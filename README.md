@@ -2,6 +2,12 @@ The plan:
 
 We hold the full density matrix of the data qbits in memory, which is about two megabyte (so not much).
 
+The density matrix is hermitian, so we only need to store one half.
+Because CUDA support for complex is still shit, we store the
+real part on the diagonal and lower triangle, and the imaginary part on the upper triangle.
+because states x,y actually are bitstrings,
+the matrix element dm[x,y] is actually stored at position dm[x<<9|y].
+
 
 We add one ancilla to measure a syndrome, then trace it out again to measure it; then add the next ancilla etc.
 
