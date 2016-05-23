@@ -5,12 +5,11 @@ We hold the full density matrix of the data qbits in memory, which is about two 
 The density matrix is hermitian, so we only need to store one half.
 
 However, in order to do addresss magic, we will store it in full form (memory is not in issue)
-but set the upper triangle to "don't care" and only update the lower half.
+but set the lower triangle to "don't care" and only update the upper half.
 
 This means that we typically run grids that are twice too big. Often we can use the
 second half to do the imaginary parts instead.
 the matrix element dm[x,y] is actually stored at position dm[x<<9|y].
-
 
 
 We add one ancilla to measure a syndrome, then trace it out again to measure it; then add the next ancilla etc.
