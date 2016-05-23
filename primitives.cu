@@ -136,8 +136,8 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 
     int block; //0 or 1?
     
-    if(x&y&mask) block = 0;
-    else if((~x)&(~y)&mask) block = 1;
+    if(x&y&mask) block = 1;
+    else if((~x)&(~y)&mask) block = 0;
     else return;
 
     unsigned int lower_mask =  (1 << bit_idx) - 1;       // e.g. 00001111
@@ -150,16 +150,44 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 
     
     if(block == 0) {
-        dm9_0[ADDR_TRIU(x9, y9, ri_flag)] = mul0*dm10[ADDR_TRIU(x,y,ri_flag)];
+        dm9_0[ADDR_TRIU9(x9, y9, ri_flag)] = mul0*dm10[ADDR_TRIU(x,y,ri_flag)];
     }
     if(block == 1) {
-        dm9_1[ADDR_TRIU(x9, y9, ri_flag)] = mul1*dm10[ADDR_TRIU(x,y,ri_flag)];
+        dm9_1[ADDR_TRIU9(x9, y9, ri_flag)] = mul1*dm10[ADDR_TRIU(x,y,ri_flag)];
     }
 }
 
 
-//inverse of dm_reduce
 
+//trace kernel
+//copy the diagonal elements to out, in order to do effective 
+//calculation of subtraces.
+//run over a 1x9 grid!
+__global__ void get_diag(double *dm9, double *out) {
+    int x = (blockIdx.x <<  LOG_BK_SIZE) + threadIdx.x;
+    out[x] = dm9[ADDR_BARE9(x,x,0)];
+}
+
+//inverse of dm_reduce
+//run over 9x9 grid!
 __global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1) {
-    //TODO
+    int x9 = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
+    int y9 = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+
+    int ri_flag = 1;
+    if (x9 >= y9) ri_flag = 0;
+
+    unsigned int mask = (1 << bit_idx);                  // e.g. 00010000 if bit_idx == 4
+
+    unsigned int lower_mask =  (1 << bit_idx) - 1;       // e.g. 00001111
+    unsigned int upper_mask = ~((1 << bit_idx) - 1);     // e.g. 11110000
+
+    //calculate new adresses
+    unsigned int x, y;
+
+    x =  ((x9&upper_mask) << 1) | (x9 & lower_mask);
+    y =  ((y9&upper_mask) << 1) | (y9 & lower_mask);
+
+    dm10[ADDR_TRIU(x,y,ri_flag)] = dm9_0[ADDR_TRIU9(x9,y9,ri_flag)];
+    dm10[ADDR_TRIU(x|mask,y|mask,ri_flag)] = dm9_1[ADDR_TRIU9(x9,y9,ri_flag)];
 }
