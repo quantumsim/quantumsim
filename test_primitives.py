@@ -128,29 +128,3 @@ class TestAmpPhDamping:
             assert np.allclose(np.trace(dm10_transformed), 1)
 
 
-    
-class TestPartialTrace:
-    def test_trace_preserve(self):
-
-        dm10 = random_dm10()
-        dm10_gpu = drv.to_device(dm10)
-
-        dm2 = np.zeros(4, dtype=np.float64)
-        dm2_gpu = drv.to_device(dm2)
-
-        assert np.allclose(np.trace(dm10), 1)
-
-        qbit = 0
-
-        mask = np.uint32(1 << qbit)
-
-        partial_trace(dm10_gpu, mask, dm2_gpu, block=(32,32,1), grid=(32,32,1))
-
-        dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
-        dm2_transformed = drv.from_device_like(dm2_gpu, dm2)
-
-        assert np.allclose(dm2_transformed[0] + dm2_transformed[1], 1)
-        assert np.allclose(np.trace(dm10_transformed), 1)
-
-
-
