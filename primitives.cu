@@ -1,4 +1,5 @@
-#include <cuda.h> #include <cuComplex.h>
+#include <cuda.h> 
+#include <cuComplex.h>
 
 // the block size is 1<<LOG_BK_SIZE in x and y direction
 #define LOG_BK_SIZE (5)
@@ -118,50 +119,6 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 
     dm10[ADDR_TRIU(x, y, ri_flag)] = f;
 }
-
-// calculate the partial trace over all but one qubit
-// dm2 is the reduced dm, with four elements: (a, c, b_re, b_imag)
-// this is equivalent to decaying all qubits except the requested ancilla
-// to the ground state and then taking the four non-zero elements
-
-// thus, we essentially implement the amplitude decay above with lambda = 1, for each other qubit
-__global__ void partial_trace(double *dm10, unsigned int mask, double *dm2) {
-
-    int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
-
-    int ri_flag = 1;
-    if (x >= y) ri_flag = 0;
-
-    double f = dm10[ADDR_TRIU(x, y, ri_flag)];
-
-    for(i = 1; i < (1 << NO_QUBITS); i<<=1) {
-
-        if(!(i&mask)) {
-            if (x&y&i) { //c block
-                dm10[ADDR_TRIU(x^mask,y^mask,ri_flag)]  += f ;
-                f = 0;
-            } 
-            else if ((~x)&(~y)&mask) {
-                return;
-            }
-            else { // b block
-                f = 0;
-            }
-
-            dm10[ADDR_TRIU(x, y, ri_flag)] = f;
-        }
-    }
-
-    //copy to output
-    if( x == 0 && y == 0) {
-        dm2[0] = dm10[0];
-        dm2[1] = dm10[ADDR_REAL(mask, mask)];
-        dm2[2] = dm10[ADDR_REAL(0, mask)];
-        dm2[3] = dm10[ADDR_IMAG(0, mask)];
-    }
-}
-
 
 //copy the two diagonal blocks of one ancilla into reduced density matrices
 //multiply the two with two numbers (inverse of the traces for instance, to implement measurement)
