@@ -32,12 +32,10 @@ def test_ensure_dense_simple():
     assert sdm.full_dm.no_qubits == 2
     assert np.allclose(sdm.trace(), 1)
 
-
 def test_cphase_simple():
     sdm = SparseDM(2)
     sdm.cphase(0, 1)
     assert sdm.full_dm.no_qubits == 2
-
 
 def test_peak_on_ground_state():
     sdm = SparseDM(1)
@@ -62,6 +60,28 @@ def test_peak_on_hadamard():
     assert np.allclose(sdm.last_peak[0].trace(), 0.5)
     assert np.allclose(sdm.last_peak[1].trace(), 0.5)
 
+
+def test_peak_on_decay():
+    sdm = SparseDM(1)
+    sdm.classical[0] = 1
+
+    p0, p1 = sdm.peak_measurement(0)
+
+    assert np.allclose(p0, 0)
+    assert np.allclose(p1, 1)
+
+    sdm.amp_ph_damping(0, 0.02, 0)
+
+    p0, p1 = sdm.peak_measurement(0)
+
+    assert np.allclose(p0, 0.02)
+    assert np.allclose(p1, 0.98) 
+
+    sdm.amp_ph_damping(0, 0.02, 0)
+
+    p0, p1 = sdm.peak_measurement(0)
+
+    assert np.allclose(p0, 0.02+0.98*0.02)
 
 def test_peak_then_measure():
     sdm = SparseDM(1)
