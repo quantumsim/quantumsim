@@ -1,4 +1,7 @@
 .ipynb_checkpoints/*
 
+.*.swo 
+.*.swp
+
 __pycache__/*
 .cache/*
