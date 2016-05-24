@@ -34,22 +34,25 @@ class Density:
         self._block_size = 2**5
         self._grid_size = 2**max(no_qubits-5, 0)
 
+        # self._size = max(self._block_size, 2**no_qubits)
+        self._size = 2**no_qubits
+
         if no_qubits > 15:
             raise ValueError("no_qubits=%d is way too many qubits, are you sure?"%no_qubits)
 
         if isinstance(data, np.ndarray):
-            assert data.shape == (2**no_qubits, 2**no_qubits)
+            assert data.shape == (self._size, self._size)
             data = data.astype(np.complex128)
             self.data = ga.to_gpu(data)
         elif isinstance(data, drv.DeviceAllocation):
-            self.data = ga.empty((2**no_qubits, 2**no_qubits), dtype=np.complex128)
+            self.data = ga.empty((self._size, self._size), dtype=np.complex128)
             drv.memcpy_dtod(self.data.gpudata, data, data.nbytes)
         elif isinstance(data, ga.GPUArray):
-            assert data.shape == (2**no_qubits, 2**no_qubits)
+            assert data.shape == (self._size, self._size)
             assert data.dtype == np.complex128
             self.data = data
         elif data is None:
-            d = np.zeros((2**no_qubits, 2**no_qubits), dtype=np.complex128)
+            d = np.zeros((self._size, self._size), dtype=np.complex128)
             d[0,0] = 1
             self.data = ga.to_gpu(d)
         else:
@@ -84,7 +87,6 @@ class Density:
                 block=(self._block_size,self._block_size,1),
                 grid=(self._grid_size,self._grid_size,1))
 
-
     def amp_ph_damping(self, bit, gamma, lamda):
         assert bit < self.no_qubits
 
@@ -103,7 +105,7 @@ class Density:
 
     def add_ancilla(self, bit, anc_st):
         assert bit <= self.no_qubits
-        new_data = ga.empty(
+        new_data = ga.zeros(
                 (2**(self.no_qubits+1), 2**(self.no_qubits+1)),
                 dtype=np.complex128)
         new_dm = Density(self.no_qubits + 1, new_data)
@@ -125,9 +127,9 @@ class Density:
     def measure_ancilla(self, bit):
         assert bit < self.no_qubits
 
-        d0 = ga.empty((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
+        d0 = ga.zeros((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
                 np.complex128)
-        d1 = ga.empty((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
+        d1 = ga.zeros((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
                 np.complex128)
 
         _dm_reduce(self.data.gpudata, 

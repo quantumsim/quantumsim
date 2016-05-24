@@ -4,10 +4,14 @@ import pycuda.gpuarray as ga
 import pytest
 
 class TestDensityInit:
-    def test_empty(self):
+    def test_ground_state(self):
         dm = dm10.Density(10)
         assert dm._block_size == 32
         assert dm._grid_size == 32
+
+
+    def test_empty(self):
+        dm = dm10.Density(0)
 
     def test_dont_make_huge_matrix(self):
         with pytest.raises(ValueError):
@@ -187,6 +191,14 @@ class TestDensityAddAncilla:
         a = dm2.data.get()
         assert np.allclose(a[0, 0], 1)
 
+    def test_add_first_full(self):
+        dm = dm10.Density(0)
+        dm2 = dm.add_ancilla(0, 0)
+
+        a = dm2.data.get()
+
+        assert np.allclose(a, [[1, 0], [0, 0]])
+
     def test_add_other_ancilla_to_gs_gives_gs(self):
         dm = dm10.Density(9)
         dm2 = dm.add_ancilla(4, 0)
@@ -239,3 +251,13 @@ class TestDensityMeasure:
         assert np.allclose(p0, 0.5)
         assert np.allclose(p1, 0.5)
 
+    def test_hadamard_gives_50_50_on_small(self):
+        dm = dm10.Density(1)
+
+        print(dm.data)
+        dm.hadamard(0)
+        print(dm.data)
+        p0, dm0, p1, dm1 = dm.measure_ancilla(0)
+
+        assert np.allclose(p0, 0.5)
+        assert np.allclose(p1, 0.5)
