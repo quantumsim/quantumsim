@@ -16,9 +16,10 @@ dm_inflate = mod.get_function("dm_inflate")
 get_diag = mod.get_function("get_diag")
 
 
+no_qubits = 10
 
-x = np.random.random((2**10, 2**10)).astype(np.complex128)
-x += np.random.random((2**10, 2**10))*1j
+x = np.random.random((2**no_qubits, 2**no_qubits)).astype(np.complex128)
+x += np.random.random((2**no_qubits, 2**no_qubits))*1j
 
 x = x.T.conj() @ x
 
@@ -40,7 +41,7 @@ class TestCphase:
         qbit1 = 9
         qbit2 = 6
 
-        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), block=(32,32,1), grid=(32,32,1))
+        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), np.uint32(no_qubits), block=(32,32,1), grid=(32,32,1))
 
         dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
@@ -57,8 +58,8 @@ class TestCphase:
         qbit1 = 9
         qbit2 = 6
 
-        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), block=(32,32,1), grid=(32,32,1))
-        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), block=(32,32,1), grid=(32,32,1))
+        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), np.uint32(no_qubits), block=(32,32,1), grid=(32,32,1))
+        cphase(dm10_gpu, np.uint32((1<<qbit1) | (1<<qbit2)), np.uint32(no_qubits), block=(32,32,1), grid=(32,32,1))
 
         dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
@@ -72,10 +73,10 @@ class TestHadamard():
 
         assert np.allclose(np.trace(dm10), 1)
 
-        for qbit in range(10):
+        for qbit in range(no_qubits):
 
-            hadamard(dm10_gpu, np.uint32(1<<qbit), 
-                    np.float64(0.5), block=(32,32,1), grid=(32,32,1))
+            hadamard(dm10_gpu, np.uint32(1<<qbit), np.float64(0.5), np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
 
             dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
@@ -89,12 +90,12 @@ class TestHadamard():
 
         assert np.allclose(np.trace(dm10), 1)
 
-        for qbit in range(10):
+        for qbit in range(no_qubits):
 
-            hadamard(dm10_gpu, np.uint32(1<<qbit), 
-                    np.float64(0.5), block=(32,32,1), grid=(32,32,1))
-            hadamard(dm10_gpu, np.uint32(1<<qbit), 
-                    np.float64(0.5), block=(32,32,1), grid=(32,32,1))
+            hadamard(dm10_gpu, np.uint32(1<<qbit), np.float64(0.5), np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+            hadamard(dm10_gpu, np.uint32(1<<qbit), np.float64(0.5), np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
 
             dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
@@ -118,9 +119,9 @@ class TestAmpPhDamping:
         s1mlambda = np.float64(np.sqrt(1 - lamda))
 
 
-        for qbit in range(10):
+        for qbit in range(no_qubits):
             amp_ph_damping(dm10_gpu, np.uint32(1<<qbit), 
-                    gamma, s1mgamma, s1mlambda, 
+                    gamma, s1mgamma, s1mlambda, np.uint32(no_qubits),
                     block=(32,32,1), grid=(32,32,1))
 
 
@@ -134,8 +135,8 @@ class TestDMReduce:
         dm10 = random_dm10()
         dm10_gpu = drv.to_device(dm10)
 
-        dm9_0 = np.zeros((2**9, 2**9), np.complex128)
-        dm9_1 = np.zeros((2**9, 2**9), np.complex128)
+        dm9_0 = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
+        dm9_1 = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
 
         dm9_0_gpu = drv.to_device(dm9_0)
         dm9_1_gpu = drv.to_device(dm9_1)
@@ -145,7 +146,7 @@ class TestDMReduce:
         bit_idx = 2
 
         dm_reduce(dm10_gpu, np.uint32(bit_idx), dm9_0_gpu, dm9_1_gpu, 
-                np.float64(1), np.float64(1),
+                np.float64(1), np.float64(1), np.uint32(no_qubits),
                 block=(32,32,1), grid=(32,32,1))
 
         dm9_0 = drv.from_device_like(dm9_0_gpu, dm9_0)
@@ -160,8 +161,8 @@ class TestDMReduce:
         dm10 = random_dm10()
         dm10_gpu = drv.to_device(dm10)
 
-        dm9_0 = np.zeros((2**9, 2**9), np.complex128)
-        dm9_1 = np.zeros((2**9, 2**9), np.complex128)
+        dm9_0 = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
+        dm9_1 = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
 
         dm9_0_gpu = drv.to_device(dm9_0)
         dm9_1_gpu = drv.to_device(dm9_1)
@@ -176,11 +177,11 @@ class TestDMReduce:
 
 
         amp_ph_damping(dm10_gpu, np.uint32(1<<bit_idx), 
-                gamma, s1mgamma, s1mlambda, 
+                gamma, s1mgamma, s1mlambda, np.uint32(no_qubits),
                 block=(32,32,1), grid=(32,32,1))
         
         dm_reduce(dm10_gpu, np.uint32(bit_idx), dm9_0_gpu, dm9_1_gpu, 
-                np.float64(1), np.float64(1),
+                np.float64(1), np.float64(1), np.uint32(no_qubits),
                 block=(32,32,1), grid=(32,32,1))
 
         dm9_0 = drv.from_device_like(dm9_0_gpu, dm9_0)
@@ -195,43 +196,43 @@ class TestDMReduce:
 class TestGetDiag:
     def test_get_diag(self):
 
-        dm9 = np.random.random((2**9, 2**9)).astype(np.complex128)
+        dm9 = np.random.random((2**(no_qubits-1), 2**(no_qubits-1))).astype(np.complex128)
         dm9_gpu = drv.to_device(dm9)
 
-        diag_dm9 = np.zeros(2**9, np.float64)
+        diag_dm9 = np.zeros(2**(no_qubits-1), np.float64)
         diag_dm9_gpu = drv.to_device(diag_dm9)
 
-        get_diag(dm9_gpu, diag_dm9_gpu, block=(32,1,1), grid=(16,1,1))
+        get_diag(dm9_gpu, diag_dm9_gpu, np.uint32(no_qubits-1), block=(32,1,1), grid=(16,1,1))
 
         diag_dm9 = drv.from_device_like(diag_dm9_gpu, diag_dm9)
 
 class TestDMInflate:
     def test_inverse_of_reduce(self):
-        dm9_0 = np.random.random((2**9, 2**9)).astype(np.complex128)
-        dm9_0 += 1j*np.random.random((2**9, 2**9))
+        dm9_0 = np.random.random((2**(no_qubits-1), 2**(no_qubits-1))).astype(np.complex128)
+        dm9_0 += 1j*np.random.random((2**(no_qubits-1), 2**(no_qubits-1)))
         dm9_0 = dm9_0 + dm9_0.T.conj() # make hermitian
         dm9_0_gpu = drv.to_device(dm9_0)
-        dm9_1 = np.random.random((2**9, 2**9)).astype(np.complex128)
-        dm9_1 += 1j*np.random.random((2**9, 2**9))
+        dm9_1 = np.random.random((2**(no_qubits-1), 2**(no_qubits-1))).astype(np.complex128)
+        dm9_1 += 1j*np.random.random((2**(no_qubits-1), 2**(no_qubits-1)))
         dm9_1 = dm9_1 + dm9_1.T.conj() # make hermitian
         dm9_1_gpu = drv.to_device(dm9_1)
 
 
-        dm10 = np.zeros((2**10, 2**10), np.complex128)
+        dm10 = np.zeros((2**no_qubits, 2**no_qubits), np.complex128)
         dm10_gpu = drv.to_device(dm10)
 
         bit_idx = 2
 
-        dm_inflate(dm10_gpu, np.uint32(bit_idx), dm9_0_gpu, dm9_1_gpu, 
+        dm_inflate(dm10_gpu, np.uint32(bit_idx), dm9_0_gpu, dm9_1_gpu, np.uint32(no_qubits),
                 block=(32,32,1), grid=(16,16,1))
 
-        dm9_0_p = np.zeros((2**9, 2**9), np.complex128)
+        dm9_0_p = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
         dm9_0_p_gpu = drv.to_device(dm9_0_p)
-        dm9_1_p = np.zeros((2**9, 2**9), np.complex128)
+        dm9_1_p = np.zeros((2**(no_qubits-1), 2**(no_qubits-1)), np.complex128)
         dm9_1_p_gpu = drv.to_device(dm9_1_p)
 
         dm_reduce(dm10_gpu, np.uint32(bit_idx), dm9_0_p_gpu, dm9_1_p_gpu,
-                np.float64(1.0), np.float64(1.0),
+                np.float64(1.0), np.float64(1.0), np.uint32(no_qubits),
                 block=(32,32,1), grid=(32,32,1))
 
         dm9_0_p = drv.from_device_like(dm9_0_p_gpu, dm9_0_p)

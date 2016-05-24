@@ -4,26 +4,19 @@
 // the block size is 1<<LOG_BK_SIZE in x and y direction
 #define LOG_BK_SIZE (5)
 
-#define NO_QUBITS 10
-
-
 //this defines the scheme by which the density matrix is stored in a dm10
 //we always require x <= y for the real part and
-#define ADDR_BARE(x,y,ri_flag) (((((x)<<NO_QUBITS) | (y)) << 1) | (ri_flag))
-#define ADDR_TRIU(x,y,ri_flag) (((x) <= (y)) ? ADDR_BARE(x,y,ri_flag) : ADDR_BARE(y,x,ri_flag))
-#define ADDR_REAL(x,y) ADDR_TRIU(x,y,0)
-#define ADDR_IMAG(x,y) ADDR_TRIU(x,y,1)
+#define ADDR_BARE(x,y,ri_flag,n) (((((x)<<(n)) | (y)) << 1) | (ri_flag))
+#define ADDR_TRIU(x,y,ri_flag,n) (((x) <= (y)) ? ADDR_BARE(x,y,ri_flag,n) : ADDR_BARE(y,x,ri_flag,n))
+#define ADDR_REAL(x,y,n) ADDR_TRIU(x,y,0,n)
+#define ADDR_IMAG(x,y,n) ADDR_TRIU(x,y,1,n)
 
-#define ADDR_BARE9(x,y,ri_flag) (((((x)<<(NO_QUBITS-1)) | (y)) << 1) | (ri_flag))
-#define ADDR_TRIU9(x,y,ri_flag) (((x) <= (y)) ? ADDR_BARE9(x,y,ri_flag) : ADDR_BARE9(y,x,ri_flag))
-#define ADDR_REAL9(x,y) ADDR_TRIU9(x,y,0)
-#define ADDR_IMAG9(x,y) ADDR_TRIU9(x,y,1)
 
 
 //do the cphase gate. set a bit in mask to 1 if you want the corresponding qubit to 
 //partake in the cphase.
 //run in a 2d grid that stretches over dm10
-__global__ void cphase(double *dm10, unsigned int mask) {
+__global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) {
     const int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     const int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
 
@@ -31,10 +24,10 @@ __global__ void cphase(double *dm10, unsigned int mask) {
     if (((x & mask) == mask) != ((y & mask) == mask)) {
 
         if (x <= y) { //real part
-            dm10[ADDR_REAL(x,y)] = -dm10[ADDR_REAL(x,y)];
+            dm10[ADDR_REAL(x,y,no_qubits)] = -dm10[ADDR_REAL(x,y,no_qubits)];
         }
         else { //imaginary part
-            dm10[ADDR_IMAG(y,x)] = -dm10[ADDR_IMAG(y,x)];
+            dm10[ADDR_IMAG(y,x,no_qubits)] = -dm10[ADDR_IMAG(y,x,no_qubits)];
         }
     }
 }
@@ -43,7 +36,7 @@ __global__ void cphase(double *dm10, unsigned int mask) {
 //do the hadamard on a qubit
 //mask must have exactly one bit flipped, denoting which byte is involved
 //the results is multiplied with mul, to obtain trace preserving map, set mul = 0.5
-__global__ void hadamard(double *dm10, unsigned int mask, double mul) { 
+__global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned int no_qubits) { 
 
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
@@ -51,39 +44,39 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul) {
     if((x&mask) && (~y&mask)) { //real part
         x = x & ~mask;
         if (x <= y) {
-            double a = dm10[ADDR_REAL(x, y)];
-            double b = dm10[ADDR_REAL(x|mask, y)];
-            double c = dm10[ADDR_REAL(x, y|mask)];
-            double d = dm10[ADDR_REAL(x|mask, y|mask)];
+            double a = dm10[ADDR_REAL(x, y, no_qubits)];
+            double b = dm10[ADDR_REAL(x|mask, y, no_qubits)];
+            double c = dm10[ADDR_REAL(x, y|mask, no_qubits)];
+            double d = dm10[ADDR_REAL(x|mask, y|mask, no_qubits)];
 
             double new_a = a+b+c+d;
             double new_b = a-b+c-d;
             double new_c = a+b-c-d;
             double new_d = a-b-c+d;
 
-            dm10[ADDR_REAL(x, y)] = mul*new_a;
-            dm10[ADDR_REAL(x|mask, y)] = mul*new_b;
-            dm10[ADDR_REAL(x, y|mask)] = mul*new_c;
-            dm10[ADDR_REAL(x|mask, y|mask)] = mul*new_d;
+            dm10[ADDR_REAL(x, y, no_qubits)] = mul*new_a;
+            dm10[ADDR_REAL(x|mask, y, no_qubits)] = mul*new_b;
+            dm10[ADDR_REAL(x, y|mask, no_qubits)] = mul*new_c;
+            dm10[ADDR_REAL(x|mask, y|mask, no_qubits)] = mul*new_d;
         }
     }
     if ((~x&mask) && (y&mask)) { //do the imaginary part
         y = y & ~mask;
         if (y <= x){
-            double a = dm10[ADDR_IMAG(y, x)];
-            double b = dm10[ADDR_IMAG(y|mask, x)];
-            double c = dm10[ADDR_IMAG(y, x|mask)];
-            double d = dm10[ADDR_IMAG(y|mask, x|mask)];
+            double a = dm10[ADDR_IMAG(y, x, no_qubits)];
+            double b = dm10[ADDR_IMAG(y|mask, x, no_qubits)];
+            double c = dm10[ADDR_IMAG(y, x|mask, no_qubits)];
+            double d = dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)];
 
             double new_a = a+b+c+d;
             double new_b = a-b+c-d;
             double new_c = a+b-c-d;
             double new_d = a-b-c+d;
 
-            dm10[ADDR_IMAG(y, x)] = mul*new_a;
-            dm10[ADDR_IMAG(y|mask, x)] = mul*new_b;
-            dm10[ADDR_IMAG(y, x|mask)] = mul*new_c;
-            dm10[ADDR_IMAG(y|mask, x|mask)] = mul*new_d;
+            dm10[ADDR_IMAG(y, x, no_qubits)] = mul*new_a;
+            dm10[ADDR_IMAG(y|mask, x, no_qubits)] = mul*new_b;
+            dm10[ADDR_IMAG(y, x|mask, no_qubits)] = mul*new_c;
+            dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)] = mul*new_d;
         }
     }
 }
@@ -94,7 +87,7 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul) {
 // gamma = probability for amplitude decay, i.e gamma = 1-exp(-t/T1)
 // s1mgamma = sqrt(1-gamma)
 // s1mlambda = sqrt(1-lambda), where lambda is the probability for a phase flip, i.e. lambda = 1- exp(-t/T2)
-__global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, double s1mgamma, double s1mlambda) {
+__global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, double s1mgamma, double s1mlambda, unsigned int no_qubits) {
 
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
@@ -104,10 +97,10 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
     if (x >= y) ri_flag = 0;
 
 
-    double f = dm10[ADDR_TRIU(x, y, ri_flag)];
+    double f = dm10[ADDR_TRIU(x, y, ri_flag, no_qubits)];
 
     if (x&y&mask) { //c block
-        dm10[ADDR_TRIU(x^mask,y^mask,ri_flag)]  += gamma * f;
+        dm10[ADDR_TRIU(x^mask,y^mask,ri_flag, no_qubits)]  += gamma * f;
         f = f - gamma*f;
     } 
     else if ((~x)&(~y)&mask) {
@@ -117,7 +110,7 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
         f *= s1mgamma * s1mlambda;
     }
 
-    dm10[ADDR_TRIU(x, y, ri_flag)] = f;
+    dm10[ADDR_TRIU(x, y, ri_flag, no_qubits)] = f;
 }
 
 //copy the two diagonal blocks of one ancilla into reduced density matrices
@@ -125,7 +118,7 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 //note that because major bit banging is required to figure out the new adresses,
 //the qubit index is passed as an integer, not as a bitmask!
 
-__global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1) {
+__global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1, unsigned int no_qubits) {
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
 
@@ -150,10 +143,10 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 
     
     if(block == 0) {
-        dm9_0[ADDR_TRIU9(x9, y9, ri_flag)] = mul0*dm10[ADDR_TRIU(x,y,ri_flag)];
+        dm9_0[ADDR_TRIU(x9, y9, ri_flag, no_qubits-1)] = mul0*dm10[ADDR_TRIU(x,y,ri_flag, no_qubits)];
     }
     if(block == 1) {
-        dm9_1[ADDR_TRIU9(x9, y9, ri_flag)] = mul1*dm10[ADDR_TRIU(x,y,ri_flag)];
+        dm9_1[ADDR_TRIU(x9, y9, ri_flag, no_qubits-1)] = mul1*dm10[ADDR_TRIU(x,y,ri_flag, no_qubits)];
     }
 }
 
@@ -163,14 +156,14 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 //copy the diagonal elements to out, in order to do effective 
 //calculation of subtraces.
 //run over a 1x9 grid!
-__global__ void get_diag(double *dm9, double *out) {
+__global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
     int x = (blockIdx.x <<  LOG_BK_SIZE) + threadIdx.x;
-    out[x] = dm9[ADDR_BARE9(x,x,0)];
+    out[x] = dm9[ADDR_BARE(x,x,0,no_qubits)];
 }
 
 //inverse of dm_reduce
 //run over 9x9 grid!
-__global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1) {
+__global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, unsigned int no_qubits) {
     int x9 = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y9 = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
 
@@ -188,6 +181,6 @@ __global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, do
     x =  ((x9&upper_mask) << 1) | (x9 & lower_mask);
     y =  ((y9&upper_mask) << 1) | (y9 & lower_mask);
 
-    dm10[ADDR_TRIU(x,y,ri_flag)] = dm9_0[ADDR_TRIU9(x9,y9,ri_flag)];
-    dm10[ADDR_TRIU(x|mask,y|mask,ri_flag)] = dm9_1[ADDR_TRIU9(x9,y9,ri_flag)];
+    dm10[ADDR_TRIU(x, y, ri_flag, no_qubits)] = dm9_0[ADDR_TRIU(x9, y9, ri_flag, no_qubits-1)];
+    dm10[ADDR_TRIU(x|mask, y|mask, ri_flag, no_qubits)] = dm9_1[ADDR_TRIU(x9, y9, ri_flag, no_qubits-1)];
 }
