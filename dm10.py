@@ -74,6 +74,16 @@ class Density:
                 block=(self._block_size,self._block_size,1),
                 grid=(self._grid_size,self._grid_size,1))
 
+    def hadamard(self, bit):
+        assert bit < self.no_qubits
+        
+        _hadamard(self.data.gpudata, 
+                np.uint32(1<<bit), 
+                np.float64(0.5), 
+                np.uint32(self.no_qubits),
+                block=(self._block_size,self._block_size,1),
+                grid=(self._grid_size,self._grid_size,1))
+
 
 
 

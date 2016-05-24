@@ -100,3 +100,35 @@ class TestDensityCPhase:
 
 
 
+class TestDensityHadamard:
+    def test_bit_too_high(self):
+        dm = dm10.Density(10)
+        with pytest.raises(AssertionError):
+            dm.hadamard(10)
+
+    def test_does_something_to_ground_state(self):
+        dm = dm10.Density(10)
+        a0 = dm.data.get()
+        dm.hadamard(4)
+        a1 = dm.data.get()
+        assert not np.allclose(a0, a1)
+
+    def test_preserve_trace_ground_state(self):
+        dm = dm10.Density(10)
+        dm.hadamard(2)
+        assert np.allclose(dm.trace(), 1)
+        dm.hadamard(4)
+        assert np.allclose(dm.trace(), 1)
+        dm.hadamard(0)
+        assert np.allclose(dm.trace(), 1)
+
+    def test_squares_to_one(self):
+        dm = dm10.Density(10)
+        a0 = dm.data.get()
+        dm.hadamard(8)
+        dm.hadamard(8)
+        a1 = dm.data.get()
+        assert np.allclose(a0, a1)
+
+
+
