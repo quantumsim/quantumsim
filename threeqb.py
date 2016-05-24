@@ -16,6 +16,8 @@ for t in range(10):
     sdm.cphase(4, 1)
     sdm.hadamard(4)
 
+    sdm.amp_ph_damping(4, 0.1, 0)
+
     # max likelihood sampling
     p0, p1 = sdm.peak_measurement(4)
     if p0 > p1:
@@ -34,4 +36,4 @@ for t in range(10):
     else:
         sdm.project_measurement(3, 1)
 
-    print(sdm.classical)
+    print(sdm.classical, sdm.trace())
