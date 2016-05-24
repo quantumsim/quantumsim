@@ -1,4 +1,4 @@
-from dm10 import Density
+import dm10 
 
 class SparseDM:
     def __init__(self, no_qubits):
@@ -7,7 +7,7 @@ class SparseDM:
         self.no_qubits = no_qubits
         self.classical = {bit: 0 for bit in range(no_qubits)}
         self.idx_in_full_dm = {}
-        self.full_dm = Density(0)
+        self.full_dm = dm10.Density(0)
 
         self.last_peak = None
 
