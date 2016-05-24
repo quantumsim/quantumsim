@@ -46,6 +46,7 @@ class Density:
             drv.memcpy_dtod(self.data.gpudata, data, data.nbytes)
         elif isinstance(data, ga.GPUArray):
             assert data.shape == (2**no_qubits, 2**no_qubits)
+            assert data.dtype == np.complex128
             self.data = data
         elif data is None:
             d = np.zeros((2**no_qubits, 2**no_qubits), dtype=np.complex128)
@@ -54,14 +55,24 @@ class Density:
         else:
             raise ValueError("type of data not understood")
 
+    def trace(self):
+        diag = ga.empty((2**self.no_qubits), dtype=np.float64)
 
-        def trace(self):
-            diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        _get_diag(self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits),
+                block=(self._block_size,1,1), grid=(self._grid_size,1,1))
 
-            get_diag(self.data.gpudata, diag.gpudata, np.uint32(no_qubits-1), block=(self._block_size,1,1), grid=(self._grid_size,1,1))
+        trace = ga.sum(diag, dtype=np.float64).get()
+        return trace
 
-            trace = diag.sum()
-            return trace
+    def cphase(self, bit0, bit1):
+        assert bit0 < self.no_qubits
+        assert bit1 < self.no_qubits
+
+        _cphase(self.data.gpudata,
+                np.uint32((1<<bit0) | (1<<bit1)),
+                np.uint32(self.no_qubits),
+                block=(self._block_size,self._block_size,1),
+                grid=(self._grid_size,self._grid_size,1))
 
 
 
