@@ -21,8 +21,7 @@ no_qubits = 10
 x = np.random.random((2**no_qubits, 2**no_qubits)).astype(np.complex128)
 x += np.random.random((2**no_qubits, 2**no_qubits))*1j
 
-x = x.T.conj() @ x
-
+x = np.dot(x.T.conj(), x) 
 x = x/np.trace(x)
 
 def random_dm10():
@@ -98,6 +97,22 @@ class TestHadamard():
             dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
             assert np.allclose(dm10_transformed, dm10)
+
+    def test_hadamard_on_small(self):
+        dm = np.zeros((2,2), np.complex128)
+        dm[:] = [[1,0], [0,0]]
+
+        dm_gpu = drv.to_device(dm)
+
+        hadamard(dm_gpu, np.uint32(1), np.float64(0.5), np.uint32(1),
+                block=(32,32,1), grid=(1,1,1))
+
+
+        dm = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(np.triu(dm), [[0.5, 0.5], [0, 0.5]])
+
+
 
 class TestAmpPhDamping:
     "test the amp_ph_damping kernel"
@@ -190,6 +205,31 @@ class TestDMReduce:
 
         assert np.allclose(tr0, 1)
         assert np.allclose(tr1, 0)
+
+
+    def test_reduce_on_small_dm(self):
+        dm = np.zeros((2,2), np.complex128)
+        dm[:] = [[0.5, 0.5], [-0.5, 0.5]]
+
+        dm_gpu = drv.to_device(dm)
+
+        dm0 = np.ones(1, np.complex128)
+        dm1 = np.ones(1, np.complex128)
+
+        dm_gpu = drv.to_device(dm)
+        dm0_gpu = drv.to_device(dm0)
+        dm1_gpu = drv.to_device(dm1)
+
+        dm_reduce(dm_gpu, np.uint32(0), dm0_gpu, dm1_gpu, 
+                np.float64(1), np.float64(1), np.uint32(1),
+                block=(32,32,1), grid=(1,1,1))
+
+        dm0 = drv.from_device_like(dm0_gpu, dm0)
+        dm1 = drv.from_device_like(dm1_gpu, dm1)
+
+        assert np.allclose(dm0, 0.5)
+        assert np.allclose(dm1, 0.5)
+
 
 class TestGetDiag:
     "test the get_diag kernel"

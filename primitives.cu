@@ -20,6 +20,8 @@ __global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) 
     const int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     const int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
 
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
     //if exactly one of x,y has all bits in mask set
     if (((x & mask) == mask) != ((y & mask) == mask)) {
 
@@ -41,7 +43,9 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned i
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
 
-    if((x&mask) && (~y&mask)) { //real part
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
+    if((x&mask) && ((~y)&mask)) { //real part
         x = x & ~mask;
         if (x <= y) {
             double a = dm10[ADDR_REAL(x, y, no_qubits)];
@@ -60,7 +64,7 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned i
             dm10[ADDR_REAL(x|mask, y|mask, no_qubits)] = mul*new_d;
         }
     }
-    if ((~x&mask) && (y&mask)) { //do the imaginary part
+    if (((~x)&mask) && (y&mask)) { //do the imaginary part
         y = y & ~mask;
         if (y <= x){
             double a = dm10[ADDR_IMAG(y, x, no_qubits)];
@@ -91,6 +95,7 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
 
@@ -121,6 +126,7 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1, unsigned int no_qubits) {
     int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
     if (x >= y) ri_flag = 0;
@@ -158,6 +164,7 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 //run over a 1x9 grid!
 __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
     int x = (blockIdx.x <<  LOG_BK_SIZE) + threadIdx.x;
+    if (x >= (1 << no_qubits)) return;
     out[x] = dm9[ADDR_BARE(x,x,0,no_qubits)];
 }
 
@@ -166,6 +173,7 @@ __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
 __global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, unsigned int no_qubits) {
     int x9 = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
     int y9 = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    if (x9 >= (1 << no_qubits-1) || y9 >= (1 << no_qubits-1)) return;
 
     int ri_flag = 1;
     if (x9 >= y9) ri_flag = 0;
