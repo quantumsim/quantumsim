@@ -14,11 +14,11 @@ class TestDensityInit:
             dm10.Density(200)
 
     def test_numpy_array(self):
-        n = 10
+        n = 8
         a = np.zeros((2**n, 2**n))
         dm = dm10.Density(n, a)
         assert dm._block_size == 32
-        assert dm._grid_size == 32
+        assert dm._grid_size == 8
 
     def test_gpu_array(self):
         n = 10
@@ -131,4 +131,44 @@ class TestDensityHadamard:
         assert np.allclose(a0, a1)
 
 
+class TestAmpPhDamping:
+    def test_bit_too_high(self):
+        dm = dm10.Density(10)
+        with pytest.raises(AssertionError):
+            dm.amp_ph_damping(10, 0.0, 0.0)
+
+    def test_does_nothing_to_ground_state(self):
+        dm = dm10.Density(10)
+        a0 = dm.data.get()
+        dm.amp_ph_damping(4, 0.5, 0.5)
+        a1 = dm.data.get()
+        assert np.allclose(a0, a1)
+
+    def test_preserve_trace_random_state(self):
+        dm = dm10.Density(10)
+        dm.amp_ph_damping(4, 0.5, 0.5)
+        assert np.allclose(dm.trace(), 1)
+        dm.amp_ph_damping(6, 0.5, 0.5)
+        assert np.allclose(dm.trace(), 1)
+        dm.amp_ph_damping(7, 0.5, 0.5)
+        assert np.allclose(dm.trace(), 1)
+
+    def test_strong_damping_gives_ground_state(self):
+        n = 5 
+        a = np.random.random((2**n, 2**n))*1j
+        a += np.random.random((2**n, 2**n))
+        # make density matrix
+        a = np.dot(a, a.transpose().conj())
+        a = a/np.trace(a)
+        dm = dm10.Density(n, a)
+        assert np.allclose(dm.trace(), 1)
+
+        for bit in range(n):
+            dm.amp_ph_damping(bit, 1.0, 0.0)
+
+        assert np.allclose(dm.trace(), 1)
+
+        a2 = dm.data.get()
+
+        assert np.allclose(a2[0, 0], 1)
 

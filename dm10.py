@@ -85,6 +85,25 @@ class Density:
                 grid=(self._grid_size,self._grid_size,1))
 
 
+    def amp_ph_damping(self, bit, gamma, lamda):
+        assert bit < self.no_qubits
+
+        gamma = np.float64(gamma)
+        lamda = np.float64(lamda)
+
+        s1mgamma = np.float64(np.sqrt(1 - gamma))
+        s1mlamda = np.float64(np.sqrt(1 - lamda))
+
+        _amp_ph_damping(self.data.gpudata, 
+                np.uint32(1<<bit), 
+                gamma, s1mgamma, s1mlamda, 
+                np.uint32(self.no_qubits),
+                block=(self._block_size,self._block_size,1),
+                grid=(self._grid_size,self._grid_size,1))
+
+
+
+
 
 
 class Density10:
