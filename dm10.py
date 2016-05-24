@@ -101,53 +101,47 @@ class Density:
                 block=(self._block_size,self._block_size,1),
                 grid=(self._grid_size,self._grid_size,1))
 
+    def add_ancilla(self, bit, anc_st):
+        assert bit <= self.no_qubits
+        new_data = ga.empty(
+                (2**(self.no_qubits+1), 2**(self.no_qubits+1)),
+                dtype=np.complex128)
+        new_dm = Density(self.no_qubits + 1, new_data)
+
+        dm9_0 = self.data
+        dm9_1 = ga.zeros_like(self.data)
+        if anc_st == 1:
+            dm9_0, dm9_1 = dm9_1, dm9_0
+
+        _dm_inflate(new_dm.data.gpudata, 
+                np.uint32(bit), 
+                dm9_0.gpudata, dm9_1.gpudata, 
+                np.uint32(new_dm.no_qubits),
+                block=(self._block_size, self._block_size,1),
+                grid=(self._grid_size, self._grid_size,1))
+
+        return new_dm
+
+    def measure_ancilla(self, bit):
+        assert bit < self.no_qubits
+
+        d0 = ga.empty((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
+                np.complex128)
+        d1 = ga.empty((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
+                np.complex128)
+
+        _dm_reduce(self.data.gpudata, 
+                np.uint32(bit),
+                d0.gpudata, d1.gpudata,
+                np.float64(1), np.float64(1), 
+                np.uint32(self.no_qubits),
+                block=(self._block_size, self._block_size,1),
+                grid=(self._grid_size, self._grid_size,1))
+
+        dm0 = Density(self.no_qubits - 1, d0)
+        dm1 = Density(self.no_qubits - 1, d1)
 
 
-
-
-
-class Density10:
-    def __init__(self, d9=None, a=0):
-        """create a dm10 by adding ancilla in state a to a dm9
-        dm9: a Density9 describing the state of 9 data qubits
-        a: 1 or 0, the state of the ancilla added
-        """
-        pass
-    
-    def cphase(self, bit1, bit2):
-        """Apply a cphase gate between bit1 and bit2
-        bit1, bit2: integer between 0 and 9. 9 is the ancilla. "a" is a synonym for 9.
-        """
-        pass
-
-    def hadamard(self, bit):
-        """Apply a hadamard gate to bit.
-        bit: integer between 0 and 9, or "a".
-        """
-        pass
-
-    def amp_ph_damping(self, bit, params):
-        """Apply a amplitude and phase damping channel to bit.
-        bit: integer between 0 and 9, or "a".
-        params: the damping probabilities (gamma, lambda)
-        """
-        pass
-
-
-    def meas(self):
-        """Measure the qubit. Return two unnormalized Density9 matrices with 
-        traces corresponding to probabilities.
-        """
-        return (d9_0, d9_1)
-
-
-class Density9:
-    def __init__(self, data=None):
-        """A density matrix describing the state of 9 data qubits
-        data: a gpu array containing the dense density matrix. If None, 
-              creata an initial density matrix with all qubits in ground state.
-        """
-
-    def trace(self):
-        """Trace of the density matrix."""
-        return tr
+        p0 = dm0.trace()
+        p1 = dm1.trace()
+        return p0, dm0, p1, dm1

@@ -131,7 +131,7 @@ class TestDensityHadamard:
         assert np.allclose(a0, a1)
 
 
-class TestAmpPhDamping:
+class TestDensityAmpPhDamping:
     def test_bit_too_high(self):
         dm = dm10.Density(10)
         with pytest.raises(AssertionError):
@@ -171,4 +171,71 @@ class TestAmpPhDamping:
         a2 = dm.data.get()
 
         assert np.allclose(a2[0, 0], 1)
+
+
+class TestDensityAddAncilla:
+    def test_bit_too_high(self):
+        dm = dm10.Density(10)
+        with pytest.raises(AssertionError):
+            dm.add_ancilla(12, 0)
+
+    def test_add_high_ancilla_to_gs_gives_gs(self):
+        dm = dm10.Density(9)
+        dm2 = dm.add_ancilla(9, 0)
+        assert dm2.no_qubits == 10
+        assert np.allclose(dm2.trace(), 1)
+        a = dm2.data.get()
+        assert np.allclose(a[0, 0], 1)
+
+    def test_add_other_ancilla_to_gs_gives_gs(self):
+        dm = dm10.Density(9)
+        dm2 = dm.add_ancilla(4, 0)
+        assert dm2.no_qubits == 10
+        assert np.allclose(dm2.trace(), 1)
+        a = dm2.data.get()
+        assert np.allclose(a[0, 0], 1)
+        
+    def test_add_exc_ancilla_to_gs_gives_no_gs(self):
+        dm = dm10.Density(9)
+        dm2 = dm.add_ancilla(4, 1)
+        assert dm2.no_qubits == 10
+        assert np.allclose(dm2.trace(), 1)
+        a = dm2.data.get()
+        assert np.allclose(a[0, 0], 0)
+
+    def test_preserve_trace_random_state(self):
+        n = 5 
+        a = np.random.random((2**n, 2**n))*1j
+        a += np.random.random((2**n, 2**n))
+        # make density matrix
+        a = np.dot(a, a.transpose().conj())
+        a = a/np.trace(a)
+        dm = dm10.Density(n, a)
+        assert np.allclose(dm.trace(), 1)
+        dm2 = dm.add_ancilla(3, 1)
+        assert np.allclose(dm2.trace(), 1)
+
+class TestDensityMeasure:
+    def test_bit_too_high(self):
+        dm = dm10.Density(10)
+        with pytest.raises(AssertionError):
+            dm.measure_ancilla(12)
+
+    def test_gs_always_gives_zero(self):
+        dm = dm10.Density(10)
+        p0, dm0, p1, dm1 = dm.measure_ancilla(4)
+
+        assert np.allclose(p0, 1)
+        assert np.allclose(dm0.data.get()[0, 0], 1)
+        assert np.allclose(p1, 0)
+        assert np.allclose(dm1.data.get()[0, 0], 0)
+
+
+    def test_hadamard_gives_50_50(self):
+        dm = dm10.Density(10)
+        dm.hadamard(4)
+        p0, dm0, p1, dm1 = dm.measure_ancilla(4)
+
+        assert np.allclose(p0, 0.5)
+        assert np.allclose(p1, 0.5)
 
