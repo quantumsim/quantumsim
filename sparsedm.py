@@ -1,11 +1,12 @@
 import dm10 
 
 class SparseDM:
-    def __init__(self, no_qubits):
+    def __init__(self, names=None):
         """A given set of qubit is kept in a state 
         """
-        self.no_qubits = no_qubits
-        self.classical = {bit: 0 for bit in range(no_qubits)}
+        self.names = names
+        self.no_qubits = len(names)
+        self.classical = {bit: 0 for bit in names}
         self.idx_in_full_dm = {}
         self.full_dm = dm10.Density(0)
 
@@ -15,7 +16,7 @@ class SparseDM:
     def ensure_dense(self, bit):
         """Make sure that the bit is removed from the classical bits and added to the
         density matrix, do nothing if it is already there."""
-        if bit >= self.no_qubits:
+        if bit not in self.names:
             raise ValueError("This bit does not exist")
         if bit not in self.idx_in_full_dm:
             state = self.classical[bit]
