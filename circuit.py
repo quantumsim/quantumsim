@@ -82,10 +82,7 @@ class Circuit:
 
         coords = {str(qb): number for number, qb in enumerate(self.qubits)}
 
-        figure = plt.figure(
-            facecolor='w',
-            edgecolor='w'
-        )
+        figure = plt.gcf()
 
         ax = figure.add_subplot(1, 1, 1, frameon=True)
         # ax.set_axis_off()
