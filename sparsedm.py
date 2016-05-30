@@ -64,6 +64,38 @@ class SparseDM:
             self.last_peak = None
         else:
             raise ValueError("trying to measure classical bit")
+    
+    def peak_multiple_measurements(self, bits):
+        """Obtain the probabilities for all combinations of a multiple
+        qubit measurement. Act on a copy, do not destroy this density matrix.
+        """
+        res = [(dict(), self.full_dm.copy())]
+
+        bit_idxs = [self.idx_in_full_dm[bit] - i for i,bit in enumerate(bits)]
+
+        for bit, bit_idx in zip(bits, bit_idxs):
+            next_res = []
+            for (state, dm) in res:
+                _, d0, _, d1 = dm.measure_ancilla(bit_idx)
+                new_state = state.copy()
+                new_state[bit] = 0
+                next_res.append((new_state, d0))
+                new_state = state.copy()
+                new_state[bit] = 1
+                next_res.append((new_state, d1))
+
+            res = next_res
+
+        res = []
+        for state, dm in next_res:
+            res.append((state, dm.trace()))
+
+        return res
+
+
+
+
+
 
 
     def cphase(self, bit0, bit1):
@@ -103,4 +135,4 @@ class SparseDM:
 
         return cp
 
-    def apply(self, circuit):
+        

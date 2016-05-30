@@ -1,4 +1,6 @@
 from sparsedm import SparseDM
+
+
 import numpy as np
 import pytest
 
@@ -156,3 +158,42 @@ def test_copy():
     assert sdm_copy.last_peak == None
     assert sdm.full_dm is not sdm_copy.full_dm
     assert sdm.full_dm.data == sdm_copy.full_dm.data
+
+
+def test_multiple_measurement_gs():
+    sdm = SparseDM(3)
+
+    sdm.ensure_dense(0)
+    sdm.ensure_dense(1)
+    sdm.ensure_dense(2)
+
+    meas = sdm.peak_multiple_measurements([0,1,2])
+
+    assert len(meas) == 8
+    for state, p in meas:
+        if state[0] == 0 and state[1] == 0 and state[2] == 0:
+            assert np.allclose(p, 1)
+        else:
+            assert np.allclose(p, 0)
+
+
+def test_multiple_measurement_hadamard():
+    sdm = SparseDM(3)
+
+    sdm.hadamard(0)
+    sdm.hadamard(1)
+
+    sdm.ensure_dense(0)
+    sdm.ensure_dense(1)
+    sdm.ensure_dense(2)
+
+    meas = sdm.peak_multiple_measurements([0,1,2])
+
+    assert len(meas) == 8
+    for state, p in meas:
+        print(meas)
+        if state[2] == 0:
+            assert np.allclose(p, 0.25)
+        else:
+            assert np.allclose(p, 0)
+    
