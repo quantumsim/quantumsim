@@ -4,9 +4,7 @@ TODOs
   - Implement primitives in cython as well, let the dm10 module select which of the two implementations to use.
     - Maybe even a pure numpy implementation (using shitloads of np.einsum)
   - A Circuit class which allows writing down gates as qasm-like strings (but with time informations):
-    - Allow for plotting of the circuit
-    - automatically add waiting gates from qubit decay times
-    - could even figure out the optimal order of evaluation of gates by examining the qubit dependency tree.
+    - allow for the application of a circuit to a sparsedm
 
 
 The plan
