@@ -147,3 +147,13 @@ class Density:
         p0 = dm0.trace()
         p1 = dm1.trace()
         return p0, dm0, p1, dm1
+
+
+    def copy(self):
+        "Return a deep copy of this Density."
+
+
+        data_cp = self.data.copy()
+        cp = Density(self.no_qubits, data=data_cp)
+        return cp
+

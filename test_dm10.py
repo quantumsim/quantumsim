@@ -261,3 +261,20 @@ class TestDensityMeasure:
 
         assert np.allclose(p0, 0.5)
         assert np.allclose(p1, 0.5)
+
+class TestCopy():
+    def test_equality(self):
+        dm = dm10.Density(6)
+
+        dm_copy = dm.copy()
+
+        assert dm.data is not dm_copy.data
+        assert np.allclose(dm.data.get(), dm_copy.data.get())
+        
+        dm_copy.hadamard(0)
+
+        assert not np.allclose(dm.data.get(), dm_copy.data.get())
+
+
+
+

@@ -9,9 +9,6 @@ class TestSparseDMInit:
         assert len(sdm.classical) == 10
         assert sdm.classical[0] == 0
 
-
-
-
 def test_trace():
     sdm = SparseDM(4)
     assert np.allclose(sdm.trace(), 1)
@@ -141,3 +138,21 @@ def test_meas_on_hadamard():
     assert sdm.full_dm.no_qubits == 0
     assert sdm.classical[0] == 1
     assert np.allclose(sdm.trace(), 0.5)
+
+
+def test_copy():
+    sdm = SparseDM(5)
+    sdm.classical.update({1:1, 3:1})
+    sdm.ensure_dense(2)
+
+    assert sdm.full_dm.no_qubits == 1
+    assert len(sdm.classical) == 4
+
+    sdm_copy = sdm.copy()
+
+    assert len(sdm_copy.classical) == 4
+    assert sdm_copy.classical == {0:0, 1:1, 3:1, 4:0}
+    assert sdm_copy.classical is not sdm.classical
+    assert sdm_copy.last_peak == None
+    assert sdm.full_dm is not sdm_copy.full_dm
+    assert sdm.full_dm.data == sdm_copy.full_dm.data

@@ -4,6 +4,9 @@ class SparseDM:
     def __init__(self, names=None):
         """A given set of qubit is kept in a state 
         """
+        if isinstance(names, int):
+            names = list(range(names))
+
         self.names = names
         self.no_qubits = len(names)
         self.classical = {bit: 0 for bit in names}
@@ -85,3 +88,19 @@ class SparseDM:
 
     def trace(self):
         return self.full_dm.trace()
+
+    def copy(self):
+        """Return an identical but distinct copy of this object.
+
+        If a measurement has been peaked at, the reduced density matrices are discarded.
+        """
+
+        cp = SparseDM(self.names)
+        cp.classical = self.classical.copy()
+        cp.idx_in_full_dm = self.idx_in_full_dm.copy()
+        cp.last_peak = None
+        cp.full_dm = self.full_dm.copy()
+
+        return cp
+
+    def apply(self, circuit):
