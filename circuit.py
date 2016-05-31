@@ -253,6 +253,10 @@ class Circuit:
         tmin = min(times)
         tmax = max(times)
 
+        if tmax - tmin < 0.1:
+            tmin -= 0.05
+            tmax += 0.05
+
         buffer = (tmax - tmin) * 0.05
 
         coords = {str(qb): number for number, qb in enumerate(self.qubits)}
