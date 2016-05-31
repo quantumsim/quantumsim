@@ -270,7 +270,6 @@ class Circuit:
             gate.plot_gate(ax, coords)
             gate.annotate_gate(ax, coords)
 
-        plt.show()
 
     def _plot_qubit_lines(self, ax, coords, tmin, tmax):
         buffer = (tmax - tmin) * 0.05
