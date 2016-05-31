@@ -97,7 +97,7 @@ class AmpPhDamp(Gate):
             r"$%g\,\mathrm{ns}$" %
             self.duration, (self.time, coords[
                 self.involved_qubits[0]]), xytext=(
-                0, 3), textcoords='offset points', ha='center')
+                0, 20), textcoords='offset points', ha='center')
 
 class Measurement(Gate):
     def __init__(self, bit, time, sampler):
@@ -132,9 +132,10 @@ class Circuit:
             "measurement" : Measurement,
             }
 
-    def __init__(self):
+    def __init__(self, title="Unnamed circuit"):
         self.qubits = []
         self.gates = []
+        self.title = title
 
     def add_qubit(self, *args, **kwargs):
         """ Add a qubit. Either 
@@ -262,11 +263,17 @@ class Circuit:
         coords = {str(qb): number for number, qb in enumerate(self.qubits)}
 
         figure = plt.gcf()
+        
 
         ax = figure.add_subplot(1, 1, 1, frameon=True)
 
+        ax.set_title(self.title, loc="left")
+        ax.get_yaxis().set_ticks([])
+
         ax.set_xlim(tmin - 5 * buffer, tmax + 3 * buffer)
-        ax.set_ylim(-1, len(self.qubits) + 1)
+        ax.set_ylim(-1, len(self.qubits))
+
+        ax.set_xlabel('time')
 
         self._plot_qubit_lines(ax, coords, tmin, tmax)
 
