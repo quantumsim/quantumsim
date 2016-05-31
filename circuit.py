@@ -18,34 +18,47 @@ class Circuit:
     def add_gate(self, gate):
         self.gates.append(gate)
 
-    def add_waiting_gates(self):
+    def add_waiting_gates(self, tmin=None, tmax=None):
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
 
-        tmin = all_gates[0].time
-        tmax = all_gates[-1].time
+
+        if not all_gates and (tmin is None or tmax is None):
+            return
+        
+        if tmin is None:
+            tmin = all_gates[0].time
+        if tmax is None:
+            tmax = all_gates[-1].time
 
         for b in self.qubits:
-            gts = [gate for gate in all_gates if gate.involves_qubit(str(b))]
+            gts = [gate for gate in all_gates if gate.involves_qubit(str(b))
+                    and tmin <= gate.time <= tmax]
 
-            if abs(tmin - gts[0].time) > 1e-6:
+            if not gts:
                 self.add_gate(
                     AmpPhDamp(
                         str(b),
-                        (gts[0].time + tmin) / 2,
-                        gts[0].time - tmin,
-                    b.t1, b.t2))
-            if abs(tmax - gts[-1].time) > 1e-6:
-                self.add_gate(AmpPhDamp(
-                    str(b), (gts[-1].time + tmax) / 2, tmax - gts[-1].time,
-                    b.t1, b.t2))
+                        (tmax + tmin) / 2,
+                        tmax - tmin, b.t1, b.t2))
+            else:
+                if gts[0].time - tmin > 1e-6:
+                    self.add_gate(
+                        AmpPhDamp(
+                            str(b),
+                            (gts[0].time + tmin) / 2,
+                            gts[0].time - tmin, b.t1, b.t2))
+                if tmax - gts[-1].time > 1e-6:
+                    self.add_gate(AmpPhDamp(
+                        str(b), (gts[-1].time + tmax) / 2, tmax - gts[-1].time,
+                        b.t1, b.t2))
 
-            for g1, g2 in zip(gts[:-1], gts[1:]):
-                self.add_gate(
-                    AmpPhDamp(
-                        str(b),
-                        (g1.time + g2.time) / 2,
-                        g2.time - g1.time,
-                    b.t1, b.t2))
+                for g1, g2 in zip(gts[:-1], gts[1:]):
+                    self.add_gate(
+                        AmpPhDamp(
+                            str(b),
+                            (g1.time + g2.time) / 2,
+                            g2.time - g1.time,
+                        b.t1, b.t2))
 
     def order(self):
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))

@@ -29,7 +29,7 @@ class TestCircuit:
         assert len(c.gates) == 2
         assert c.gates[0].time == 0
 
-    def test_add_waiting(self):
+    def test_add_waiting_full(self):
         c = circuit.Circuit()
 
         qb = circuit.Qubit("A", t1=10, t2=0)
@@ -47,6 +47,20 @@ class TestCircuit:
         c.order()
 
         assert c.gates[1].time == 0.5
+        assert c.gates[1].duration == 1.0
+
+    def test_add_waiting_empty(self):
+        c = circuit.Circuit()
+
+        c.add_qubit(circuit.Qubit("A", 0, 0))
+
+        c.add_waiting_gates()
+
+        assert len(c.gates) == 0
+
+        c.add_waiting_gates(tmin=0, tmax=100)
+
+        assert len(c.gates) == 1
 
     def test_apply_to(self):
         sdm = MagicMock()
