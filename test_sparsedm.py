@@ -216,3 +216,17 @@ def test_multiple_measurement_hadamard_order2_regression():
             assert np.allclose(p, 0.25)
         else:
             assert np.allclose(p, 0)
+
+
+def test_renormalize():
+    sdm = SparseDM(2)
+
+    sdm.hadamard(0)
+
+    sdm.project_measurement(0, 1)
+
+    assert np.allclose(sdm.trace(), 0.5)
+
+    sdm.renormalize()
+
+    assert np.allclose(sdm.trace(), 1)

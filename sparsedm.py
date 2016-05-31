@@ -15,7 +15,6 @@ class SparseDM:
 
         self.last_peak = None
 
-
     def ensure_dense(self, bit):
         """Make sure that the bit is removed from the classical bits and added to the
         density matrix, do nothing if it is already there."""
@@ -27,7 +26,6 @@ class SparseDM:
             self.full_dm = self.full_dm.add_ancilla(idx, state)
             del self.classical[bit]
             self.idx_in_full_dm[bit] = idx
-
 
     def peak_measurement(self, bit):
         """Calculate the two smaller density matrices that occur when 
@@ -94,12 +92,6 @@ class SparseDM:
 
         return res
 
-
-
-
-
-
-
     def cphase(self, bit0, bit1):
         """Apply a cphase gate between bit0 and bit1.
         """
@@ -122,6 +114,9 @@ class SparseDM:
 
     def trace(self):
         return self.full_dm.trace()
+
+    def renormalize(self):
+        self.full_dm.renormalize()
 
     def copy(self):
         """Return an identical but distinct copy of this object.
