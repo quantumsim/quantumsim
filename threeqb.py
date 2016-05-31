@@ -1,7 +1,11 @@
 import sparsedm
 import numpy as np
 
-sdm = sparsedm.SparseDM(["D1", "D2", "D3", "A1", "A2"])
+import circuit as c
+
+
+qubit_names = ["D1", "D2", "D3", "A1", "A2"]
+sdm = sparsedm.SparseDM(qubit_names)
 
 for bit in sdm.classical:
     sdm.classical[bit] = 1
@@ -10,33 +14,18 @@ sdm.classical["D3"] = 0
 
 print(sdm.classical)
 
-for t in range(20):
-    sdm.hadamard("A1") 
-    sdm.cphase("A1", "D1")
-    sdm.cphase("A1", "D2")
-    sdm.hadamard("A1")
 
-    sdm.amp_ph_damping("A1", 0.1, 0)
 
-    # natural sampling
-    r = np.random.random()
-    p0, p1 = sdm.peak_measurement("A1")
-    if p0/(p0 + p1) > r:
-        sdm.project_measurement("A1", 0)
-    else:
-        sdm.project_measurement("A1", 1)
+c = circuit.Circuit()
 
-    sdm.hadamard("A2") 
-    sdm.cphase("A2", "D2")
-    sdm.cphase("A2", "D3")
-    sdm.hadamard("A2")
-    sdm.amp_ph_damping("A2", 0.1, 0)
+for qb in qubit_names:
+    c.add_qubit(qb, 30000, 50000)
 
-    r = np.random.random()
-    p0, p1 = sdm.peak_measurement("A2")
-    if p0/(p0 + p1) > r:
-        sdm.project_measurement("A2", 0)
-    else:
-        sdm.project_measurement("A2", 1)
+c.add_gate(circuit.Hadamard("A1", time=0))
+c.add_gate(circuit.Hadamard("A2", time=0))
 
-    print(sdm.classical, sdm.trace())
+c.add_gate()
+
+
+
+
