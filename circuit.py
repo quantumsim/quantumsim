@@ -6,126 +6,6 @@ import numpy as np
 import tp
 
 
-class Circuit:
-
-    def __init__(self):
-        self.qubits = []
-        self.gates = []
-
-    def add_qubit(self, name):
-        self.qubits.append(name)
-
-    def add_gate(self, gate):
-        self.gates.append(gate)
-
-    def add_waiting_gates(self, tmin=None, tmax=None):
-        all_gates = list(sorted(self.gates, key=lambda g: g.time))
-
-
-        if not all_gates and (tmin is None or tmax is None):
-            return
-        
-        if tmin is None:
-            tmin = all_gates[0].time
-        if tmax is None:
-            tmax = all_gates[-1].time
-
-        for b in self.qubits:
-            gts = [gate for gate in all_gates if gate.involves_qubit(str(b))
-                    and tmin <= gate.time <= tmax]
-
-            if not gts:
-                self.add_gate(
-                    AmpPhDamp(
-                        str(b),
-                        (tmax + tmin) / 2,
-                        tmax - tmin, b.t1, b.t2))
-            else:
-                if gts[0].time - tmin > 1e-6:
-                    self.add_gate(
-                        AmpPhDamp(
-                            str(b),
-                            (gts[0].time + tmin) / 2,
-                            gts[0].time - tmin, b.t1, b.t2))
-                if tmax - gts[-1].time > 1e-6:
-                    self.add_gate(AmpPhDamp(
-                        str(b), (gts[-1].time + tmax) / 2, tmax - gts[-1].time,
-                        b.t1, b.t2))
-
-                for g1, g2 in zip(gts[:-1], gts[1:]):
-                    self.add_gate(
-                        AmpPhDamp(
-                            str(b),
-                            (g1.time + g2.time) / 2,
-                            g2.time - g1.time,
-                        b.t1, b.t2))
-
-    def order(self):
-        all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
-        measurements = [n for n, gate in all_gates if gate.is_measurement]
-        dependencies = {n: set() for n, gate in all_gates}
-
-        for b in self.qubits:
-            gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
-            for g1, g2 in zip(gts[:-1], gts[1:]):
-                dependencies[g2] |= {g1}
-
-        order = tp.greedy_toposort(dependencies, set(measurements))
-
-        for n, i in enumerate(order):
-            all_gates[i][1].annotation = "%d" % n
-
-        new_order = []
-        for i in order:
-            new_order.append(all_gates[i][1])
-
-        self.gates = new_order
-
-    def apply_to(self, sdm):
-        for gate in self.gates:
-            gate.apply_to(sdm)
-
-    def plot(self):
-        times = [g.time for g in self.gates]
-
-        tmin = min(times)
-        tmax = max(times)
-
-        buffer = (tmax - tmin) * 0.05
-
-        coords = {str(qb): number for number, qb in enumerate(self.qubits)}
-
-        figure = plt.gcf()
-
-        ax = figure.add_subplot(1, 1, 1, frameon=True)
-        # ax.set_axis_off()
-
-        ax.set_xlim(tmin - 5 * buffer, tmax + 3 * buffer)
-        ax.set_ylim(-1, len(self.qubits) + 1)
-
-        self._plot_qubit_lines(ax, coords, tmin, tmax)
-
-        for gate in self.gates:
-            gate.plot_gate(ax, coords)
-            gate.annotate_gate(ax, coords)
-
-        plt.show()
-
-    def _plot_qubit_lines(self, ax, coords, tmin, tmax):
-        buffer = (tmax - tmin) * 0.05
-        xdata = (tmin - buffer, tmax + buffer)
-        for qubit in coords:
-            ydata = (coords[qubit], coords[qubit])
-            line = mp.lines.Line2D(xdata, ydata, color='k')
-            ax.add_line(line)
-            ax.text(
-                xdata[0] - 2 * buffer,
-                ydata[0],
-                str(qubit),
-                color='k',
-                ha='center',
-                va='center')
-
 
 class Qubit:
 
@@ -243,6 +123,162 @@ class Measurement(Gate):
         else:
             self.measurements.append(1)
             sdm.project_measurement(bit, 1)
+
+class Circuit:
+
+    gate_classes = {"cphase": CPhase, 
+            "hadamard": Hadamard,
+            "amp_ph_damping": AmpPhDamp,
+            "measurement" : Measurement,
+            }
+
+    def __init__(self):
+        self.qubits = []
+        self.gates = []
+
+    def add_qubit(self, *args, **kwargs):
+        """ Add a qubit. Either 
+
+        qubit = Qubit("name", t1, t2)
+        circ.add_qubit(qubit)
+
+        or create the instance automatically:
+
+        circ.add_qubit("name", t1, t2)
+        """
+
+        if isinstance(args[0], Qubit):
+            qubit = args[0]
+            self.qubits.append(qubit)
+        else:
+            qb = Qubit(*args, **kwargs)
+            self.qubits.append(qb)
+
+    def add_gate(self, gate_type, *args, **kwargs):
+        """Add a gate to the Circuit.
+
+        gate_type can be circuit.Gate, a string like "hadamard",
+        or a gate class. in the latter two cases, an instance is 
+        created using args and kwargs
+        """
+
+        if isinstance(gate_type, type) and issubclass(gate_type, Gate):
+            gate = gate_type(*args, **kwargs)
+            self.add_gate(gate)
+        elif isinstance(gate_type, str):
+            gate = Circuit.gate_classes[gate_type](*args, **kwargs)
+            self.gates.append(gate)
+        elif isinstance(gate_type, Gate):
+            self.gates.append(gate_type)
+
+    def add_waiting_gates(self, tmin=None, tmax=None):
+        all_gates = list(sorted(self.gates, key=lambda g: g.time))
+
+
+        if not all_gates and (tmin is None or tmax is None):
+            return
+        
+        if tmin is None:
+            tmin = all_gates[0].time
+        if tmax is None:
+            tmax = all_gates[-1].time
+
+        for b in self.qubits:
+            gts = [gate for gate in all_gates if gate.involves_qubit(str(b))
+                    and tmin <= gate.time <= tmax]
+
+            if not gts:
+                self.add_gate(
+                    AmpPhDamp(
+                        str(b),
+                        (tmax + tmin) / 2,
+                        tmax - tmin, b.t1, b.t2))
+            else:
+                if gts[0].time - tmin > 1e-6:
+                    self.add_gate(
+                        AmpPhDamp(
+                            str(b),
+                            (gts[0].time + tmin) / 2,
+                            gts[0].time - tmin, b.t1, b.t2))
+                if tmax - gts[-1].time > 1e-6:
+                    self.add_gate(AmpPhDamp(
+                        str(b), (gts[-1].time + tmax) / 2, tmax - gts[-1].time,
+                        b.t1, b.t2))
+
+                for g1, g2 in zip(gts[:-1], gts[1:]):
+                    self.add_gate(
+                        AmpPhDamp(
+                            str(b),
+                            (g1.time + g2.time) / 2,
+                            g2.time - g1.time,
+                        b.t1, b.t2))
+
+    def order(self):
+        all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
+        measurements = [n for n, gate in all_gates if gate.is_measurement]
+        dependencies = {n: set() for n, gate in all_gates}
+
+        for b in self.qubits:
+            gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
+            for g1, g2 in zip(gts[:-1], gts[1:]):
+                dependencies[g2] |= {g1}
+
+        order = tp.greedy_toposort(dependencies, set(measurements))
+
+        for n, i in enumerate(order):
+            all_gates[i][1].annotation = "%d" % n
+
+        new_order = []
+        for i in order:
+            new_order.append(all_gates[i][1])
+
+        self.gates = new_order
+
+    def apply_to(self, sdm):
+        for gate in self.gates:
+            gate.apply_to(sdm)
+
+    def plot(self):
+        times = [g.time for g in self.gates]
+
+        tmin = min(times)
+        tmax = max(times)
+
+        buffer = (tmax - tmin) * 0.05
+
+        coords = {str(qb): number for number, qb in enumerate(self.qubits)}
+
+        figure = plt.gcf()
+
+        ax = figure.add_subplot(1, 1, 1, frameon=True)
+
+        ax.set_xlim(tmin - 5 * buffer, tmax + 3 * buffer)
+        ax.set_ylim(-1, len(self.qubits) + 1)
+
+        self._plot_qubit_lines(ax, coords, tmin, tmax)
+
+        for gate in self.gates:
+            gate.plot_gate(ax, coords)
+            gate.annotate_gate(ax, coords)
+
+        plt.show()
+
+    def _plot_qubit_lines(self, ax, coords, tmin, tmax):
+        buffer = (tmax - tmin) * 0.05
+        xdata = (tmin - buffer, tmax + buffer)
+        for qubit in coords:
+            ydata = (coords[qubit], coords[qubit])
+            line = mp.lines.Line2D(xdata, ydata, color='k')
+            ax.add_line(line)
+            ax.text(
+                xdata[0] - 2 * buffer,
+                ydata[0],
+                str(qubit),
+                color='k',
+                ha='center',
+                va='center')
+
+
 
 
 if __name__ == "__main__":

@@ -92,6 +92,39 @@ class TestCircuit:
                 call.peak_measurement("A"),
                 call.project_measurement("A", 0)])
 
+    def test_simplified_adding_qubit(self):
+        c = circuit.Circuit()
+        c.add_qubit("A", 10, 10)
+
+        assert len(c.qubits) == 1
+        assert c.qubits[0].name == 'A'
+
+    def test_add_gate_by_class(self):
+        c = circuit.Circuit()
+        c.add_qubit("A", 10, 10)
+        
+        c.add_gate(circuit.Hadamard, "A", time=20)
+
+        assert len(c.gates) == 1
+        assert c.gates[0].time == 20
+
+    def test_add_gate_by_class_name(self):
+        c = circuit.Circuit()
+        c.add_qubit("A", 10, 10)
+        
+        c.add_gate("hadamard", "A", time=20)
+
+        assert len(c.gates) == 1
+        assert c.gates[0].time == 20
+
+        c.add_gate("cphase", "A", "B", time=30)
+
+        assert len(c.gates) == 2
+        assert c.gates[-1].time == 30
+
+
+
+
 class TestHadamardGate:
     def test_init(self):
         h = circuit.Hadamard("A", 7)
