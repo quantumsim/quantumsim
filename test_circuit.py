@@ -122,6 +122,15 @@ class TestCircuit:
         assert len(c.gates) == 2
         assert c.gates[-1].time == 30
 
+    def test_add_gate_by_getattr(self):
+        c = circuit.Circuit()
+        c.add_qubit("A", 10, 10)
+        
+        c.add_hadamard("A", time=20)
+
+        assert len(c.gates) == 1
+        assert c.gates[0].time == 20
+
 
 
 

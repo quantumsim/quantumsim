@@ -5,7 +5,7 @@ import numpy as np
 
 import tp
 
-
+import functools
 
 class Qubit:
 
@@ -170,6 +170,15 @@ class Circuit:
             self.gates.append(gate)
         elif isinstance(gate_type, Gate):
             self.gates.append(gate_type)
+
+    def __getattribute__(self, name):
+
+        if name.find("add_") == 0:
+            if name[4:] in Circuit.gate_classes:
+                gate_type = Circuit.gate_classes[name[4:]]
+                return functools.partial(self.add_gate, gate_type)
+
+        return super().__getattribute__(name)
 
     def add_waiting_gates(self, tmin=None, tmax=None):
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
