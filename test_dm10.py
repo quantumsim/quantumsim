@@ -278,3 +278,42 @@ class TestCopy():
 
 
 
+class TestRenormalize:
+    def test_renormalize_does_nothing_to_gs(self):
+        dm = dm10.Density(6)
+        a0 = dm.data.get()
+        dm.renormalize()
+        a1 = dm.data.get()
+        assert np.allclose(a0, a1)
+
+
+    def test_random_matrix(self):
+        n = 6
+        a = np.random.random((2**n, 2**n))*1j
+        a += np.random.random((2**n, 2**n))
+        a += a.transpose().conj()
+        
+        dm = dm10.Density(n, a)
+
+        dm.renormalize()
+        tr = dm.trace()
+
+        a2 = dm.data.get()
+
+        assert np.allclose(tr, 1)
+        assert np.allclose(a2, a/np.trace(a))
+
+
+
+
+
+
+        
+
+
+
+        
+
+
+
+

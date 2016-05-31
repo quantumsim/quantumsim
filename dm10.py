@@ -165,6 +165,11 @@ class Density:
         p1 = dm1.trace()
         return p0, dm0, p1, dm1
 
+    def renormalize(self):
+        """Renormalize to trace one."""
+        tr = self.trace()
+        self.data *= np.float(1/tr)
+
 
     def copy(self):
         "Return a deep copy of this Density."
