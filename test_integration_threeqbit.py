@@ -8,6 +8,7 @@ def test_three_qbit_clean():
 
     qubit_names = ["D1", "A1", "D2", "A2", "D3"]
 
+    # clean ancillas have infinite life-time
     for qb in qubit_names:
         c.add_qubit(qb, np.inf, np.inf)
     
@@ -23,8 +24,6 @@ def test_three_qbit_clean():
     c.add_hadamard("A1", time=300)
     c.add_hadamard("A2", time=300)
 
-
-
     m1 = circuit.Measurement("A1", time=350, sampler=None)
     c.add_gate(m1)
     m2 = circuit.Measurement("A2", time=350, sampler=None)
@@ -36,7 +35,6 @@ def test_three_qbit_clean():
 
     assert len(c.gates) == 27
 
-
     sdm = sparsedm.SparseDM(qubit_names)
 
     for bit in sdm.classical:
@@ -45,7 +43,6 @@ def test_three_qbit_clean():
     sdm.classical["D3"] = 0
 
     assert sdm.classical == {'A1': 1, 'A2': 1, 'D3': 0, 'D1': 1, 'D2': 1}
-
 
     for i in range(100):
         c.apply_to(sdm)
