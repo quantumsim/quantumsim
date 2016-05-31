@@ -6,8 +6,11 @@ TODOs
     - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - A Circuit class which allows writing down gates as qasm-like strings (but with time informations):
     - Integrated test on 3qb repetition code
-      - clean
       - with decay
+  - Test with Toms decoder
+  - add pi and pi2 gates
+  - add readout error to measurements (or full butterfly)
+  - add actual sampling class to measurements
 
 
 The plan
