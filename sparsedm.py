@@ -71,9 +71,13 @@ class SparseDM:
         """
         res = [(dict(), self.full_dm.copy())]
 
-        bit_idxs = [self.idx_in_full_dm[bit] - i for i,bit in enumerate(bits)]
+        bit_idxs = [(bit, self.idx_in_full_dm[bit]) for i,bit in enumerate(bits)]
 
-        for bit, bit_idx in zip(bits, bit_idxs):
+        # we need to project the bits out in descending, otherwise 
+        # bit numbering reshuffles
+        bit_idxs = list(reversed(sorted(bit_idxs, key=lambda x: x[1])))
+
+        for bit, bit_idx in bit_idxs:
             next_res = []
             for (state, dm) in res:
                 _, d0, _, d1 = dm.measure_ancilla(bit_idx)
@@ -83,9 +87,7 @@ class SparseDM:
                 new_state = state.copy()
                 new_state[bit] = 1
                 next_res.append((new_state, d1))
-
             res = next_res
-
         res = []
         for state, dm in next_res:
             res.append((state, dm.trace()))

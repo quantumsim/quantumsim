@@ -177,7 +177,27 @@ def test_multiple_measurement_gs():
             assert np.allclose(p, 0)
 
 
-def test_multiple_measurement_hadamard():
+def test_multiple_measurement_hadamard_order1():
+    sdm = SparseDM(3)
+
+    sdm.hadamard(0)
+    sdm.hadamard(2)
+
+    sdm.ensure_dense(0)
+    sdm.ensure_dense(1)
+    sdm.ensure_dense(2)
+
+    meas = sdm.peak_multiple_measurements([0,1,2])
+
+    assert len(meas) == 8
+    for state, p in meas:
+        print(meas)
+        if state[1] == 0:
+            assert np.allclose(p, 0.25)
+        else:
+            assert np.allclose(p, 0)
+    
+def test_multiple_measurement_hadamard_order2_regression():
     sdm = SparseDM(3)
 
     sdm.hadamard(0)
@@ -196,4 +216,3 @@ def test_multiple_measurement_hadamard():
             assert np.allclose(p, 0.25)
         else:
             assert np.allclose(p, 0)
-    
