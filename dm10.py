@@ -13,11 +13,17 @@ with open("./primitives.cu", "r") as f:
         mod = SourceModule(f.read())
 
 _cphase = mod.get_function("cphase")
+_cphase.prepare("PII")
 _hadamard = mod.get_function("hadamard")
+_hadamard.prepare("PIdI")
 _amp_ph_damping = mod.get_function("amp_ph_damping")
+_amp_ph_damping.prepare("PIdddI")
 _dm_reduce = mod.get_function("dm_reduce")
+_dm_reduce.prepare("PIPPddI")
 _dm_inflate = mod.get_function("dm_inflate")
+_dm_inflate.prepare("PIPPI")
 _get_diag = mod.get_function("get_diag")
+_get_diag.prepare("PPI")
 
 
 
@@ -60,9 +66,11 @@ class Density:
 
     def trace(self):
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        block=(self._block_size,1,1)
+        grid=(self._grid_size,1,1)
 
-        _get_diag(self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits),
-                block=(self._block_size,1,1), grid=(self._grid_size,1,1))
+        _get_diag.prepared_call(grid, block,
+                self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits))
 
         trace = ga.sum(diag, dtype=np.float64).get()
         return trace
@@ -71,21 +79,25 @@ class Density:
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
 
-        _cphase(self.data.gpudata,
-                np.uint32((1<<bit0) | (1<<bit1)),
-                np.uint32(self.no_qubits),
-                block=(self._block_size,self._block_size,1),
-                grid=(self._grid_size,self._grid_size,1))
+        block = (self._block_size,self._block_size,1)
+        grid = (self._grid_size,self._grid_size,1)
+
+        _cphase.prepared_call(grid, block,
+                self.data.gpudata,
+                (1<<bit0) | (1<<bit1),
+                self.no_qubits)
 
     def hadamard(self, bit):
         assert bit < self.no_qubits
+
+        block = (self._block_size,self._block_size,1)
+        grid = (self._grid_size,self._grid_size,1)
         
-        _hadamard(self.data.gpudata, 
-                np.uint32(1<<bit), 
-                np.float64(0.5), 
-                np.uint32(self.no_qubits),
-                block=(self._block_size,self._block_size,1),
-                grid=(self._grid_size,self._grid_size,1))
+        _hadamard.prepared_call(grid, block,
+                self.data.gpudata, 
+                1<<bit,
+                0.5,
+                self.no_qubits)
 
     def amp_ph_damping(self, bit, gamma, lamda):
         assert bit < self.no_qubits
@@ -96,12 +108,14 @@ class Density:
         s1mgamma = np.float64(np.sqrt(1 - gamma))
         s1mlamda = np.float64(np.sqrt(1 - lamda))
 
-        _amp_ph_damping(self.data.gpudata, 
-                np.uint32(1<<bit), 
+        block = (self._block_size,self._block_size,1)
+        grid = (self._grid_size,self._grid_size,1)
+
+        _amp_ph_damping.prepared_call(grid, block,
+                self.data.gpudata, 
+                1<<bit, 
                 gamma, s1mgamma, s1mlamda, 
-                np.uint32(self.no_qubits),
-                block=(self._block_size,self._block_size,1),
-                grid=(self._grid_size,self._grid_size,1))
+                self.no_qubits)
 
     def add_ancilla(self, bit, anc_st):
         assert bit <= self.no_qubits
@@ -114,13 +128,15 @@ class Density:
         dm9_1 = ga.zeros_like(self.data)
         if anc_st == 1:
             dm9_0, dm9_1 = dm9_1, dm9_0
+            
+        block=(self._block_size,self._block_size,1)
+        grid=(self._grid_size,self._grid_size,1)
 
-        _dm_inflate(new_dm.data.gpudata, 
-                np.uint32(bit), 
+        _dm_inflate.prepared_call(grid, block,
+                new_dm.data.gpudata, 
+                bit, 
                 dm9_0.gpudata, dm9_1.gpudata, 
-                np.uint32(new_dm.no_qubits),
-                block=(self._block_size, self._block_size,1),
-                grid=(self._grid_size, self._grid_size,1))
+                new_dm.no_qubits)
 
         return new_dm
 
@@ -132,13 +148,14 @@ class Density:
         d1 = ga.zeros((2**(self.no_qubits-1), 2**(self.no_qubits-1)), 
                 np.complex128)
 
-        _dm_reduce(self.data.gpudata, 
-                np.uint32(bit),
+        block=(self._block_size,self._block_size,1)
+        grid=(self._grid_size,self._grid_size,1)
+
+        _dm_reduce.prepared_call(grid, block,
+                self.data.gpudata, 
+                bit,
                 d0.gpudata, d1.gpudata,
-                np.float64(1), np.float64(1), 
-                np.uint32(self.no_qubits),
-                block=(self._block_size, self._block_size,1),
-                grid=(self._grid_size, self._grid_size,1))
+                1, 1, self.no_qubits)
 
         dm0 = Density(self.no_qubits - 1, d0)
         dm1 = Density(self.no_qubits - 1, d1)
