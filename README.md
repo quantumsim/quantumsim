@@ -10,7 +10,6 @@ TODOs
   - Test with Toms decoder
   - add pi and pi2 gates
   - add readout error to measurements (or full butterfly)
-  - add actual sampling class to measurements
 
 
 The plan

@@ -101,28 +101,62 @@ class AmpPhDamp(Gate):
 
 class Measurement(Gate):
     def __init__(self, bit, time, sampler):
+        """Create a Measurement gate. The measurement 
+        characteristics are defined by the sampler.
+        The sampler is a coroutine object, which implements:
+
+          declare, project, rel_prob = sampler.send(p0, p1)
+
+        where p0, p1 are two relative probabilities for the outcome 0 and 1.
+        project is the true post-measurement state of the system,
+        while declare is the declared outcome of the measurement.
+
+        rel_prob is the conditional probability for the declaration, given the 
+        input and projection; for a perfect measurement this is 1.
+
+        If sampler is None, a perfect natural Monte Carlo sampler is instantiated.
+
+        After applying the circuit to a density matrix, the declared measurement results
+        are stored in self.measurements.
+        """
+
         super().__init__(time)
         self.is_measurement = True
         self.involved_qubits.append(bit)
         self.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
-
-        self.sampler = sampler
-
-
+        if sampler:
+            self.sampler = sampler
+            next(self.sampler)
+        else:
+            self.sampler = uniform_sampler()
+            next(self.sampler)
         self.measurements = []
-
 
     def apply_to(self, sdm):
         bit = self.involved_qubits[0]
         p0, p1 = sdm.peak_measurement(bit)
 
-        r = np.random.random()
+        declare, project, cond_prob = self.sampler.send((p0, p1))
+
+        self.measurements.append(declare)
+        sdm.project_measurement(bit, project)
+
+def selection_sampler(result=0):
+    while True:
+        yield result, result, 1
+
+
+def uniform_sampler(seed=42):
+    rng = np.random.RandomState(seed)
+    p0, p1 = yield
+    while True:
+        r = rng.random_sample()
         if r < p0/(p0+p1):
-            self.measurements.append(0)
-            sdm.project_measurement(bit, 0)
+            p0, p1 = yield 0, 0, 1
         else:
-            self.measurements.append(1)
-            sdm.project_measurement(bit, 1)
+            p0, p1 = yield 1, 1, 1
+            
+
 
 class Circuit:
 
@@ -281,7 +315,6 @@ class Circuit:
             gate.plot_gate(ax, coords)
             gate.annotate_gate(ax, coords)
 
-
     def _plot_qubit_lines(self, ax, coords, tmin, tmax):
         buffer = (tmax - tmin) * 0.05
         xdata = (tmin - buffer, tmax + buffer)
@@ -298,33 +331,4 @@ class Circuit:
                 va='center')
 
 
-
-
-if __name__ == "__main__":
-    cp = CPhase(0, 1, 0)
-    h = Hadamard(0, 2)
-
-    ct = Circuit()
-    bits = ["D1", "A1", "D2", "A2", "D3"]
-    for qb in bits:
-        ct.add_qubit(Qubit(qb, 10, 10))
-
-    ct.add_gate(CPhase("A1", "D1", 0))
-    ct.add_gate(CPhase("A1", "D2", 100))
-    ct.add_gate(CPhase("A2", "D2", 0))
-    ct.add_gate(CPhase("A2", "D3", 100))
-
-    ct.add_gate(Hadamard("A1", -50))
-    ct.add_gate(Hadamard("A1", 200))
-    ct.add_gate(Hadamard("A2", -50))
-    ct.add_gate(Hadamard("A2", 200))
-
-    ct.add_gate(Measurement("A1", 300))
-    ct.add_gate(Measurement("A2", 300))
-
-    ct.add_waiting_gates()
-
-    ct.order()
-
-    ct.plot()
 

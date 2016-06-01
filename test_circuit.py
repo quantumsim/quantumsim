@@ -131,9 +131,6 @@ class TestCircuit:
         assert len(c.gates) == 1
         assert c.gates[0].time == 20
 
-
-
-
 class TestHadamardGate:
     def test_init(self):
         h = circuit.Hadamard("A", 7)
@@ -194,7 +191,7 @@ class TestMeasurement:
         assert m.involves_qubit("A")
         assert m.time == 0
         
-    def test_apply(self):
+    def test_apply_with_uniform_sampler(self):
         m = circuit.Measurement("A", 0, sampler=None)
 
         sdm = MagicMock()
@@ -218,11 +215,39 @@ class TestMeasurement:
         sdm.peak_measurement.assert_called_once_with("A")
         sdm.project_measurement.assert_called_once_with("A", 0)
 
+    def test_apply_with_selection_sampler(self):
+        m = circuit.Measurement("A", 0, sampler=circuit.selection_sampler(1))
+
+        sdm = MagicMock()
+        sdm.peak_measurement = MagicMock(return_value=(0, 1))
+        sdm.project_measurement = MagicMock()
+
+        m.apply_to(sdm)
+
+        assert m.measurements == [1]
+
+        sdm.peak_measurement.assert_called_once_with("A")
+        sdm.project_measurement.assert_called_once_with("A", 1)
+
+        sdm.peak_measurement = MagicMock(return_value=(1, 0))
+        sdm.project_measurement = MagicMock()
+
+        m.apply_to(sdm)
+
+        assert m.measurements == [1, 1]
+
+        sdm.peak_measurement.assert_called_once_with("A")
+        sdm.project_measurement.assert_called_once_with("A", 1)
+
 
     def test_apply_random(self):
         m = circuit.Measurement("A", 0, sampler=None)
 
-        with patch('numpy.random.random') as p:
+        with patch('numpy.random.RandomState') as rsclass:
+            rs = MagicMock()
+            rsclass.return_value = rs
+            rs.random_sample = MagicMock()
+            p = rs.random_sample
             p.return_value = 0.3
             sdm = MagicMock()
             sdm.peak_measurement = MagicMock(return_value=(0.06, 0.04))
@@ -241,3 +266,31 @@ class TestMeasurement:
             sdm.project_measurement.assert_called_once_with("A", 1)
 
 
+
+class TestSamplers:
+    def test_selection_sampler(self):
+        s = circuit.selection_sampler(0)
+        next(s)
+        for _ in range(10):
+            pr, dec, prob = s.send((0.5, 0.5))
+            assert pr == 0
+            assert dec == 0
+            assert prob == 1
+
+    def test_uniform_sampler(self):
+        s = circuit.uniform_sampler()
+        with patch("numpy.random.RandomState") as rsclass:
+            rs = MagicMock()
+            rsclass.return_value = rs
+            rs.random_sample = MagicMock(return_value = 0.5)
+
+            s = circuit.uniform_sampler(seed=42)
+            next(s)
+
+            rsclass.assert_called_once_with(42)
+
+            for p0 in np.linspace(0, 1, 10):
+                proj, dec, prob = s.send((p0, 1 - p0))
+                assert proj == dec
+                assert prob == 1
+                assert proj == int(p0 < 0.5)
