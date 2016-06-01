@@ -69,7 +69,9 @@ class SparseDM:
         """Obtain the probabilities for all combinations of a multiple
         qubit measurement. Act on a copy, do not destroy this density matrix.
         """
-        res = [(dict(), self.full_dm.copy())]
+        res = [(self.classical.copy(), self.full_dm.copy())]
+
+        bits = [bit for bit in bits if bit not in self.classical]
 
         bit_idxs = [(bit, self.idx_in_full_dm[bit]) for i,bit in enumerate(bits)]
 

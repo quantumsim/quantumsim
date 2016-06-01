@@ -15,7 +15,6 @@ def test_trace():
     sdm = SparseDM(4)
     assert np.allclose(sdm.trace(), 1)
 
-
 def test_ensure_dense_only_allowed_bits():
     sdm = SparseDM(0)
     with pytest.raises(ValueError):
@@ -58,7 +57,6 @@ def test_peak_on_hadamard():
 
     assert np.allclose(sdm.last_peak[0].trace(), 0.5)
     assert np.allclose(sdm.last_peak[1].trace(), 0.5)
-
 
 def test_peak_on_decay():
     sdm = SparseDM(1)
@@ -120,7 +118,6 @@ def test_meas_on_ground_state():
     assert sdm.full_dm.no_qubits == 0
     assert np.allclose(sdm.trace(), 1)
 
-
 def test_meas_on_hadamard():
     sdm = SparseDM(1)
     sdm.hadamard(0)
@@ -141,7 +138,6 @@ def test_meas_on_hadamard():
     assert sdm.classical[0] == 1
     assert np.allclose(sdm.trace(), 0.5)
 
-
 def test_copy():
     sdm = SparseDM(5)
     sdm.classical.update({1:1, 3:1})
@@ -159,7 +155,6 @@ def test_copy():
     assert sdm.full_dm is not sdm_copy.full_dm
     assert sdm.full_dm.data == sdm_copy.full_dm.data
 
-
 def test_multiple_measurement_gs():
     sdm = SparseDM(3)
 
@@ -175,7 +170,6 @@ def test_multiple_measurement_gs():
             assert np.allclose(p, 1)
         else:
             assert np.allclose(p, 0)
-
 
 def test_multiple_measurement_hadamard_order1():
     sdm = SparseDM(3)
@@ -217,6 +211,15 @@ def test_multiple_measurement_hadamard_order2_regression():
         else:
             assert np.allclose(p, 0)
 
+def test_multiple_measurement_hadamard_on_classical():
+    sdm = SparseDM(2)
+
+    sdm.hadamard(0)
+
+    meas = sdm.peak_multiple_measurements([0,1])
+
+    assert len(meas) == 2
+    assert meas == [ ({0:0, 1:0}, 0.5), ({0:1, 1:0}, 0.5) ]
 
 def test_renormalize():
     sdm = SparseDM(2)
