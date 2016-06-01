@@ -155,78 +155,92 @@ def test_copy():
     assert sdm.full_dm is not sdm_copy.full_dm
     assert sdm.full_dm.data == sdm_copy.full_dm.data
 
-def test_multiple_measurement_gs():
-    sdm = SparseDM(3)
+class TestMultipleMeasurement:
+    def test_multiple_measurement_gs(self):
+        sdm = SparseDM(3)
 
-    sdm.ensure_dense(0)
-    sdm.ensure_dense(1)
-    sdm.ensure_dense(2)
+        sdm.ensure_dense(0)
+        sdm.ensure_dense(1)
+        sdm.ensure_dense(2)
 
-    meas = sdm.peak_multiple_measurements([0,1,2])
+        meas = sdm.peak_multiple_measurements([0,1,2])
 
-    assert len(meas) == 8
-    for state, p in meas:
-        if state[0] == 0 and state[1] == 0 and state[2] == 0:
-            assert np.allclose(p, 1)
-        else:
-            assert np.allclose(p, 0)
+        assert len(meas) == 8
+        for state, p in meas:
+            if state[0] == 0 and state[1] == 0 and state[2] == 0:
+                assert np.allclose(p, 1)
+            else:
+                assert np.allclose(p, 0)
+    def test_multiple_measurement_hadamard_order1(self):
+        sdm = SparseDM(3)
 
-def test_multiple_measurement_hadamard_order1():
-    sdm = SparseDM(3)
+        sdm.hadamard(0)
+        sdm.hadamard(2)
 
-    sdm.hadamard(0)
-    sdm.hadamard(2)
+        sdm.ensure_dense(0)
+        sdm.ensure_dense(1)
+        sdm.ensure_dense(2)
 
-    sdm.ensure_dense(0)
-    sdm.ensure_dense(1)
-    sdm.ensure_dense(2)
+        meas = sdm.peak_multiple_measurements([0,1,2])
 
-    meas = sdm.peak_multiple_measurements([0,1,2])
+        assert len(meas) == 8
+        for state, p in meas:
+            print(meas)
+            if state[1] == 0:
+                assert np.allclose(p, 0.25)
+            else:
+                assert np.allclose(p, 0)
+    def test_multiple_measurement_hadamard_order2_regression(self):
+        sdm = SparseDM(3)
 
-    assert len(meas) == 8
-    for state, p in meas:
-        print(meas)
-        if state[1] == 0:
-            assert np.allclose(p, 0.25)
-        else:
-            assert np.allclose(p, 0)
-    
-def test_multiple_measurement_hadamard_order2_regression():
-    sdm = SparseDM(3)
+        sdm.hadamard(0)
+        sdm.hadamard(1)
 
-    sdm.hadamard(0)
-    sdm.hadamard(1)
+        sdm.ensure_dense(0)
+        sdm.ensure_dense(1)
+        sdm.ensure_dense(2)
 
-    sdm.ensure_dense(0)
-    sdm.ensure_dense(1)
-    sdm.ensure_dense(2)
+        meas = sdm.peak_multiple_measurements([0,1,2])
 
-    meas = sdm.peak_multiple_measurements([0,1,2])
+        assert len(meas) == 8
+        for state, p in meas:
+            print(meas)
+            if state[2] == 0:
+                assert np.allclose(p, 0.25)
+            else:
+                assert np.allclose(p, 0)
+    def test_multiple_does_not_change(self):
+        sdm = SparseDM(3)
 
-    assert len(meas) == 8
-    for state, p in meas:
-        print(meas)
-        if state[2] == 0:
-            assert np.allclose(p, 0.25)
-        else:
-            assert np.allclose(p, 0)
+        sdm.hadamard(0)
+        sdm.hadamard(1)
 
-def test_multiple_measurement_hadamard_on_classical():
-    sdm = SparseDM(2)
+        sdm.ensure_dense(0)
+        sdm.ensure_dense(1)
+        sdm.ensure_dense(2)
 
-    sdm.hadamard(0)
+        before = sdm.full_dm.data.get()
 
-    meas = sdm.peak_multiple_measurements([0,1])
+        assert before.shape == (8,8)
 
-    assert len(meas) == 2
-    assert meas == [ ({0:0, 1:0}, 0.5), ({0:1, 1:0}, 0.5) ]
+        meas = sdm.peak_multiple_measurements([0,1,2])
 
-def test_multiple_measurement_only_classical():
-    sdm = SparseDM(2)
+        assert np.allclose(before, sdm.full_dm.data.get())
+    def test_multiple_measurement_hadamard_on_classical(self):
+        sdm = SparseDM(2)
 
-    meas = sdm.peak_multiple_measurements([0])
+        sdm.hadamard(0)
 
-    assert meas == [ ({0:0}, 1) ]
+        meas = sdm.peak_multiple_measurements([0,1])
+
+        assert len(meas) == 2
+        assert meas == [ ({0:0, 1:0}, 0.5), ({0:1, 1:0}, 0.5) ]
+    def test_multiple_measurement_only_classical(self):
+        sdm = SparseDM(2)
+
+        meas = sdm.peak_multiple_measurements([0])
+
+        assert meas == [ ({0:0}, 1) ]
 
 def test_renormalize():
     sdm = SparseDM(2)
