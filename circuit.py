@@ -140,6 +140,7 @@ class Measurement(Gate):
 
         self.measurements.append(declare)
         sdm.project_measurement(bit, project)
+        sdm.classical_probability *= cond_prob
 
 class Circuit:
 
@@ -172,6 +173,8 @@ class Circuit:
             qb = Qubit(*args, **kwargs)
             self.qubits.append(qb)
 
+        return self.qubits[-1]
+
     def add_gate(self, gate_type, *args, **kwargs):
         """Add a gate to the Circuit.
 
@@ -188,6 +191,8 @@ class Circuit:
             self.gates.append(gate)
         elif isinstance(gate_type, Gate):
             self.gates.append(gate_type)
+
+        return self.gates[-1]
 
     def __getattribute__(self, name):
 

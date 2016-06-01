@@ -13,6 +13,8 @@ class SparseDM:
         self.idx_in_full_dm = {}
         self.full_dm = dm10.Density(0)
 
+        self.classical_probability = 1
+
         self.last_peak = None
 
     def ensure_dense(self, bit):
@@ -113,10 +115,11 @@ class SparseDM:
         self.full_dm.amp_ph_damping(self.idx_in_full_dm[bit], gamma, lamda)
 
     def trace(self):
-        return self.full_dm.trace()
+        return self.classical_probability * self.full_dm.trace()
 
     def renormalize(self):
         self.full_dm.renormalize()
+        self.classical_probability = 1
 
     def copy(self):
         """Return an identical but distinct copy of this object.

@@ -2,6 +2,8 @@ import circuit
 import sparsedm
 import numpy as np
 
+import pytest
+
 
 def test_three_qbit_clean():
     c = circuit.Circuit()
@@ -60,6 +62,41 @@ def test_three_qbit_clean():
 
 
     
+
+
+
+
+def test_noisy_measurement_sampler():
+    c = circuit.Circuit()
+    c.add_qubit("A", 0, 0)
+
+
+    c.add_hadamard("A", 1)
+
+    sampler = circuit.uniform_noisy_sampler(seed=42, readout_error = 0.1)
+    m1 = c.add_measurement("A", time=2, sampler=sampler)
+
+    sdm = sparsedm.SparseDM("A")
+
+    true_state = []
+    for _ in range(20):
+        c.apply_to(sdm)
+        true_state.append(sdm.classical['A'])
+
+        
+
+    # these samples assume a certain seed (=42)
+    assert m1.measurements == [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1]
+    assert true_state != m1.measurements
+    assert true_state == [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1]
+
+    # we have two measurement errors
+    mprob = 0.9**18 * 0.1**2
+    assert np.allclose(sdm.classical_probability, mprob)
+    
+    # and each measurement has outcome 1/2
+    totprob = mprob * 0.5**20
+    assert np.allclose(sdm.trace(), totprob)
 
 
 
