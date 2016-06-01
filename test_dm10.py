@@ -1,7 +1,7 @@
-import dm10
 import numpy as np
 import pycuda.gpuarray as ga
 import pytest
+import dm10
 
 class TestDensityInit:
     def test_ground_state(self):
@@ -60,6 +60,29 @@ class TestDensityTrace:
         trace_np = a.trace()
 
         assert np.allclose(trace_dm, trace_np)
+
+class TestDensityGetDiag:
+    def test_empty_trace_one(self):
+        dm = dm10.Density(5)
+        diag = dm.get_diag()
+        diag_should = np.zeros(2**5)
+        diag_should[0] = 1
+        assert np.allclose(diag, diag_should)
+
+    def test_trace_random(self):
+        n = 7
+        a = np.random.random((2**n, 2**n))*1j
+        a += np.random.random((2**n, 2**n))
+
+        # make a hermitian
+        a += a.transpose().conj()
+        
+        dm = dm10.Density(n, a)
+
+        diag_dm = dm.get_diag()
+        diag_a = a.diagonal()
+
+        assert np.allclose(diag_dm, diag_a)
 
         
 class TestDensityCPhase:

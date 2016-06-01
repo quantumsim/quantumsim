@@ -75,6 +75,17 @@ class Density:
         trace = ga.sum(diag, dtype=np.float64).get()
         return trace
 
+
+    def get_diag(self):
+        diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        block=(self._block_size,1,1)
+        grid=(self._grid_size,1,1)
+
+        _get_diag.prepared_call(grid, block,
+                self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits))
+
+        return diag.get()
+
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
