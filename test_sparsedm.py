@@ -221,6 +221,13 @@ def test_multiple_measurement_hadamard_on_classical():
     assert len(meas) == 2
     assert meas == [ ({0:0, 1:0}, 0.5), ({0:1, 1:0}, 0.5) ]
 
+def test_multiple_measurement_only_classical():
+    sdm = SparseDM(2)
+
+    meas = sdm.peak_multiple_measurements([0])
+
+    assert meas == [ ({0:0}, 1) ]
+
 def test_renormalize():
     sdm = SparseDM(2)
 

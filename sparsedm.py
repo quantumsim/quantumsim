@@ -69,7 +69,9 @@ class SparseDM:
         """Obtain the probabilities for all combinations of a multiple
         qubit measurement. Act on a copy, do not destroy this density matrix.
         """
-        res = [(self.classical.copy(), self.full_dm.copy())]
+        classical_bits = {bit: self.classical[bit] for bit in bits if bit in self.classical}
+
+        res = [(classical_bits, self.full_dm.copy())]
 
         bits = [bit for bit in bits if bit not in self.classical]
 
@@ -79,6 +81,7 @@ class SparseDM:
         # bit numbering reshuffles
         bit_idxs = list(reversed(sorted(bit_idxs, key=lambda x: x[1])))
 
+        next_res = res
         for bit, bit_idx in bit_idxs:
             next_res = []
             for (state, dm) in res:
@@ -91,6 +94,7 @@ class SparseDM:
                 next_res.append((new_state, d1))
             res = next_res
         res = []
+
         for state, dm in next_res:
             res.append((state, dm.trace()))
 
