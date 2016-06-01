@@ -294,3 +294,28 @@ class TestSamplers:
                 assert proj == dec
                 assert prob == 1
                 assert proj == int(p0 < 0.5)
+
+    def test_uniform_noisy_sampler(self):
+        s = circuit.uniform_sampler()
+        with patch("numpy.random.RandomState") as rsclass:
+            rs = MagicMock()
+            rsclass.return_value = rs
+            rs.random_sample = MagicMock(return_value = 0.5)
+
+            s = circuit.uniform_noisy_sampler(0.4, seed=42)
+            next(s)
+
+            rsclass.assert_called_once_with(42)
+
+            # no readout error
+            proj, dec, prob = s.send((0.2, 0.8))
+            assert (proj, dec, prob) == (1, 1, 0.6)
+            proj, dec, prob = s.send((0.9, 0.1))
+            assert (proj, dec, prob) == (0, 0, 0.6)
+
+            s = circuit.uniform_noisy_sampler(0.7, seed=42)
+            next(s)
+            proj, dec, prob = s.send((0.2, 0.8))
+            assert (proj, dec, prob) == (1, 0, 0.7)
+            proj, dec, prob = s.send((0.9, 0.1))
+            assert (proj, dec, prob) == (0, 1, 0.7)

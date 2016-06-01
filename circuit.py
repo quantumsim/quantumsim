@@ -141,23 +141,6 @@ class Measurement(Gate):
         self.measurements.append(declare)
         sdm.project_measurement(bit, project)
 
-def selection_sampler(result=0):
-    while True:
-        yield result, result, 1
-
-
-def uniform_sampler(seed=42):
-    rng = np.random.RandomState(seed)
-    p0, p1 = yield
-    while True:
-        r = rng.random_sample()
-        if r < p0/(p0+p1):
-            p0, p1 = yield 0, 0, 1
-        else:
-            p0, p1 = yield 1, 1, 1
-            
-
-
 class Circuit:
 
     gate_classes = {"cphase": CPhase, 
@@ -330,5 +313,34 @@ class Circuit:
                 ha='center',
                 va='center')
 
+def selection_sampler(result=0):
+    while True:
+        yield result, result, 1
 
+def uniform_sampler(seed=42):
+    rng = np.random.RandomState(seed)
+    p0, p1 = yield
+    while True:
+        r = rng.random_sample()
+        if r < p0/(p0+p1):
+            p0, p1 = yield 0, 0, 1
+        else:
+            p0, p1 = yield 1, 1, 1
 
+def uniform_noisy_sampler(readout_error, seed=42):
+    rng = np.random.RandomState(seed)
+    p0, p1 = yield
+    while True:
+        r = rng.random_sample()
+        if r < p0/(p0+p1):
+            proj = 0
+        else:
+            proj = 1
+        r = rng.random_sample()
+        if r < readout_error:
+            decl = 1 - proj
+            prob = readout_error
+        else:
+            decl = proj
+            prob = 1 - readout_error
+        p0, p1 = yield proj, decl, prob 
