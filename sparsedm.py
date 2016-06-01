@@ -77,26 +77,27 @@ class SparseDM:
 
         bit_idxs = [(bit, self.idx_in_full_dm[bit]) for i,bit in enumerate(bits)]
 
-        # we need to project the bits out in descending, otherwise 
-        # bit numbering reshuffles
-        bit_idxs = list(reversed(sorted(bit_idxs, key=lambda x: x[1])))
+        mask = 0
+        for bit in bits:
+            mask |= 1 << self.idx_in_full_dm[bit]
 
-        next_res = res
-        for bit, bit_idx in bit_idxs:
-            next_res = []
-            for (state, dm) in res:
-                _, d0, _, d1 = dm.measure_ancilla(bit_idx)
-                new_state = state.copy()
-                new_state[bit] = 0
-                next_res.append((new_state, d0))
-                new_state = state.copy()
-                new_state[bit] = 1
-                next_res.append((new_state, d1))
-            res = next_res
+        diagonal = self.full_dm.get_diag()
+
+        probs = {}
+
+        for idx, prob in enumerate(diagonal):
+            if idx & mask in probs:
+                probs[idx & mask]  += prob
+            else: 
+                probs[idx & mask]  = prob
+
         res = []
+        for idx in probs:
+            outcome = classical_bits.copy()
+            for bit in bits: 
+                outcome[bit] = idx & (1 << self.idx_in_full_dm[bit])
 
-        for state, dm in next_res:
-            res.append((state, dm.trace()))
+            res.append((outcome, probs[idx]))
 
         return res
 
