@@ -16,7 +16,7 @@
 //run in a 2d grid that stretches over dm10
 __global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) {
     const int x = (blockIdx.x *blockDim.x) + threadIdx.x;
-    const int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+    const int y = (blockIdx.y *blockDim.y) + threadIdx.y;
 
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
@@ -40,7 +40,7 @@ __global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) 
 __global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double sine, unsigned int no_qubits) { 
 
     int x = (blockIdx.x *blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
 
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
@@ -103,7 +103,7 @@ __global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double 
 __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned int no_qubits) { 
 
     int x = (blockIdx.x *blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
 
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
@@ -156,7 +156,7 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned i
 __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, double s1mgamma, double s1mlambda, unsigned int no_qubits) {
 
     int x = (blockIdx.x *blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
@@ -187,7 +187,7 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 
 __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1, unsigned int no_qubits) {
     int x = (blockIdx.x *blockDim.x) + threadIdx.x;
-    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
@@ -234,7 +234,7 @@ __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
 //run over 9x9 grid!
 __global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, unsigned int no_qubits) {
     int x9 = (blockIdx.x *blockDim.x) + threadIdx.x;
-    int y9 = (blockIdx.y *blockDim.x) + threadIdx.y;
+    int y9 = (blockIdx.y *blockDim.y) + threadIdx.y;
     if (x9 >= (1 << no_qubits-1) || y9 >= (1 << no_qubits-1)) return;
 
     int ri_flag = 1;
