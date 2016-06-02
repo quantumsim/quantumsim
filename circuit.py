@@ -144,10 +144,9 @@ class Measurement(Gate):
         self.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
         if sampler:
             self.sampler = sampler
-            next(self.sampler)
         else:
             self.sampler = uniform_sampler()
-            next(self.sampler)
+        next(self.sampler)
         self.measurements = []
 
     def apply_to(self, sdm):
