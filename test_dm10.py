@@ -3,6 +3,7 @@ import pycuda.gpuarray as ga
 import pytest
 import dm10
 
+
 class TestDensityInit:
     def test_ground_state(self):
         dm = dm10.Density(10)
@@ -39,7 +40,6 @@ class TestDensityInit:
         a = np.zeros((2**n, 2**n))
         with pytest.raises(AssertionError):
             dm = dm10.Density(n+1, a)
-
 
 class TestDensityTrace:
     def test_empty_trace_one(self):
@@ -83,7 +83,6 @@ class TestDensityGetDiag:
         diag_a = a.diagonal()
 
         assert np.allclose(diag_dm, diag_a)
-
         
 class TestDensityCPhase:
     def test_bit_too_high(self):
@@ -125,8 +124,6 @@ class TestDensityCPhase:
         a1 = dm.data.get()
         assert np.allclose(a0, a1)
 
-
-
 class TestDensityHadamard:
     def test_bit_too_high(self):
         dm = dm10.Density(10)
@@ -157,6 +154,28 @@ class TestDensityHadamard:
         a1 = dm.data.get()
         assert np.allclose(a0, a1)
 
+class TestDensityRotateY:
+    def test_bit_too_high(self):
+        dm = dm10.Density(10)
+        with pytest.raises(AssertionError):
+            dm.rotate_y(10, 1, 0)
+
+    def test_does_something_to_ground_state(self):
+        dm = dm10.Density(10)
+        a0 = dm.data.get()
+        dm.rotate_y(4, np.cos(0.5), np.sin(0.5))
+        a1 = dm.data.get()
+        assert not np.allclose(a0, a1)
+
+
+    def test_excite(self):
+        dm = dm10.Density(2)
+        dm.rotate_y(0, np.cos(np.pi/2), np.sin(np.pi/2))
+        dm.rotate_y(1, np.cos(np.pi/2), np.sin(np.pi/2))
+        
+        a1 = dm.data.get()
+        assert np.allclose(np.trace(a1), 1)
+        assert np.allclose(a1[-1, -1], 1)
 
 class TestDensityAmpPhDamping:
     def test_bit_too_high(self):
@@ -198,7 +217,6 @@ class TestDensityAmpPhDamping:
         a2 = dm.data.get()
 
         assert np.allclose(a2[0, 0], 1)
-
 
 class TestDensityAddAncilla:
     def test_bit_too_high(self):
@@ -297,9 +315,6 @@ class TestCopy():
         dm_copy.hadamard(0)
 
         assert not np.allclose(dm.data.get(), dm_copy.data.get())
-
-
-
 
 class TestRenormalize:
     def test_renormalize_does_nothing_to_gs(self):

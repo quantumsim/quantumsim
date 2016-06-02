@@ -24,6 +24,8 @@ _dm_inflate = mod.get_function("dm_inflate")
 _dm_inflate.prepare("PIPPI")
 _get_diag = mod.get_function("get_diag")
 _get_diag.prepare("PPI")
+_rotate_y = mod.get_function("rotate_y")
+_rotate_y.prepare("PIddI")
 
 
 
@@ -126,6 +128,18 @@ class Density:
                 self.data.gpudata, 
                 1<<bit, 
                 gamma, s1mgamma, s1mlamda, 
+                self.no_qubits)
+        
+    def rotate_y(self, bit, cosine, sine):
+        assert bit < self.no_qubits
+
+        block = (self._block_size,self._block_size,1)
+        grid = (self._grid_size,self._grid_size,1)
+
+        _rotate_y.prepared_call(grid, block,
+                self.data.gpudata, 
+                1<<bit, 
+                cosine, sine,
                 self.no_qubits)
 
     def add_ancilla(self, bit, anc_st):
