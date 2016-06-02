@@ -185,7 +185,8 @@ class TestMultipleMeasurement:
 
         assert len(meas) == 8
         for state, p in meas:
-            print(meas)
+            for x in state.values():
+                assert x in [0, 1]
             if state[1] == 0:
                 assert np.allclose(p, 0.25)
             else:

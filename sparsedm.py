@@ -96,7 +96,7 @@ class SparseDM:
         for idx in probs:
             outcome = classical_bits.copy()
             for bit in bits: 
-                outcome[bit] = idx & (1 << self.idx_in_full_dm[bit])
+                outcome[bit] = int(idx & (1 << self.idx_in_full_dm[bit])>0)
 
             res.append((outcome, probs[idx]))
 
