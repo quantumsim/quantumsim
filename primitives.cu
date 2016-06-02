@@ -1,8 +1,6 @@
 #include <cuda.h> 
 #include <cuComplex.h>
 
-// the block size is 1<<LOG_BK_SIZE in x and y direction
-#define LOG_BK_SIZE (5)
 
 //this defines the scheme by which the density matrix is stored in a dm10
 //we always require x <= y for the real part and
@@ -17,8 +15,8 @@
 //partake in the cphase.
 //run in a 2d grid that stretches over dm10
 __global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) {
-    const int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    const int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    const int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    const int y = (blockIdx.y *blockDim.x) + threadIdx.y;
 
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
@@ -35,13 +33,77 @@ __global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) 
 }
 
 
+
+//do a rotation around the y axis on the gate specified by bit: 
+//sine and cosine are the sine and cosine of the angle over two!: 
+// U = [[cos, sin], [-sin, cos]]
+__global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double sine, unsigned int no_qubits) { 
+
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
+
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
+    if((x&mask) && ((~y)&mask)) { //real part
+        x = x & ~mask;
+        if (x <= y) {
+            double a = dm10[ADDR_REAL(x, y, no_qubits)];
+            double b = dm10[ADDR_REAL(x|mask, y, no_qubits)];
+            double c = dm10[ADDR_REAL(x, y|mask, no_qubits)];
+            double d = dm10[ADDR_REAL(x|mask, y|mask, no_qubits)];
+
+            double new_a = cosine*a + sine*b;
+            double new_b = -sine*a + cosine*b;
+            double new_c = cosine*c + sine*d;
+            double new_d = -sine*c + cosine*d;
+
+            a = cosine*new_a + sine*new_c;
+            b = cosine*new_b + sine*new_d;
+            c = -sine*new_a + cosine*new_c;
+            d = -sine*new_b + cosine*new_d;
+
+
+            dm10[ADDR_REAL(x, y, no_qubits)] = a;
+            dm10[ADDR_REAL(x|mask, y, no_qubits)] = b;
+            dm10[ADDR_REAL(x, y|mask, no_qubits)] = c;
+            dm10[ADDR_REAL(x|mask, y|mask, no_qubits)] = d;
+        }
+    }
+    if (((~x)&mask) && (y&mask)) { //do the imaginary part
+        y = y & ~mask;
+        if (y <= x){
+            double a = dm10[ADDR_IMAG(y, x, no_qubits)];
+            double b = dm10[ADDR_IMAG(y|mask, x, no_qubits)];
+            double c = dm10[ADDR_IMAG(y, x|mask, no_qubits)];
+            double d = dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)];
+
+            double new_a = cosine*a + sine*b;
+            double new_b = -sine*a + cosine*b;
+            double new_c = cosine*c + sine*d;
+            double new_d = -sine*c + cosine*d;
+
+            a = cosine*new_a + sine*new_c;
+            b = cosine*new_b + sine*new_d;
+            c = -sine*new_a + cosine*new_c;
+            d = -sine*new_b + cosine*new_d;
+
+            dm10[ADDR_IMAG(y, x, no_qubits)] = a;
+            dm10[ADDR_IMAG(y|mask, x, no_qubits)] = b;
+            dm10[ADDR_IMAG(y, x|mask, no_qubits)] = c;
+            dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)] = d;
+        }
+    }
+
+}
+
+
 //do the hadamard on a qubit
 //mask must have exactly one bit flipped, denoting which byte is involved
 //the results is multiplied with mul, to obtain trace preserving map, set mul = 0.5
 __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned int no_qubits) { 
 
-    int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
 
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
@@ -93,8 +155,8 @@ __global__ void hadamard(double *dm10, unsigned int mask, double mul, unsigned i
 // s1mlambda = sqrt(1-lambda), where lambda is the probability for a phase flip, i.e. lambda = 1- exp(-t/T2)
 __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, double s1mgamma, double s1mlambda, unsigned int no_qubits) {
 
-    int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
@@ -124,8 +186,8 @@ __global__ void amp_ph_damping(double *dm10, unsigned int mask, double gamma, do
 //the qubit index is passed as an integer, not as a bitmask!
 
 __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1, unsigned int no_qubits) {
-    int x = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    int y = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.x) + threadIdx.y;
     if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
     int ri_flag = 1;
@@ -163,7 +225,7 @@ __global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, dou
 //calculation of subtraces.
 //run over a 1x9 grid!
 __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
-    int x = (blockIdx.x <<  LOG_BK_SIZE) + threadIdx.x;
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
     if (x >= (1 << no_qubits)) return;
     out[x] = dm9[ADDR_BARE(x,x,0,no_qubits)];
 }
@@ -171,8 +233,8 @@ __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
 //inverse of dm_reduce
 //run over 9x9 grid!
 __global__ void dm_inflate(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, unsigned int no_qubits) {
-    int x9 = (blockIdx.x << LOG_BK_SIZE) + threadIdx.x;
-    int y9 = (blockIdx.y << LOG_BK_SIZE) + threadIdx.y;
+    int x9 = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y9 = (blockIdx.y *blockDim.x) + threadIdx.y;
     if (x9 >= (1 << no_qubits-1) || y9 >= (1 << no_qubits-1)) return;
 
     int ri_flag = 1;

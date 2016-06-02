@@ -14,7 +14,7 @@ amp_ph_damping = mod.get_function("amp_ph_damping")
 dm_reduce = mod.get_function("dm_reduce")
 dm_inflate = mod.get_function("dm_inflate")
 get_diag = mod.get_function("get_diag")
-
+rotate_y = mod.get_function("rotate_y")
 
 no_qubits = 10
 
@@ -111,6 +111,68 @@ class TestHadamard():
         dm = drv.from_device_like(dm_gpu, dm)
 
         assert np.allclose(np.triu(dm), [[0.5, 0.5], [0, 0.5]])
+
+class TestRotateY():
+    "test the rotate_y kernel"
+    def test_trace_preserve(self):
+        """must preserve trace"""
+        dm10 = random_dm10()
+        dm10_gpu = drv.to_device(dm10)
+
+        assert np.allclose(np.trace(dm10), 1)
+
+        angle = np.float64(np.random.random()*2*np.pi)
+
+        sine = np.sin(angle/2)
+        cosine = np.cos(angle/2)
+
+        for qbit in range(no_qubits):
+            rotate_y(dm10_gpu, np.uint32(1<<qbit), cosine, sine, np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+            dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
+            assert np.allclose(np.trace(dm10_transformed), 1)
+
+    def test_rotate_two_pi(self):
+        "rotating by two pi is identity"
+        dm10 = random_dm10()
+        dm10_gpu = drv.to_device(dm10)
+
+        assert np.allclose(np.trace(dm10), 1)
+
+        angle = 2*np.pi
+
+        sine = np.sin(angle/2)
+        cosine = np.cos(angle/2)
+
+        for qbit in range(no_qubits):
+            rotate_y(dm10_gpu, np.uint32(1<<qbit), cosine, sine, np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+
+        dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
+
+        assert np.allclose(np.triu(dm10_transformed), np.triu(dm10))
+
+    def test_does_something(self):
+        "rotating by pi is not identity"
+        dm10 = random_dm10()
+        dm10_gpu = drv.to_device(dm10)
+
+        assert np.allclose(np.trace(dm10), 1)
+
+        angle = np.pi
+
+        sine = np.sin(angle/2)
+        cosine = np.cos(angle/2)
+
+        for qbit in range(no_qubits):
+            rotate_y(dm10_gpu, np.uint32(1<<qbit), cosine, sine, np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+
+        dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
+
+        assert not np.allclose(np.triu(dm10_transformed), np.triu(dm10))
+
+
 
 
 
