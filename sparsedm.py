@@ -1,4 +1,5 @@
 import dm10 
+import numpy as np
 
 class SparseDM:
     def __init__(self, names=None):
@@ -120,6 +121,11 @@ class SparseDM:
         """
         self.ensure_dense(bit)
         self.full_dm.amp_ph_damping(self.idx_in_full_dm[bit], gamma, lamda)
+
+    def rotate_y(self, bit, angle):
+        self.ensure_dense(bit)
+        c, s = np.cos(angle/2), np.sin(angle/2)
+        self.full_dm.rotate_y(self.idx_in_full_dm[bit], c, s)
 
     def trace(self):
         return self.classical_probability * self.full_dm.trace()

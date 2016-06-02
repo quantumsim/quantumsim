@@ -254,3 +254,25 @@ def test_renormalize():
     sdm.renormalize()
 
     assert np.allclose(sdm.trace(), 1)
+
+
+def test_rotate_y():
+    sdm = SparseDM(2)
+
+    sdm.rotate_y(0, np.pi)
+    sdm.rotate_y(1, np.pi)
+
+    assert np.allclose(sdm.trace(), 1)
+
+    sdm.project_measurement(1, 1)
+    sdm.project_measurement(0, 1)
+
+    assert np.allclose(sdm.trace(), 1)
+
+    sdm.rotate_y(0, np.pi/2)
+    sdm.rotate_y(1, np.pi/2)
+
+    sdm.project_measurement(1, 1)
+    sdm.project_measurement(0, 1)
+
+    assert np.allclose(sdm.trace(), 0.25)
