@@ -11,6 +11,8 @@ TODOs
   - add pi and pi2 gates
   - add readout error to measurements (or full butterfly)
 
+  - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
+for imaginary part, which should be very poor(?)
 
 The plan
 ========

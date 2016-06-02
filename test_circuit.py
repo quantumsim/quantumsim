@@ -178,10 +178,6 @@ class TestRotateYGate:
         h.apply_to(sdm)
         sdm.rotate_y.assert_called_once_with("A", angle=np.pi/2)
 
-        
-
-
-
 class TestCPhaseGate:
     def test_init(self):
         cp = circuit.CPhase("A", "B", 10)
