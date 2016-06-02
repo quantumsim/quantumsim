@@ -9,7 +9,7 @@ import functools
 
 class Qubit:
 
-    def __init__(self, name, t1, t2):
+    def __init__(self, name, t1=np.inf, t2=np.inf):
         self.name = name
         self.t1 = max(t1, 1e-10)
         self.t2 = max(t2, 1e-10)
@@ -59,6 +59,24 @@ class Hadamard(Gate):
         self.label = r"$H$"
         self.method_name = "hadamard"
         self.method_params = {}
+
+
+class RotateY(Gate):
+    def __init__(self, bit, time, angle):
+        super().__init__(time)
+        self.involved_qubits.append(bit)
+
+        multiple_of_pi = angle/np.pi
+        if np.allclose(multiple_of_pi, 1):
+            self.label = r"$\pi$"
+        elif not np.allclose(angle, 0) and np.allclose(np.round(1/multiple_of_pi, 0), 1/multiple_of_pi):
+                divisor = 1/multiple_of_pi
+                self.label = r"$\pi/%d$"%divisor
+        else:
+            self.label = r"$R_y(%g)$"%angle
+
+        self.method_name = "rotate_y"
+        self.method_params = {"angle": angle}
 
 class CPhase(Gate):
     def __init__(self, bit0, bit1, time):
@@ -148,12 +166,16 @@ class Circuit:
             "hadamard": Hadamard,
             "amp_ph_damping": AmpPhDamp,
             "measurement" : Measurement,
+            "rotate_y": RotateY,
             }
 
     def __init__(self, title="Unnamed circuit"):
         self.qubits = []
         self.gates = []
         self.title = title
+
+    def get_qubit_names(self):
+        return [qb.name for qb in self.qubits]
 
     def add_qubit(self, *args, **kwargs):
         """ Add a qubit. Either 

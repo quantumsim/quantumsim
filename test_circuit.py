@@ -1,7 +1,5 @@
 import circuit
-
 from unittest.mock import MagicMock, patch, call
-
 import numpy as np
 
 
@@ -14,6 +12,14 @@ class TestCircuit:
         assert len(c.gates) == 0
         assert len(c.qubits) == 1
         assert c.qubits[0].name == "A"
+
+    def test_get_qubit_names(self):
+        c = circuit.Circuit()
+        c.add_qubit("A")
+        c.add_qubit("B")
+        c.add_qubit("C")
+
+        assert set(c.get_qubit_names()) == {"A", "B", "C"}
 
     def test_order_no_meas(self):
         c = circuit.Circuit()
@@ -127,8 +133,9 @@ class TestCircuit:
         c.add_qubit("A", 10, 10)
         
         c.add_hadamard("A", time=20)
+        c.add_rotate_y("A", time=20, angle=0)
 
-        assert len(c.gates) == 1
+        assert len(c.gates) == 2
         assert c.gates[0].time == 20
 
 class TestHadamardGate:
@@ -145,6 +152,35 @@ class TestHadamardGate:
         h = circuit.Hadamard("A", 7)
         h.apply_to(sdm)
         sdm.hadamard.assert_called_once_with("A")
+
+class TestRotateYGate:
+    def test_init(self):
+        h = circuit.RotateY("A", 7, 0)
+        assert h.time == 7
+        assert h.involves_qubit("A")
+        assert not h.involves_qubit("B")
+        assert not h.is_measurement
+
+        assert h.label == r"$R_y(0)$"
+
+    def test_label_pi(self):
+        h = circuit.RotateY("A", 7, np.pi)
+        assert h.label == r"$\pi$"
+
+    def test_label_piover2(self):
+        h = circuit.RotateY("A", 7, np.pi/2)
+        assert h.label == r"$\pi/2$"
+
+    def test_apply_piover2(self):
+        sdm = MagicMock()
+        sdm.rotate_y = MagicMock()
+        h = circuit.RotateY("A", 7, np.pi/2)
+        h.apply_to(sdm)
+        sdm.rotate_y.assert_called_once_with("A", angle=np.pi/2)
+
+        
+
+
 
 class TestCPhaseGate:
     def test_init(self):
@@ -264,8 +300,6 @@ class TestMeasurement:
             m.apply_to(sdm)
 
             sdm.project_measurement.assert_called_once_with("A", 1)
-
-
 
 class TestSamplers:
     def test_selection_sampler(self):
