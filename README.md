@@ -1,18 +1,21 @@
 TODOs
 -----
 
+  - 5bit rep code
+  - Test with Toms decoder
+    - find discrepancy source (see `me_vs_tom_problem` git tag)
+    - apparently factor 1.25?
+
+
+For the future:
+
   - Implement primitives in cython as well, let the dm10 module select which of the two implementations to use.
     - Maybe even a pure numpy implementation (using shitloads of np.einsum)
     - Make the Density class use cython for small dms and switch to cuda when large, automatically
-  - A Circuit class which allows writing down gates as qasm-like strings (but with time informations):
-    - Integrated test on 3qb repetition code
-      - with decay
-  - Test with Toms decoder
-  - add pi and pi2 gates
-  - add readout error to measurements (or full butterfly)
-
+  - automatic calculation of ancilla decay rates due to stray photons after measurement?
   - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
 for imaginary part, which should be very poor(?)
+
 
 The plan
 ========
