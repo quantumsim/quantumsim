@@ -161,3 +161,7 @@ class SparseDM:
         c, s = np.cos(angle/2), np.sin(angle/2)
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], c, s)
 
+
+    def set_bit(self, bit, value):
+        self.ensure_classical(bit)
+        self.classical[bit] = value

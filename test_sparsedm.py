@@ -45,6 +45,15 @@ def test_ensure_classical_fail_after_hadamard():
     with pytest.raises(ValueError):
         sdm.ensure_classical(0)
 
+def test_set_bit():
+    sdm = SparseDM(10)
+    sdm.set_bit(0, 1)
+    
+    assert sdm.classical[0] == 1
+
+    sdm.hadamard(0)
+    sdm.hadamard(0)
+
 def test_cphase_simple():
     sdm = SparseDM(2)
     sdm.cphase(0, 1)
