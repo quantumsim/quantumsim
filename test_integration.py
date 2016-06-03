@@ -60,12 +60,6 @@ def test_three_qbit_clean():
     assert m1.measurements == [1]*100
     assert m2.measurements == [0, 1]*50
 
-
-    
-
-
-
-
 def test_noisy_measurement_sampler():
     c = circuit.Circuit()
     c.add_qubit("A", 0, 0)
@@ -97,6 +91,43 @@ def test_noisy_measurement_sampler():
     # and each measurement has outcome 1/2
     totprob = mprob * 0.5**20
     assert np.allclose(sdm.trace(), totprob)
+
+
+
+
+def test_measurement_with_output_bit():
+    c = circuit.Circuit()
+    c.add_qubit("A")
+
+    c.add_qubit("O")
+    c.add_qubit("O2")
+
+    c.add_rotate_y("A", time=0, angle=np.pi/2)
+
+    sampler = circuit.selection_sampler(1)
+    c.add_measurement("A", time=1, sampler=sampler, output_bit="O")
+
+    c.add_rotate_y("A", time=3.5, angle=np.pi/2)
+
+    sampler = circuit.selection_sampler(1)
+    c.add_measurement("A", time=4, sampler=sampler, output_bit="O2")
+
+    c.add_rotate_y("A", time=5, angle=np.pi/2)
+    c.order()
+
+    sdm = sparsedm.SparseDM(c.get_qubit_names())
+
+    assert sdm.classical['O'] == 0
+    assert sdm.classical['O2'] == 0
+
+
+    c.apply_to(sdm)
+
+    assert np.allclose(sdm.trace(), 0.25)
+
+    assert sdm.classical == {'O': 1, 'O2':1}
+
+
 
 
 
