@@ -18,16 +18,19 @@ class Qubit:
         return self.name
 
 class Gate:
-    def __init__(self, time):
+    def __init__(self, time, conditional_bit=None):
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
         self.involved_qubits = []
         self.annotation = None
+        self.conditional_bit = conditional_bit
+        if self.conditional_bit:
+            self.involved_qubits.append(self.conditional_bit)
 
     def plot_gate(self, ax, coords):
         x = self.time
-        y = coords[self.involved_qubits[0]]
+        y = coords[self.involved_qubits[-1]]
         ax.text(
             x, y, self.label,
             color='k',
@@ -35,6 +38,10 @@ class Gate:
             va='center',
             bbox=dict(ec='k', fc='w', fill=True),
         )
+
+        if self.conditional_bit:
+            y2 = coords[self.conditional_bit]
+            ax.plot( (x,x), (y,y2), ".--", color='k')
 
     def annotate_gate(self, ax, coords):
         if self.annotation:
@@ -48,22 +55,27 @@ class Gate:
         return bit in self.involved_qubits
 
     def apply_to(self, sdm):
-        f = sdm.__getattribute__(self.method_name)
+        if self.conditional_bit is not None:
+            sdm.ensure_classical(self.conditional_bit)
+            if sdm.classical[self.conditional_bit] == 1:
+                f = sdm.__getattribute__(self.method_name)
+                f(*self.involved_qubits[1:], **self.method_params)
 
-        f(*self.involved_qubits, **self.method_params)
+        else:
+            f = sdm.__getattribute__(self.method_name)
+            f(*self.involved_qubits, **self.method_params)
 
 class Hadamard(Gate):
-    def __init__(self, bit, time):
-        super().__init__(time)
+    def __init__(self, bit, time, **kwargs):
+        super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
         self.label = r"$H$"
         self.method_name = "hadamard"
         self.method_params = {}
 
-
 class RotateY(Gate):
-    def __init__(self, bit, time, angle):
-        super().__init__(time)
+    def __init__(self, bit, time, angle, **kwargs):
+        super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
 
         multiple_of_pi = angle/np.pi
@@ -79,16 +91,16 @@ class RotateY(Gate):
         self.method_params = {"angle": angle}
 
 class CPhase(Gate):
-    def __init__(self, bit0, bit1, time):
-        super().__init__(time)
+    def __init__(self, bit0, bit1, time, **kwargs):
+        super().__init__(time, **kwargs)
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
         self.method_name = "cphase"
         self.method_params = {}
 
     def plot_gate(self, ax, coords):
-        bit0 = self.involved_qubits[0]
-        bit1 = self.involved_qubits[1]
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
         ax.scatter((self.time, self.time),
                    (coords[bit0], coords[bit1]), color='k')
 
@@ -98,8 +110,8 @@ class CPhase(Gate):
         ax.add_line(line)
 
 class AmpPhDamp(Gate):
-    def __init__(self, bit, time, duration, t1, t2):
-        super().__init__(time)
+    def __init__(self, bit, time, duration, t1, t2, **kwargs):
+        super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
         self.duration = duration
         self.t1 = t1
@@ -110,7 +122,7 @@ class AmpPhDamp(Gate):
 
     def plot_gate(self, ax, coords):
         ax.scatter((self.time),
-                   (coords[self.involved_qubits[0]]), color='k', marker='x')
+                   (coords[self.involved_qubits[-1]]), color='k', marker='x')
         ax.annotate(
             r"$%g\,\mathrm{ns}$" %
             self.duration, (self.time, coords[
@@ -179,7 +191,6 @@ class Measurement(Gate):
             y2 = coords[self.real_output_bit]
 
             ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w', ec='k', ls=":")
-
 
     def apply_to(self, sdm):
         bit = self.involved_qubits[0]

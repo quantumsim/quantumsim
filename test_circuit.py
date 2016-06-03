@@ -326,7 +326,30 @@ class TestMeasurement:
         sdm.project_measurement.assert_called_once_with("A", 0)
         sdm.set_bit.assert_called_once_with("O", 0)
 
+class TestConditionalGates:
+    def test_simple(self):
+        sdm = MagicMock()
+        sdm.classical = {"A": 0, "B": 1}
+        sdm.hadamard = MagicMock()
+        
 
+        c = circuit.Circuit()
+
+        c.add_gate("hadamard", "A", time=0, conditional_bit="B")
+
+        c.apply_to(sdm)
+
+        sdm.hadamard.assert_called_once_with("A")
+        sdm.ensure_classical.assert_called_once_with("B")
+
+        sdm = MagicMock()
+        sdm.classical = {"A": 0, "B": 0}
+        sdm.hadamard = MagicMock()
+
+        c.apply_to(sdm)
+
+        sdm.hadamard.assert_not_called()
+        sdm.ensure_classical.assert_called_once_with("B")
 
 class TestSamplers:
     def test_selection_sampler(self):
