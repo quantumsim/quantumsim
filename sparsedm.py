@@ -30,6 +30,18 @@ class SparseDM:
             del self.classical[bit]
             self.idx_in_full_dm[bit] = idx
 
+    def ensure_classical(self, bit, epsilon=1e-7):
+        if bit not in self.names:
+            raise ValueError("This bit does not exist")
+        if bit in self.idx_in_full_dm:
+            p0, p1 = self.peak_measurement(bit)
+            if p0 < epsilon:
+                self.project_measurement(bit, 1)
+            elif p1 < epsilon:
+                self.project_measurement(bit, 0)
+            else:
+                raise ValueError("Trying to classicalize entangled quantum bit")
+
     def peak_measurement(self, bit):
         """Calculate the two smaller density matrices that occur when 
         measuring qubit #bit. Return the probabilities. 
@@ -102,6 +114,28 @@ class SparseDM:
 
         return res
 
+    def trace(self):
+        return self.classical_probability * self.full_dm.trace()
+
+    def renormalize(self):
+        self.full_dm.renormalize()
+        self.classical_probability = 1
+
+    def copy(self):
+        """Return an identical but distinct copy of this object.
+
+        If a measurement has been peaked at, the reduced density matrices are discarded.
+        """
+
+        cp = SparseDM(self.names)
+        cp.classical = self.classical.copy()
+        cp.idx_in_full_dm = self.idx_in_full_dm.copy()
+        cp.last_peak = None
+        cp.full_dm = self.full_dm.copy()
+
+        return cp
+        
+
     def cphase(self, bit0, bit1):
         """Apply a cphase gate between bit0 and bit1.
         """
@@ -127,25 +161,3 @@ class SparseDM:
         c, s = np.cos(angle/2), np.sin(angle/2)
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], c, s)
 
-    def trace(self):
-        return self.classical_probability * self.full_dm.trace()
-
-    def renormalize(self):
-        self.full_dm.renormalize()
-        self.classical_probability = 1
-
-    def copy(self):
-        """Return an identical but distinct copy of this object.
-
-        If a measurement has been peaked at, the reduced density matrices are discarded.
-        """
-
-        cp = SparseDM(self.names)
-        cp.classical = self.classical.copy()
-        cp.idx_in_full_dm = self.idx_in_full_dm.copy()
-        cp.last_peak = None
-        cp.full_dm = self.full_dm.copy()
-
-        return cp
-
-        

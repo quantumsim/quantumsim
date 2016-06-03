@@ -30,6 +30,21 @@ def test_ensure_dense_simple():
     assert sdm.full_dm.no_qubits == 2
     assert np.allclose(sdm.trace(), 1)
 
+def test_ensure_classical_simple():
+    sdm = SparseDM(10)
+    sdm.ensure_classical(0)
+
+def test_ensure_classical_no_operation():
+    sdm = SparseDM(10)
+    sdm.ensure_dense(0)
+    sdm.ensure_classical(0)
+
+def test_ensure_classical_fail_after_hadamard():
+    sdm = SparseDM(10)
+    sdm.hadamard(0)
+    with pytest.raises(ValueError):
+        sdm.ensure_classical(0)
+
 def test_cphase_simple():
     sdm = SparseDM(2)
     sdm.cphase(0, 1)
