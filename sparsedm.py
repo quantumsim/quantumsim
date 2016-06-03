@@ -13,6 +13,7 @@ class SparseDM:
         self.classical = {bit: 0 for bit in names}
         self.idx_in_full_dm = {}
         self.full_dm = dm10.Density(0)
+        self.max_bits_in_full_dm = 0
 
         self.classical_probability = 1
 
@@ -29,6 +30,9 @@ class SparseDM:
             self.full_dm = self.full_dm.add_ancilla(idx, state)
             del self.classical[bit]
             self.idx_in_full_dm[bit] = idx
+
+            new_max = max(self.max_bits_in_full_dm, len(self.idx_in_full_dm))
+            self.max_bits_in_full_dm = new_max
 
     def ensure_classical(self, bit, epsilon=1e-7):
         if bit not in self.names:
@@ -134,7 +138,6 @@ class SparseDM:
         cp.full_dm = self.full_dm.copy()
 
         return cp
-        
 
     def cphase(self, bit0, bit1):
         """Apply a cphase gate between bit0 and bit1.

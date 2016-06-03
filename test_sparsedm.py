@@ -280,7 +280,6 @@ def test_renormalize():
 
     assert np.allclose(sdm.trace(), 1)
 
-
 def test_rotate_y():
     sdm = SparseDM(2)
 
@@ -301,3 +300,26 @@ def test_rotate_y():
     sdm.project_measurement(0, 1)
 
     assert np.allclose(sdm.trace(), 0.25)
+
+def test_max_no_bits():
+    sdm = SparseDM(3)
+
+    assert sdm.max_bits_in_full_dm == 0
+
+    sdm.ensure_dense(0)
+    assert sdm.max_bits_in_full_dm == 1
+    sdm.ensure_dense(1)
+    assert sdm.max_bits_in_full_dm == 2
+    sdm.ensure_dense(2)
+    assert sdm.max_bits_in_full_dm == 3
+
+    sdm.ensure_classical(0)
+    assert sdm.max_bits_in_full_dm == 3
+    sdm.ensure_classical(1)
+    assert sdm.max_bits_in_full_dm == 3
+    sdm.ensure_classical(2)
+    assert sdm.max_bits_in_full_dm == 3
+
+    assert len(sdm.classical) == 3
+    assert sdm.full_dm.no_qubits == 0
+
