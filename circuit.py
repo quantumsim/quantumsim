@@ -118,7 +118,7 @@ class AmpPhDamp(Gate):
                 0, 20), textcoords='offset points', ha='center')
 
 class Measurement(Gate):
-    def __init__(self, bit, time, sampler):
+    def __init__(self, bit, time, sampler, output_bit=None, real_output_bit=None):
         """Create a Measurement gate. The measurement 
         characteristics are defined by the sampler.
         The sampler is a coroutine object, which implements:
@@ -136,18 +136,50 @@ class Measurement(Gate):
 
         After applying the circuit to a density matrix, the declared measurement results
         are stored in self.measurements.
+
+        Additionally, the bits output_bit and real_output_bit (if defined) 
+        are set to the declared/projected value.
         """
 
         super().__init__(time)
         self.is_measurement = True
         self.involved_qubits.append(bit)
+        self.bit = bit
         self.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
+
+
+        
+        self.output_bit = output_bit
+        if output_bit:
+            self.involved_qubits.append(output_bit)
+        self.real_output_bit = real_output_bit
+        if real_output_bit:
+            self.involved_qubits.append(real_output_bit)
+
         if sampler:
             self.sampler = sampler
         else:
             self.sampler = uniform_sampler()
         next(self.sampler)
         self.measurements = []
+
+    def plot_gate(self, ax, coords):
+        super().plot_gate(ax, coords)
+
+        if self.output_bit:
+            x = self.time
+            y1 = coords[self.bit]
+            y2 = coords[self.output_bit]
+
+            ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w')
+
+        if self.real_output_bit:
+            x = self.time
+            y1 = coords[self.bit]
+            y2 = coords[self.real_output_bit]
+
+            ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w', ec='k', ls=":")
+
 
     def apply_to(self, sdm):
         bit = self.involved_qubits[0]
@@ -156,7 +188,11 @@ class Measurement(Gate):
         declare, project, cond_prob = self.sampler.send((p0, p1))
 
         self.measurements.append(declare)
+        if self.output_bit:
+            sdm.set_bit(self.output_bit, declare)
         sdm.project_measurement(bit, project)
+        if self.real_output_bit:
+            sdm.set_bit(self.real_output_bit, project)
         sdm.classical_probability *= cond_prob
 
 class Circuit:

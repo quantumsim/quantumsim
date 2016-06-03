@@ -3,6 +3,8 @@ from unittest.mock import MagicMock, patch, call
 import numpy as np
 
 
+
+
 class TestCircuit:
     def test_add_qubit(self):
         c = circuit.Circuit()
@@ -271,7 +273,6 @@ class TestMeasurement:
         sdm.peak_measurement.assert_called_once_with("A")
         sdm.project_measurement.assert_called_once_with("A", 1)
 
-
     def test_apply_random(self):
         m = circuit.Measurement("A", 0, sampler=None)
 
@@ -296,6 +297,36 @@ class TestMeasurement:
             m.apply_to(sdm)
 
             sdm.project_measurement.assert_called_once_with("A", 1)
+
+    def test_output_bit(self):
+        m = circuit.Measurement("A", 0, sampler=None, output_bit="O")
+
+        sdm = MagicMock()
+        sdm.peak_measurement = MagicMock(return_value=(0, 1))
+        sdm.project_measurement = MagicMock()
+        sdm.set_bit = MagicMock()
+
+        m.apply_to(sdm)
+
+        assert m.measurements == [1]
+
+        sdm.peak_measurement.assert_called_once_with("A")
+        sdm.project_measurement.assert_called_once_with("A", 1)
+        sdm.set_bit.assert_called_once_with("O", 1)
+
+        sdm.peak_measurement = MagicMock(return_value=(1, 0))
+        sdm.project_measurement = MagicMock()
+        sdm.set_bit = MagicMock()
+
+        m.apply_to(sdm)
+
+        assert m.measurements == [1, 0]
+
+        sdm.peak_measurement.assert_called_once_with("A")
+        sdm.project_measurement.assert_called_once_with("A", 0)
+        sdm.set_bit.assert_called_once_with("O", 0)
+
+
 
 class TestSamplers:
     def test_selection_sampler(self):
