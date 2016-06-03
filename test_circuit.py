@@ -70,6 +70,21 @@ class TestCircuit:
 
         assert len(c.gates) == 1
 
+    def test_add_waiting_partial(self):
+        c = circuit.Circuit()
+        c.add_qubit("A", 10, 10)
+        c.add_qubit("B", 10, 10)
+
+        assert len(c.gates) == 0
+
+        c.add_waiting_gates(qubits=["A"], tmin=0, tmax=1)
+
+        assert len(c.gates) == 1
+        
+        c.add_waiting_gates(qubits=["B"], tmin=0, tmax=1)
+
+        assert len(c.gates) == 2
+
     def test_apply_to(self):
         sdm = MagicMock()
         sdm.hadamard = MagicMock()
