@@ -271,7 +271,7 @@ class Circuit:
 
         return super().__getattribute__(name)
 
-    def add_waiting_gates(self, tmin=None, tmax=None, qubits=None):
+    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
 
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
 
@@ -285,9 +285,11 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
-        qubits_to_do = self.qubits
-        if qubits:
-            qubits_to_do = [qb for qb in qubits_to_do if qb.name in qubits]
+        qubits_to_do = [qb for qb in self.qubits 
+                if qb.t1 < np.inf or qb.t2 < np.inf]
+
+        if only_qubits:
+            qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
 
         for b in qubits_to_do:
             gts = [gate for gate in all_gates if gate.involves_qubit(str(b))

@@ -77,13 +77,24 @@ class TestCircuit:
 
         assert len(c.gates) == 0
 
-        c.add_waiting_gates(qubits=["A"], tmin=0, tmax=1)
+        c.add_waiting_gates(only_qubits=["A"], tmin=0, tmax=1)
 
         assert len(c.gates) == 1
         
-        c.add_waiting_gates(qubits=["B"], tmin=0, tmax=1)
+        c.add_waiting_gates(only_qubits=["B"], tmin=0, tmax=1)
 
         assert len(c.gates) == 2
+
+    def test_add_waiting_not_to_inf_qubits(self):
+        c = circuit.Circuit()
+        c.add_qubit("A") #should have infinite lifetime by default
+        c.add_qubit("B", np.inf, np.inf) #should have infinite lifetime by default
+        c.add_qubit("C", 10, 10)
+
+        c.add_waiting_gates(tmin=0, tmax=1)
+
+        assert len(c.gates) == 1
+
 
     def test_apply_to(self):
         sdm = MagicMock()

@@ -12,7 +12,8 @@ def test_three_qbit_clean():
 
     # clean ancillas have infinite life-time
     for qb in qubit_names:
-        c.add_qubit(qb, np.inf, np.inf)
+        #set lifetime to only almost inf so that waiting gates are added but ineffective
+        c.add_qubit(qb, np.inf, 1e10) 
     
     c.add_hadamard("A1", time=0)
     c.add_hadamard("A2", time=0)
@@ -91,9 +92,6 @@ def test_noisy_measurement_sampler():
     # and each measurement has outcome 1/2
     totprob = mprob * 0.5**20
     assert np.allclose(sdm.trace(), totprob)
-
-
-
 
 def test_measurement_with_output_bit():
     c = circuit.Circuit()
