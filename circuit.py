@@ -291,7 +291,7 @@ class Circuit:
         for gate in self.gates:
             gate.apply_to(sdm)
 
-    def plot(self):
+    def plot(self, show_annotations=False):
         times = [g.time for g in self.gates]
 
         tmin = min(times)
@@ -322,7 +322,8 @@ class Circuit:
 
         for gate in self.gates:
             gate.plot_gate(ax, coords)
-            gate.annotate_gate(ax, coords)
+            if show_annotations:
+                gate.annotate_gate(ax, coords)
 
     def _plot_qubit_lines(self, ax, coords, tmin, tmax):
         buffer = (tmax - tmin) * 0.05
