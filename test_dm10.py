@@ -92,17 +92,17 @@ class TestDensityCPhase:
 
     def test_does_nothing_to_ground_state(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.cphase(4, 5)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(a0, a1)
     
     def test_does_something_to_random_state(self):
         a = np.random.random((2**10, 2**10))
         dm = dm10.Density(10, a)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.cphase(4, 5)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert not np.allclose(a0, a1)
 
     def test_preserve_trace_empty(self):
@@ -116,12 +116,12 @@ class TestDensityCPhase:
 
     def test_squares_to_one(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.cphase(2, 8)
         dm.cphase(4, 5)
         dm.cphase(2, 8)
         dm.cphase(4, 5)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
 class TestDensityHadamard:
@@ -132,9 +132,9 @@ class TestDensityHadamard:
 
     def test_does_something_to_ground_state(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.hadamard(4)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert not np.allclose(a0, a1)
 
     def test_preserve_trace_ground_state(self):
@@ -148,10 +148,10 @@ class TestDensityHadamard:
 
     def test_squares_to_one(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.hadamard(8)
         dm.hadamard(8)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
 class TestDensityRotateY:
@@ -162,9 +162,9 @@ class TestDensityRotateY:
 
     def test_does_something_to_ground_state(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.rotate_y(4, np.cos(0.5), np.sin(0.5))
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert not np.allclose(a0, a1)
 
 
@@ -173,7 +173,7 @@ class TestDensityRotateY:
         dm.rotate_y(0, np.cos(np.pi/2), np.sin(np.pi/2))
         dm.rotate_y(1, np.cos(np.pi/2), np.sin(np.pi/2))
         
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(np.trace(a1), 1)
         assert np.allclose(a1[-1, -1], 1)
 
@@ -185,9 +185,9 @@ class TestDensityAmpPhDamping:
 
     def test_does_nothing_to_ground_state(self):
         dm = dm10.Density(10)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.amp_ph_damping(4, 0.5, 0.5)
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
     def test_preserve_trace_random_state(self):
@@ -214,7 +214,7 @@ class TestDensityAmpPhDamping:
 
         assert np.allclose(dm.trace(), 1)
 
-        a2 = dm.data.get()
+        a2 = dm.to_array()
 
         assert np.allclose(a2[0, 0], 1)
 
@@ -229,14 +229,14 @@ class TestDensityAddAncilla:
         dm2 = dm.add_ancilla(9, 0)
         assert dm2.no_qubits == 10
         assert np.allclose(dm2.trace(), 1)
-        a = dm2.data.get()
+        a = dm2.to_array()
         assert np.allclose(a[0, 0], 1)
 
     def test_add_first_full(self):
         dm = dm10.Density(0)
         dm2 = dm.add_ancilla(0, 0)
 
-        a = dm2.data.get()
+        a = dm2.to_array()
 
         assert np.allclose(a, [[1, 0], [0, 0]])
 
@@ -245,7 +245,7 @@ class TestDensityAddAncilla:
         dm2 = dm.add_ancilla(4, 0)
         assert dm2.no_qubits == 10
         assert np.allclose(dm2.trace(), 1)
-        a = dm2.data.get()
+        a = dm2.to_array()
         assert np.allclose(a[0, 0], 1)
         
     def test_add_exc_ancilla_to_gs_gives_no_gs(self):
@@ -253,7 +253,7 @@ class TestDensityAddAncilla:
         dm2 = dm.add_ancilla(4, 1)
         assert dm2.no_qubits == 10
         assert np.allclose(dm2.trace(), 1)
-        a = dm2.data.get()
+        a = dm2.to_array()
         assert np.allclose(a[0, 0], 0)
 
     def test_preserve_trace_random_state(self):
@@ -279,9 +279,9 @@ class TestDensityMeasure:
         p0, dm0, p1, dm1 = dm.measure_ancilla(4)
 
         assert np.allclose(p0, 1)
-        assert np.allclose(dm0.data.get()[0, 0], 1)
+        assert np.allclose(dm0.to_array()[0, 0], 1)
         assert np.allclose(p1, 0)
-        assert np.allclose(dm1.data.get()[0, 0], 0)
+        assert np.allclose(dm1.to_array()[0, 0], 0)
 
 
     def test_hadamard_gives_50_50(self):
@@ -295,9 +295,7 @@ class TestDensityMeasure:
     def test_hadamard_gives_50_50_on_small(self):
         dm = dm10.Density(1)
 
-        print(dm.data)
         dm.hadamard(0)
-        print(dm.data)
         p0, dm0, p1, dm1 = dm.measure_ancilla(0)
 
         assert np.allclose(p0, 0.5)
@@ -310,18 +308,18 @@ class TestCopy():
         dm_copy = dm.copy()
 
         assert dm.data is not dm_copy.data
-        assert np.allclose(dm.data.get(), dm_copy.data.get())
+        assert np.allclose(dm.to_array(), dm_copy.to_array())
         
         dm_copy.hadamard(0)
 
-        assert not np.allclose(dm.data.get(), dm_copy.data.get())
+        assert not np.allclose(dm.to_array(), dm_copy.to_array())
 
 class TestRenormalize:
     def test_renormalize_does_nothing_to_gs(self):
         dm = dm10.Density(6)
-        a0 = dm.data.get()
+        a0 = dm.to_array()
         dm.renormalize()
-        a1 = dm.data.get()
+        a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
 
@@ -336,7 +334,7 @@ class TestRenormalize:
         dm.renormalize()
         tr = dm.trace()
 
-        a2 = dm.data.get()
+        a2 = dm.to_array()
 
         assert np.allclose(tr, 1)
         assert np.allclose(a2, a/np.trace(a))

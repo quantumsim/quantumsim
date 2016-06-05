@@ -195,7 +195,6 @@ class Density:
         tr = self.trace()
         self.data *= np.float(1/tr)
 
-
     def copy(self):
         "Return a deep copy of this Density."
 
@@ -203,4 +202,9 @@ class Density:
         data_cp = self.data.copy()
         cp = Density(self.no_qubits, data=data_cp)
         return cp
+
+
+    def to_array(self):
+        "Return the entries of the density matrix as a dense numpy ndarray."
+        return self.data.get()
 
