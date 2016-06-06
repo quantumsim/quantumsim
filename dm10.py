@@ -77,6 +77,22 @@ class Density:
         trace = ga.sum(diag, dtype=np.float64).get()
         return trace
 
+    def renormalize(self):
+        """Renormalize to trace one."""
+        tr = self.trace()
+        self.data *= np.float(1/tr)
+
+    def copy(self):
+        "Return a deep copy of this Density."
+
+
+        data_cp = self.data.copy()
+        cp = Density(self.no_qubits, data=data_cp)
+        return cp
+
+    def to_array(self):
+        "Return the entries of the density matrix as a dense numpy ndarray."
+        return self.data.get()
 
     def get_diag(self):
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
@@ -87,6 +103,7 @@ class Density:
                 self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits))
 
         return diag.get()
+
 
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
@@ -189,22 +206,4 @@ class Density:
         p0 = dm0.trace()
         p1 = dm1.trace()
         return p0, dm0, p1, dm1
-
-    def renormalize(self):
-        """Renormalize to trace one."""
-        tr = self.trace()
-        self.data *= np.float(1/tr)
-
-    def copy(self):
-        "Return a deep copy of this Density."
-
-
-        data_cp = self.data.copy()
-        cp = Density(self.no_qubits, data=data_cp)
-        return cp
-
-
-    def to_array(self):
-        "Return the entries of the density matrix as a dense numpy ndarray."
-        return self.data.get()
 
