@@ -1,6 +1,6 @@
 NUMPY_INCLUDE=$(shell python3 -c 'import numpy; print(numpy.get_include());')
 PYTHON_INCLUDE=$(shell python3 -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc());')
-CFLAGS=-I$(NUMPY_INCLUDE) -g
+CFLAGS=-I$(NUMPY_INCLUDE) -O3
 CFLAGS+= -I$(PYTHON_INCLUDE)
 
 all: dmcpu.so
