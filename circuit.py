@@ -155,7 +155,6 @@ class Measurement(Gate):
 
         super().__init__(time)
         self.is_measurement = True
-        self.involved_qubits.append(bit)
         self.bit = bit
         self.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
 
@@ -167,6 +166,8 @@ class Measurement(Gate):
         self.real_output_bit = real_output_bit
         if real_output_bit:
             self.involved_qubits.append(real_output_bit)
+
+        self.involved_qubits.append(bit)
 
         if sampler:
             self.sampler = sampler
@@ -193,7 +194,7 @@ class Measurement(Gate):
             ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w', ec='k', ls=":")
 
     def apply_to(self, sdm):
-        bit = self.involved_qubits[0]
+        bit = self.bit
         p0, p1 = sdm.peak_measurement(bit)
 
         declare, project, cond_prob = self.sampler.send((p0, p1))
