@@ -3,6 +3,8 @@ import pytest
 
 import dmcpu
 
+# There are two implementations for the backend (on CPU and on GPU)
+# here we collect the classes we want to test
 implementations_to_test = []
 
 implementations_to_test.append(dmcpu.Density)
@@ -15,6 +17,8 @@ try:
     hascuda = True
 except ImportError:
     pass
+# We automatically only test the backends available by using the fixtures here
+
 
 @pytest.fixture(params=implementations_to_test)
 def dm(request):
@@ -36,6 +40,8 @@ def dm_random(request):
     dm = request.param(n, a)
     return dm
 
+
+# Test cases begin here
 
 class TestDensityInit:
     def test_ground_state(self, dmclass):
@@ -138,7 +144,8 @@ class TestDensityCPhase:
         dm.cphase(4, 3)
         assert np.allclose(dm.trace(), 1)
 
-    def test_squares_to_one(self, dm):
+    def test_squares_to_one(self, dm_random):
+        dm = dm_random
         a0 = dm.to_array()
         dm.cphase(2, 1)
         dm.cphase(4, 0)
@@ -166,12 +173,25 @@ class TestDensityHadamard:
         dm.hadamard(0)
         assert np.allclose(dm.trace(), 1)
 
-    def test_squares_to_one(self, dm):
+    def test_squares_to_one(self, dm_random):
+        dm = dm_random
         a0 = dm.to_array()
         dm.hadamard(4)
         dm.hadamard(4)
+        # dm.hadamard(2)
+        # dm.hadamard(2)
+        # dm.hadamard(0)
+        # dm.hadamard(0)
         a1 = dm.to_array()
-        assert np.allclose(a0, a1)
+        assert np.allclose(np.triu(a0), np.triu(a1))
+
+    def test_squares_to_one_small(self, dmclass):
+        dm = dmclass(1)
+
+        dm.hadamard(0)
+        dm.hadamard(0)
+
+        assert dm.to_array()[0, 0] == 1
 
 class TestDensityRotateY:
     def test_bit_too_high(self, dm):
@@ -296,6 +316,19 @@ class TestDensityMeasure:
 
         assert np.allclose(p0, 0.5)
         assert np.allclose(p1, 0.5)
+
+    def test_trace_preserve(self, dm_random):
+        dm = dm_random
+        p0, dm0, p1, dm1 = dm.measure_ancilla(2)
+
+        assert np.allclose(p0 + p1, 1)
+
+    def test_relax_then_measure_gives_gs(self, dm_random):
+        dm = dm_random
+        dm.amp_ph_damping(2, 1.0, 1.0)
+        p0, dm0, p1, dm1 = dm.measure_ancilla(2)
+        assert np.allclose(p1, 0)
+        assert np.allclose(p0, 1)
 
 class TestCopy:
     def test_equality(self, dm):
