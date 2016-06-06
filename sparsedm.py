@@ -1,5 +1,9 @@
-import dm10 
 import numpy as np
+
+try:
+    import dm10
+except ImportError:
+    import dmcpu as dm10
 
 class SparseDM:
     def __init__(self, names=None):
