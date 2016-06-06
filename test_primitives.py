@@ -172,10 +172,6 @@ class TestRotateY():
 
         assert not np.allclose(np.triu(dm10_transformed), np.triu(dm10))
 
-
-
-
-
 class TestAmpPhDamping:
     "test the amp_ph_damping kernel"
     def test_trace_preserve(self):
@@ -202,6 +198,31 @@ class TestAmpPhDamping:
             dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
 
             assert np.allclose(np.trace(dm10_transformed), 1)
+
+    def test_t2_trace_preserve(self):
+        dm10 = random_dm10()
+        dm10_gpu = drv.to_device(dm10)
+
+        gamma = 0.1
+        lamda = 0.1
+
+        gamma = np.float64(gamma)
+        s1mgamma = np.float64(np.sqrt(1 - gamma))
+        s1mlambda = np.float64(np.sqrt(1 - lamda))
+
+        for qbit in range(no_qubits):
+            hadamard(dm10_gpu, np.uint32(1<<qbit), np.float64(0.5), np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+            amp_ph_damping(dm10_gpu, np.uint32(1<<qbit), 
+                    gamma, s1mgamma, s1mlambda, np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+            hadamard(dm10_gpu, np.uint32(1<<qbit), np.float64(0.5), np.uint32(no_qubits),
+                    block=(32,32,1), grid=(32,32,1))
+            dm10_transformed = drv.from_device_like(dm10_gpu, dm10)
+
+            assert np.allclose(np.trace(dm10_transformed), 1)
+
+
 
 class TestDMReduce:
     "test the dm_reduce kernel"
