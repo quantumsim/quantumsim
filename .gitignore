@@ -2,6 +2,8 @@
 
 .*.swo 
 .*.swp
+dmcpu.c
+*.so
 
 __pycache__/*
 .cache/*
