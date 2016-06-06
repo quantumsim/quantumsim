@@ -1,5 +1,4 @@
 import numpy as np
-import pycuda.gpuarray as ga
 import pytest
 import dmcpu as dm10
 
