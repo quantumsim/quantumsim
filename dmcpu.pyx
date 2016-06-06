@@ -1,7 +1,9 @@
 import numpy as np
+from math import sqrt
 
 
 cimport numpy as np
+
 
 cdef class Density:
 
@@ -48,7 +50,7 @@ cdef class Density:
         return self.data_re.diagonal()
 
     def cphase(self, bit0, bit1):
-        cdef unsigned int i, j
+        cdef unsigned int x, y
 
         cdef unsigned int mask0, mask1, mask_both
 
@@ -63,7 +65,7 @@ cdef class Density:
         mask = (1 << bit0) | (1 << bit1)
 
         for x in range(self.size):
-            for y in range(x, self.size):
+            for y in range(self.size):
                 if ((x & mask) == mask) != ((y & mask) == mask):
                     re[x, y] = -re[x, y]
                     im[x, y] = -im[x, y]
@@ -85,7 +87,7 @@ cdef class Density:
         cdef unsigned int mask = (1<<bit)
 
         for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(ih, 1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
                 for il in range(1<<bit):
                     for jl in range(1<<bit):
                         x = (ih << (bit + 1)) | il
@@ -93,9 +95,9 @@ cdef class Density:
 
 
                         a = re[x, y]
-                        b = re[x^mask, y]
-                        c = re[x, y^mask]
-                        d = re[x^mask, y^mask]
+                        b = re[x|mask, y]
+                        c = re[x, y|mask]
+                        d = re[x|mask, y|mask]
 
                         na = a+b+c+d
                         nb = a-b+c-d
@@ -103,14 +105,14 @@ cdef class Density:
                         nd = a-b-c+d
 
                         re[x, y] = 0.5*na
-                        re[x^mask, y] = 0.5*nb
-                        re[x, y^mask] = 0.5*nc
-                        re[x^mask, y^mask] = 0.5*nd
+                        re[x|mask, y] = 0.5*nb
+                        re[x, y|mask] = 0.5*nc
+                        re[x|mask, y|mask] = 0.5*nd
 
                         a = im[x, y]
-                        b = im[x^mask, y]
-                        c = im[x, y^mask]
-                        d = im[x^mask, y^mask]
+                        b = im[x|mask, y]
+                        c = im[x, y|mask]
+                        d = im[x|mask, y|mask]
 
                         na = a+b+c+d
                         nb = a-b+c-d
@@ -118,18 +120,21 @@ cdef class Density:
                         nd = a-b-c+d
 
                         im[x, y] = 0.5*na
-                        im[x^mask, y] = 0.5*nb
-                        im[x, y^mask] = 0.5*nc
-                        im[x^mask, y^mask] = 0.5*nd
+                        im[x|mask, y] = 0.5*nb
+                        im[x, y|mask] = 0.5*nc
+                        im[x|mask, y|mask] = 0.5*nd
 
     def amp_ph_damping(self, bit, gamma, lamda):
         cdef unsigned int ih, jh, il, jl
 
-        cdef double dgamma, dlamda, ds1mgamma, ds1mlamba
+        cdef double dgamma, dlamda, ds1mgamma, ds1mlamda
         dgamma = gamma
         dlamda = lamda
-        ds1mgamma = np.sqrt(1 - gamma)
-        ds1mlamda = np.sqrt(1 - lamda)
+        ds1mgamma = sqrt(1 - gamma)
+        ds1mlamda = sqrt(1 - lamda)
+
+        assert np.allclose(dgamma + ds1mgamma**2, 1)
+        assert np.allclose(dlamda + ds1mlamda**2, 1)
 
         assert bit < self.no_qubits
 
@@ -145,7 +150,7 @@ cdef class Density:
         im = self.data_im
 
         for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(ih, 1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
                 for il in range(1<<bit):
                     for jl in range(1<<bit):
                         x = (ih << (bit + 1)) | il
@@ -181,7 +186,6 @@ cdef class Density:
                         im[x, y^mask] = nc
                         im[x^mask, y^mask] = nd
 
-
     def rotate_y(self, bit, cosine, sine):
         cdef unsigned int il, jl, ih, jh, x, y
 
@@ -199,7 +203,7 @@ cdef class Density:
         cdef unsigned int mask = (1<<bit)
 
         for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(ih, 1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
                 for il in range(1<<bit):
                     for jl in range(1<<bit):
                         x = (ih << (bit + 1)) | il
@@ -273,7 +277,7 @@ cdef class Density:
         bit_mask = anc_st << bit
 
         for i in range(self.size):
-            for j in range(i, self.size):
+            for j in range(self.size):
                 new_x = ((i & upper_mask) << 1) | (i & lower_mask) | bit_mask
                 new_y = ((j & upper_mask) << 1) | (j & lower_mask) | bit_mask
 
@@ -281,7 +285,6 @@ cdef class Density:
                 im_new[new_x, new_y] = im[i, j]
 
         return Density(self.no_qubits + 1, data=re_new + 1j*im_new)
-
 
     def measure_ancilla(self, bit):
         assert bit < self.no_qubits
@@ -313,7 +316,7 @@ cdef class Density:
         bit_mask = 1 << bit
 
         for i in range(new_size):
-            for j in range(i, new_size):
+            for j in range(new_size):
                 from_x = ((i & upper_mask) << 1) | (i&lower_mask) 
                 from_y = ((j & upper_mask) << 1) | (j&lower_mask) 
 
