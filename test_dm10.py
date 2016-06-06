@@ -16,24 +16,24 @@ try:
 except ImportError:
     pass
 
-@pytest.fixture()
-def dm():
-    return implementations_to_test[0](5)
+@pytest.fixture(params=implementations_to_test)
+def dm(request):
+    return request.param(5)
 
 
-@pytest.fixture()
-def dmclass():
-    return implementations_to_test[0]
+@pytest.fixture(params=implementations_to_test)
+def dmclass(request):
+    return request.param
 
-@pytest.fixture()
-def dm_random():
+@pytest.fixture(params=implementations_to_test)
+def dm_random(request):
     n = 5
     a = np.random.random((2**n, 2**n))*1j
     a += np.random.random((2**n, 2**n))
 
     a += a.transpose().conj()
     a = a/np.trace(a)
-    dm = implementations_to_test[0](n, a)
+    dm = request.param(n, a)
     return dm
 
 
