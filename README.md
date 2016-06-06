@@ -6,7 +6,6 @@ TODOs
     - find discrepancy source (see `me_vs_tom_problem` git tag)
     - apparently factor 1.25?
 
-
 For the future:
 
   - Implement primitives in cython as well, let the dm10 module select which of the two implementations to use.
