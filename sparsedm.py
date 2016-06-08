@@ -30,6 +30,8 @@ class SparseDM:
         self.classical_probability = 1
 
         self.last_peak = None
+        self._last_majority_vote_array = None
+        self._last_majority_vote_mask = None
 
     def ensure_dense(self, bit):
         """Make sure that the bit is removed from the classical bits and added to the
@@ -203,3 +205,37 @@ class SparseDM:
         """
         self.ensure_classical(bit)
         self.classical[bit] = value
+
+    def majority_vote(self, bits):
+        """Return the (total) probability for measuring more than half 1 
+        when measuring all the given bits. Do not actually perform the measurement.
+
+        This is evaluated as Tr(ρ.M) with M a diagonal matrix. 
+        The diagonal of M is constructed when needed, then cached and reused when possible.
+        """
+
+        dense_bits = {b for b in bits if b in self.idx_in_full_dm}
+
+        classical_bits_sum = sum(self.classical[b] for b in bits if b in self.classical)
+
+        mask = 0
+        for b in dense_bits:
+            mask += 1 << self.idx_in_full_dm[b]
+
+        if mask != self._last_majority_vote_mask:
+            adresses = np.arange(2**len(self.idx_in_full_dm))
+            majority = np.zeros_like(adresses)
+            for _ in range(len(self.idx_in_full_dm)):
+                majority += adresses & 1
+                adresses >>= 1
+
+            self._last_majority_vote_mask = mask
+            self._last_majority_vote_array = majority
+        else:
+            majority = self._last_majority_vote_array
+
+        majority = (majority+classical_bits_sum > len(bits)/2).astype(np.int)
+
+        diag = self.full_dm.get_diag()
+
+        return np.dot(majority, diag)

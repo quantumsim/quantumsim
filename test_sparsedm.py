@@ -345,3 +345,64 @@ def test_max_no_bits():
 
     assert len(sdm.classical) == 3
     assert sdm.full_dm.no_qubits == 0
+
+
+class TestMajorityVote:
+    def test_majority_vote_gs_classical(self):
+
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+
+        assert sdm._last_majority_vote_array is None
+        assert sdm._last_majority_vote_mask is None
+
+        p = sdm.majority_vote(bits)
+
+        assert sdm._last_majority_vote_mask == 0
+
+        assert np.allclose(p, 0)
+
+    def test_majority_vote_on_excited_classical(self):
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+
+        sdm.set_bit(1, 1)
+        sdm.set_bit(3, 1)
+
+        p = sdm.majority_vote(bits)
+        assert np.allclose(p, 1)
+        assert sdm._last_majority_vote_mask == 0 
+
+    def test_majority_vote_on_excited_quantum(self):
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+
+        sdm.rotate_y(1, np.pi)
+        sdm.rotate_y(2, np.pi)
+        sdm.rotate_y(3, 2*np.pi)
+
+        p = sdm.majority_vote(bits)
+        assert np.allclose(p, 1)
+        assert sdm._last_majority_vote_mask == 7
+
+    def test_majority_after_hadamard(self):
+
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+        sdm.hadamard(1)
+        sdm.hadamard(2)
+        sdm.hadamard(3)
+
+        p = sdm.majority_vote(bits)
+
+        assert np.allclose(p, 0.5)
+
+        sdm.hadamard(3)
+
+        p = sdm.majority_vote(bits)
+
+        assert np.allclose(p, 0.25)
+
+    def test_majority_vote_reuse_of_cached(self):
+        #TODO?!
+        pass
