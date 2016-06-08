@@ -8,8 +8,9 @@ import tp
 import functools
 
 class Qubit:
-
     def __init__(self, name, t1=np.inf, t2=np.inf):
+        """A Qubit with a name and amplitude damping time t1 and phase damping time t2,
+        """
         self.name = name
         self.t1 = max(t1, 1e-10)
         self.t2 = max(t2, 1e-10)
@@ -19,6 +20,7 @@ class Qubit:
 
 class Gate:
     def __init__(self, time, conditional_bit=None):
+        """A Gate acting at time `time`. If conditional_bit is set, only act when that bit is a classical 1. """
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -67,6 +69,11 @@ class Gate:
 
 class Hadamard(Gate):
     def __init__(self, bit, time, **kwargs):
+        """A Hadamard gate on Qubit bit acting at a point in time `time`
+
+        Other arguments: conditional_bit
+        
+        """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
         self.label = r"$H$"
@@ -75,6 +82,9 @@ class Hadamard(Gate):
 
 class RotateY(Gate):
     def __init__(self, bit, time, angle, **kwargs):
+        """ A rotation around the y-axis on the bloch sphere by `angle`.
+        Other arguments: conditional_bit
+        """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
 
@@ -92,6 +102,10 @@ class RotateY(Gate):
 
 class CPhase(Gate):
     def __init__(self, bit0, bit1, time, **kwargs):
+        """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric). 
+        
+        Other arguments: conditional_bit
+        """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
@@ -111,6 +125,16 @@ class CPhase(Gate):
 
 class AmpPhDamp(Gate):
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
+        """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
+        with amplitude damping time t1 and phase damping t2. 
+
+        Note that the gate acts at only one point in time, but acts as if the damping was active for 
+        the time `duration`.
+
+        kwargs: conditional_bit
+
+        See also: Circuit.add_waiting_gates to add these gates automatically.
+        """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
         self.duration = duration
@@ -135,22 +159,24 @@ class Measurement(Gate):
         characteristics are defined by the sampler.
         The sampler is a coroutine object, which implements:
 
-          declare, project, rel_prob = sampler.send(p0, p1)
+          declare, project, rel_prob = sampler.send((p0, p1))
 
-        where p0, p1 are two relative probabilities for the outcome 0 and 1.
-        project is the true post-measurement state of the system,
-        while declare is the declared outcome of the measurement.
+        where `p0`, `p1` are two relative probabilities for the outcome 0 and 1.
+        `project` is the true post-measurement state of the system,
+        `declare` is the declared outcome of the measurement.
 
-        rel_prob is the conditional probability for the declaration, given the 
+        `rel_prob` is the conditional probability for the declaration, given the 
         input and projection; for a perfect measurement this is 1.
 
-        If sampler is None, a perfect natural Monte Carlo sampler is instantiated.
+        If sampler is None, a noiseless Monte Carlo sampler is instantiated with seed 42.
 
         After applying the circuit to a density matrix, the declared measurement results
         are stored in self.measurements.
 
         Additionally, the bits output_bit and real_output_bit (if defined) 
         are set to the declared/projected value.
+
+        See also: uniform_sampler, selection_sampler, uniform_noisy_sampler
         """
 
         super().__init__(time)
@@ -217,15 +243,19 @@ class Circuit:
             }
 
     def __init__(self, title="Unnamed circuit"):
+        """Create an empty Circuit named `title`.
+        """
         self.qubits = []
         self.gates = []
         self.title = title
 
     def get_qubit_names(self):
+        """Return the names of all qubits in the circuit
+        """
         return [qb.name for qb in self.qubits]
 
     def add_qubit(self, *args, **kwargs):
-        """ Add a qubit. Either 
+        """ Add a qubit. Either instantiate by hand
 
         qubit = Qubit("name", t1, t2)
         circ.add_qubit(qubit)
@@ -247,7 +277,7 @@ class Circuit:
     def add_gate(self, gate_type, *args, **kwargs):
         """Add a gate to the Circuit.
 
-        gate_type can be circuit.Gate, a string like "hadamard",
+        gate_type can be a subclass of circuit.Gate, a string like "hadamard",
         or a gate class. in the latter two cases, an instance is 
         created using args and kwargs
         """
@@ -273,10 +303,17 @@ class Circuit:
         return super().__getattribute__(name)
 
     def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
+        """Add AmpPhDamping gates to all qubits in the circuit 
+        (unless their t1=t2=np.inf or only_qubits is specified).
 
+        If only_qubits is an iterable containing qubit names, gates are only added to those qubits.
+
+        The gates are added between all pairs of other gates between tmin and tmax.
+        If tmin or tmax are not specified, they default to the time of the first (last) gate 
+        on any of the qubits in the circuit (or in only_qubits, if specified).
+
+        """
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
-
-
 
         if not all_gates and (tmin is None or tmax is None):
             return
@@ -323,6 +360,15 @@ class Circuit:
                         b.t1, b.t2))
 
     def order(self):
+        """ Reorder the gates in the circuit so that they are applied in temporal order.
+        If any freedom exists when choosing the order of commuting gates, the order is chosen so that
+        measurement gates are applied "as soon as possible"; this means that when applying to a 
+        SparseDM, the measured qubits can be removed, which reduces computational cost.
+
+        This function should always be called after defining the circuit and before applying it.
+
+        See also: Circuit.apply_to
+        """
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
         measurements = [n for n, gate in all_gates if gate.is_measurement]
         dependencies = {n: set() for n, gate in all_gates}
@@ -344,10 +390,19 @@ class Circuit:
         self.gates = new_order
 
     def apply_to(self, sdm):
+        """Apply the gates in the Circuit to a sparsedm.SparseDM density matrix. 
+        The gates are applied in the order given in self.gates, which is the order in which they are 
+        added to the Circuit. To reorder them to reflect the temporal order,
+        call self.order()
+
+        See also: Circuit.order()
+        """
         for gate in self.gates:
             gate.apply_to(sdm)
 
     def plot(self, show_annotations=False):
+        """Plot the circuit using matplotlib.
+        """
         times = [g.time for g in self.gates]
 
         tmin = min(times)
@@ -397,10 +452,20 @@ class Circuit:
                 va='center')
 
 def selection_sampler(result=0):
+    """ A sampler always returning the measurement result `result`, and not making any 
+    measurement errors. Useful for testing or state preparation.
+
+    See also: Measurement
+    """
     while True:
         yield result, result, 1
 
 def uniform_sampler(seed=42):
+    """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results 
+    is defined by the seed; you should never use two samplers with the same seed in one circuit.
+
+    See also: Measurement
+    """
     rng = np.random.RandomState(seed)
     p0, p1 = yield
     while True:
@@ -411,6 +476,11 @@ def uniform_sampler(seed=42):
             p0, p1 = yield 1, 1, 1
 
 def uniform_noisy_sampler(readout_error, seed=42):
+    """A sampler using natural Monte Carlo sampling and including the possibility of 
+    declaring the wrong measurement result with probability `readout_error` (symmetric for both outcomes).
+
+    See also: Measuremen
+    """
     rng = np.random.RandomState(seed)
     p0, p1 = yield
     while True:
