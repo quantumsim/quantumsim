@@ -1,16 +1,9 @@
 TODOs
 -----
 
-  - 5bit rep code
-  - Test with Toms decoder
-    - find discrepancy source (see `me_vs_tom_problem` git tag)
-    - apparently factor 1.25?
-
 For the future:
 
-  - Implement primitives in cython as well, let the dm10 module select which of the two implementations to use.
-    - Maybe even a pure numpy implementation (using shitloads of np.einsum)
-    - Make the Density class use cython for small dms and switch to cuda when large, automatically
+  - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - automatic calculation of ancilla decay rates due to stray photons after measurement?
   - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
 for imaginary part, which should be very poor(?)
