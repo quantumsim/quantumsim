@@ -7,7 +7,15 @@ except ImportError:
 
 class SparseDM:
     def __init__(self, names=None):
-        """A given set of qubit is kept in a state 
+        """A sparse density matrix for a set of qubits with names `names`. 
+
+        Each qubit can be in a "classical state", where it is in a basis state 
+        (i.e. 0 or 1) and not correlated with other qubits, so that the total density matrix 
+        can be written as a product state. This is the case after a measurement projection,
+        meaning that a measurement turns a qubit classical.
+
+        If a qubit is not classical, it is quantum, which means that it is part of the 
+        full dense density matrix `self.full_dm`.
         """
         if isinstance(names, int):
             names = list(range(names))
@@ -25,7 +33,8 @@ class SparseDM:
 
     def ensure_dense(self, bit):
         """Make sure that the bit is removed from the classical bits and added to the
-        density matrix, do nothing if it is already there."""
+        density matrix, do nothing if it is already there. Does not change the state of the system.
+        """
         if bit not in self.names:
             raise ValueError("This bit does not exist")
         if bit not in self.idx_in_full_dm:
@@ -39,6 +48,9 @@ class SparseDM:
             self.max_bits_in_full_dm = new_max
 
     def ensure_classical(self, bit, epsilon=1e-7):
+        """Try to make a qubit classical. This only succeeds if the qubit already is classical, or if a measurement
+        returns a definite result with fidelity > (1-epsilon), in which case the measurement is performed with the probable outcome.
+        """
         if bit not in self.names:
             raise ValueError("This bit does not exist")
         if bit in self.idx_in_full_dm:
@@ -52,10 +64,10 @@ class SparseDM:
 
     def peak_measurement(self, bit):
         """Calculate the two smaller density matrices that occur when 
-        measuring qubit #bit. Return the probabilities. 
+        measuring qubit #bit. Return the probabilities (not normalized to one).
 
-        The density matrices are stored and will be used by project_measurement
-        if called with the same bit immediately afterwards
+        The density matrices are stored internally and will be used 
+        without recalculation if `project_measurement` is called with the same bit immediately afterwards.
         """
         if bit in self.idx_in_full_dm:
             qbit = self.idx_in_full_dm[bit]
@@ -71,7 +83,7 @@ class SparseDM:
         """Project a bit to a fixed state, making it classical and 
         reducing the size of the full density matrix.
         The reduced density matrix is not normalized, so that
-        its trace represents the probability for that event.
+        its trace after projection represents the probability for that event.
         """
         if bit in self.idx_in_full_dm:
             if self.last_peak == None or self.last_peak['bit'] != bit:
@@ -89,6 +101,17 @@ class SparseDM:
     def peak_multiple_measurements(self, bits):
         """Obtain the probabilities for all combinations of a multiple
         qubit measurement. Act on a copy, do not destroy this density matrix.
+
+        bits is a list of qubit names. Return a list with up to `2**len(bits)` tuples of the form
+
+        [(result, probability), ...] 
+
+        where `result` is a dict describing the measurement result {"bit0": 1, "bit2": 0, ...}, 
+        and `probability` is the corresponding probability. 
+
+        If results are omitted from this list, the corresponding probability is assumed to be 0.
+
+        Note that these probabilities are not normalized if previous projections took place.
         """
         classical_bits = {bit: self.classical[bit] for bit in bits if bit in self.classical}
 
@@ -123,9 +146,13 @@ class SparseDM:
         return res
 
     def trace(self):
+        """Return the trace of the density matrix, which is the probability for all measurement projections in the history.
+        """
         return self.classical_probability * self.full_dm.trace()
 
     def renormalize(self):
+        """Renormalize the density matrix to trace 1.
+        """
         self.full_dm.renormalize()
         self.classical_probability = 1
 
@@ -164,11 +191,15 @@ class SparseDM:
         self.full_dm.amp_ph_damping(self.idx_in_full_dm[bit], gamma, lamda)
 
     def rotate_y(self, bit, angle):
+        """Apply a rotation around the y-axis of the Bloch sphere of bit `bit` 
+        by `angle` (in radians).
+        """
         self.ensure_dense(bit)
         c, s = np.cos(angle/2), np.sin(angle/2)
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], c, s)
 
-
     def set_bit(self, bit, value):
+        """Set the value of a classical bit to `value` (0 or 1).
+        """
         self.ensure_classical(bit)
         self.classical[bit] = value
