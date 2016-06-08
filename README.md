@@ -1,12 +1,22 @@
 TODOs
 -----
 
+Make a package
+  - write setup.py
+  - include the cython part and the primitives.cu data file correctly
+  - include dependencies
+
+
 For the future:
 
   - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - automatic calculation of ancilla decay rates due to stray photons after measurement?
   - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
 for imaginary part, which should be very poor(?)
+    - turns out that did not help. too much overhead for launching kernels maybe?
+
+  - Kernels that do more hadamards or dampings at the same time? Could save overhead, 
+      but would take some effort to collect with the current Circuit.
 
 
 The plan
