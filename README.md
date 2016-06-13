@@ -26,12 +26,12 @@ See ipynb files in the root directory
 TODOs
 -----
 
+  - add a qasm parser to create a `circuit.Circuit`
+  - turn into a python package: include dependencies
 
+  - a circuit should order its gates automatically before the every apply that follows an edit.
 
-Make a python package
-  - include dependencies
-
-For the future:
+For later:
   - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - automatic calculation of ancilla decay rates due to stray photons after measurement?
   - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
@@ -41,8 +41,14 @@ for imaginary part, which should be very poor(?)
   - Kernels that do more hadamards or dampings at the same time? Could save overhead, 
       but would take some effort to collect with the current Circuit.
 
+Overview
+========
 
-The plan
+To obtain an overview over the capabilities of the package from a user perspective,
+have a look at `Introduction.ipynb`.
+
+
+The architecture 
 ========
 
 We hold the full density matrix of the data qubits in memory, which is about two megabyte (so not much).
@@ -68,7 +74,7 @@ multiplying with matrices that have been
 sparsified by hand. The structure is too strong in this one.
 
 Primitives
-==========
+----------
 
 We thus need the following primitives, which will be implemented by hand as kernels:
 
@@ -88,7 +94,7 @@ and we need about ~500 of them per round; thus 250ms per round?
 
 
 Wrappers
-========
+--------
 
 The data structure exposing the above primitives is called `dm10.Density`.
 
@@ -122,7 +128,7 @@ possible here.
 It is important to note that dm0 and dm1 are not normalized to trace one, they are the subblocks of the original density matrix.
 
 Sparse density matrix
-=====================
+---------------------
 
 In order to keep track of which ancillas are in the density matrix at any moment,
 there is a second level of abstraction, implemented in `sparsedm.SparseDM`.
