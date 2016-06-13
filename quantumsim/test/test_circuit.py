@@ -418,14 +418,14 @@ class TestSamplers:
             rsclass.assert_called_once_with(42)
 
             # no readout error
-            proj, dec, prob = s.send((0.2, 0.8))
+            dec, proj, prob = s.send((0.2, 0.8))
             assert (proj, dec, prob) == (1, 1, 0.6)
-            proj, dec, prob = s.send((0.9, 0.1))
+            dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 0, 0.6)
 
             s = circuit.uniform_noisy_sampler(0.7, seed=42)
             next(s)
-            proj, dec, prob = s.send((0.2, 0.8))
+            dec, proj, prob = s.send((0.2, 0.8))
             assert (proj, dec, prob) == (1, 0, 0.7)
-            proj, dec, prob = s.send((0.9, 0.1))
+            dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 1, 0.7)
