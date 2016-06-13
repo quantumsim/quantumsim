@@ -210,7 +210,7 @@ class Measurement(Gate):
             y1 = coords[self.bit]
             y2 = coords[self.output_bit]
 
-            ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w')
+            ax.arrow(x, y1, 0, y2-y1-0.1, head_length=0.1, fc='w', width=0.2)
 
         if self.real_output_bit:
             x = self.time
