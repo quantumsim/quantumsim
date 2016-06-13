@@ -2,8 +2,10 @@ import numpy as np
 
 try:
     from . import dm10
+    using_gpu = True
 except ImportError:
     from . import dmcpu as dm10
+    using_gpu = False
 
 class SparseDM:
     def __init__(self, names=None):
