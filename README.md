@@ -1,14 +1,37 @@
+Installation
+------------
+
+Just 
+
+    git clone https://github.com/brianzi/quantumsim
+
+then 
+
+    pip install quantumsim/ [--user]
+
+to install into the current environment or user site-packages,
+or
+
+    pip install -e quantumsim 
+
+to install in 'editable' mode, so that packages are imported from this directory.
+
+
+Usage
+-----
+
+See ipynb files in the root directory
+
+
 TODOs
 -----
 
-Make a package
-  - write setup.py
-  - include the cython part and the primitives.cu data file correctly
+
+
+Make a python package
   - include dependencies
 
-
 For the future:
-
   - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - automatic calculation of ancilla decay rates due to stray photons after measurement?
   - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
@@ -145,7 +168,3 @@ with this outcome and add it back to sdm.classical with state 0.
 Again, note that the trace of the dm10.Density is not renormalized; this means that the 
 trace gives the total probability with which the selected outcome of the measeruments 
 actually takes place. The trace can be obtained using `sdm.trace()`.
-
-```python
-
-```
