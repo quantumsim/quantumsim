@@ -22,7 +22,7 @@ to install in 'editable' mode, so that packages are imported from this directory
 Usage
 -----
 
-See ipynb files in the root directory
+See ipynb files in the root directory.
 
 
 TODOs
