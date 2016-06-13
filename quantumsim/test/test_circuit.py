@@ -1,4 +1,4 @@
-import circuit
+import quantumsim.circuit as circuit
 from unittest.mock import MagicMock, patch, call
 import numpy as np
 

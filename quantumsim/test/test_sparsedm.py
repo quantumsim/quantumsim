@@ -1,4 +1,4 @@
-from sparsedm import SparseDM
+from quantumsim.sparsedm import SparseDM
 
 
 import numpy as np

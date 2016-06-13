@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import dmcpu
+import quantumsim.dmcpu as dmcpu
 
 # There are two implementations for the backend (on CPU and on GPU)
 # here we collect the classes we want to test
@@ -12,7 +12,7 @@ implementations_to_test.append(dmcpu.Density)
 hascuda = False
 try:
     import pycuda.gpuarray as ga
-    import dm10
+    import quantumsim.dm10 as dm10
     implementations_to_test.append(dm10.Density)
     hascuda = True
 except ImportError:

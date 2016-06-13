@@ -1,4 +1,4 @@
-from tp import greedy_toposort
+from quantumsim.tp import greedy_toposort
 
 
 def test_greedy_toposort():

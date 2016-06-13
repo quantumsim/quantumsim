@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-import tp
+from . import tp
 
 import functools
 

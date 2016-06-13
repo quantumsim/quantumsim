@@ -8,9 +8,9 @@ try:
     import pycuda.driver as drv
     from pycuda.compiler import SourceModule
 
+    import quantumsim.dm10 as dm10
 
-
-    with open("./primitives.cu", "r") as f:
+    with open(dm10.kernel_file, "r") as f:
         mod = SourceModule(f.read())
 
     cphase = mod.get_function("cphase")

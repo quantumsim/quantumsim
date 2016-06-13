@@ -1,5 +1,5 @@
-import circuit
-import sparsedm
+import quantumsim.circuit as circuit
+import quantumsim.sparsedm as sparsedm
 import numpy as np
 
 import pytest
