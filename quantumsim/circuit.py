@@ -496,4 +496,4 @@ def uniform_noisy_sampler(readout_error, seed=42):
         else:
             decl = proj
             prob = 1 - readout_error
-        p0, p1 = yield proj, decl, prob 
+        p0, p1 = yield decl, proj, prob 
