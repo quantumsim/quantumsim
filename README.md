@@ -18,11 +18,18 @@ or
 
 to install in 'editable' mode, so that packages are imported from this directory.
 
+To run the test suite, enter the directory and run py.test:
+
+    cd quantumsim
+    py.test
+
+If you do not have pycuda available, GPU related tests will be skipped.
+
 
 Usage
 -----
 
-See ipynb files in the root directory
+See ipynb files in the root directory.
 
 
 TODOs
@@ -176,3 +183,9 @@ with this outcome and add it back to sdm.classical with state 0.
 Again, note that the trace of the dm10.Density is not renormalized; this means that the 
 trace gives the total probability with which the selected outcome of the measeruments 
 actually takes place. The trace can be obtained using `sdm.trace()`.
+
+License
+-------
+
+This work is distributed under the GNU GPLv3. See LICENSE.txt.
+(c) 2016 Brian Tarasinski
