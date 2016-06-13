@@ -1,6 +1,8 @@
 Installation
 ------------
 
+You need cython installed. If you want to use the GPU, you need a CUDA runtime, NVCC compiler and pycuda installed, but this is not required.
+
 Just 
 
     git clone https://github.com/brianzi/quantumsim
