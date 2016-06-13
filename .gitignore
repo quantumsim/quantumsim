@@ -5,5 +5,9 @@
 dmcpu.c
 *.so
 
-__pycache__/*
+*.ipynb
+
+*__pycache__
 .cache/*
+
+*egg-info
