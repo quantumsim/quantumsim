@@ -81,6 +81,8 @@ __global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double 
             double c = dm10[ADDR_IMAG(y, x|mask, no_qubits)];
             double d = dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)];
 
+            if (y|mask >= x) b*=-1;
+
             double new_a = cosine*a + sine*b;
             double new_b = -sine*a + cosine*b;
             double new_c = cosine*c + sine*d;
@@ -91,6 +93,8 @@ __global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double 
             c = -sine*new_a + cosine*new_c;
             d = -sine*new_b + cosine*new_d;
 
+            if (y|mask >= x) b*=-1;
+
             dm10[ADDR_IMAG(y, x, no_qubits)] = a;
             dm10[ADDR_IMAG(y|mask, x, no_qubits)] = b;
             dm10[ADDR_IMAG(y, x|mask, no_qubits)] = c;
@@ -100,6 +104,89 @@ __global__ void rotate_y(double *dm10, unsigned int mask, double cosine, double 
 
 }
 
+__global__ void rotate_z(double *dm10, unsigned int mask, double cos, double sin, unsigned int no_qubits) { 
+
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
+
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
+    if (y>x) return;
+
+    if ((x&mask) && ((~y)&mask)) { //do the b block
+            double b_re = dm10[ADDR_REAL(x, y, no_qubits)];
+            double b_im = dm10[ADDR_IMAG(x, y, no_qubits)];
+
+            double nb_re = cos*b_re + sin*b_im;
+            double nb_im = cos*b_im - sin*b_re;
+
+            dm10[ADDR_REAL(x, y, no_qubits)] = nb_re;
+            dm10[ADDR_IMAG(x, y, no_qubits)] = nb_im;
+    }
+    if (((~x)&mask) && (y&mask)) { //do the c block
+            double b_re = dm10[ADDR_REAL(x, y, no_qubits)];
+            double b_im = dm10[ADDR_IMAG(x, y, no_qubits)];
+
+            double nb_re = cos*b_re - sin*b_im;
+            double nb_im = cos*b_im + sin*b_re;
+
+            dm10[ADDR_REAL(x, y, no_qubits)] = nb_re;
+            dm10[ADDR_IMAG(x, y, no_qubits)] = nb_im;
+    }
+
+}
+
+__global__ void rotate_x(double *dm10, unsigned int mask, double cos, double sin, unsigned int no_qubits) { 
+
+    int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    int y = (blockIdx.y *blockDim.y) + threadIdx.y;
+
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
+    if((x&mask) && ((~y)&mask)) { //real part
+        x = x & ~mask;
+        if (x <= y) {
+            double a = dm10[ADDR_REAL(x, y, no_qubits)];
+            double b = dm10[ADDR_IMAG(x|mask, y, no_qubits)];
+            double c = dm10[ADDR_IMAG(x, y|mask, no_qubits)];
+            double d = dm10[ADDR_REAL(x|mask, y|mask, no_qubits)];
+
+            if (x|mask >= y) b*=-1;
+
+            double na = cos*cos*a + sin*cos*(b-c) + sin*sin*d;
+            double nb = sin*cos*(d-a) + sin*sin*c + cos*cos*b;
+            double nc = sin*cos*(a-d) + sin*sin*b + cos*cos*c;
+            double nd = cos*cos*d + sin*cos*(c-b) + sin*sin*a;
+
+            if (x|mask >= y) nb*=-1;
+
+            dm10[ADDR_REAL(x, y, no_qubits)] = na;
+            dm10[ADDR_IMAG(x|mask, y, no_qubits)] = nb;
+            dm10[ADDR_IMAG(x, y|mask, no_qubits)] = nc;
+            dm10[ADDR_REAL(x|mask, y|mask, no_qubits)] = nd;
+        }
+    }
+    if (((~x)&mask) && (y&mask)) { //do the imaginary part
+        y = y & ~mask;
+        if (y <= x){
+            double a = dm10[ADDR_IMAG(y, x, no_qubits)];
+            double b = dm10[ADDR_REAL(y|mask, x, no_qubits)];
+            double c = dm10[ADDR_REAL(y, x|mask, no_qubits)];
+            double d = dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)];
+
+            double na = cos*cos*a - sin*cos*(b-c) + sin*sin*d;
+            double nb = sin*cos*(a-d) + sin*sin*c + cos*cos*b;
+            double nc = sin*cos*(d-a) + sin*sin*b + cos*cos*c;
+            double nd = cos*cos*d - sin*cos*(c-b) + sin*sin*a;
+
+            dm10[ADDR_IMAG(y, x, no_qubits)] = na;
+            dm10[ADDR_REAL(y|mask, x, no_qubits)] = nb;
+            dm10[ADDR_REAL(y, x|mask, no_qubits)] = nc;
+            dm10[ADDR_IMAG(y|mask, x|mask, no_qubits)] = nd;
+        }
+    }
+
+}
 
 //do the hadamard on a qubit
 //mask must have exactly one bit flipped, denoting which byte is involved

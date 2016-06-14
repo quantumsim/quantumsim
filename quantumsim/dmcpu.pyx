@@ -303,8 +303,8 @@ cdef class Density:
                         d = im[x^mask, y^mask]
 
                         na = cos*cos*a - sin*cos*(b-c) + sin*sin*d
-                        nb = sin*cos*(a-d) + sin*sin*b + cos*cos*b
-                        nc = sin*cos*(d-a) + sin*sin*c + cos*cos*c
+                        nb = sin*cos*(a-d) + sin*sin*c + cos*cos*b
+                        nc = sin*cos*(d-a) + sin*sin*b + cos*cos*c
                         nd = cos*cos*d - sin*cos*(c-b) + sin*sin*a
 
                         im[x, y] = na
