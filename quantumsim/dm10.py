@@ -115,7 +115,9 @@ class Density:
 
     def to_array(self):
         "Return the entries of the density matrix as a dense numpy ndarray."
-        return self.data.get()
+        dense = np.triu(self.data.get())
+        dense += np.conjugate(np.transpose(np.triu(dense, 1)))
+        return dense
 
     def get_diag(self):
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
