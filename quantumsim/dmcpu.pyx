@@ -190,7 +190,61 @@ cdef class Density:
                         im[x, y^mask] = nc
                         im[x^mask, y^mask] = nd
 
-    def rotate_y(self, bit, cosine, sine):
+    def rotate_x(self, bit, cos, sin):
+        cdef unsigned int il, jl, ih, jh, x, y
+
+        cdef np.ndarray[double, ndim=2] re
+        cdef np.ndarray[double, ndim=2] im
+
+        re = self.data_re
+        im = self.data_im
+
+        assert bit < self.no_qubits
+
+        cdef double a, b, c, d
+        cdef double na, nb, nc, nd
+
+        cdef unsigned int mask = (1<<bit)
+
+        for ih in range(1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
+                for il in range(1<<bit):
+                    for jl in range(1<<bit):
+                        x = (ih << (bit + 1)) | il
+                        y = (jh << (bit + 1)) | jl
+
+
+                        a = re[x, y]
+                        b = im[x^mask, y]
+                        c = im[x, y^mask]
+                        d = re[x^mask, y^mask]
+
+                        na = cos*cos*a + sin*cos*(b-c) + sin*sin*d
+                        nb = sin*cos*(d-a) + sin*sin*c + cos*cos*b
+                        nc = sin*cos*(a-d) + sin*sin*b + cos*cos*c
+                        nd = cos*cos*d + sin*cos*(c-b) + sin*sin*a
+
+                        re[x, y] = na
+                        im[x^mask, y] = nb
+                        im[x, y^mask] = nc 
+                        re[x^mask, y^mask] = nd
+
+                        a = im[x, y]
+                        b = re[x^mask, y]
+                        c = re[x, y^mask]
+                        d = im[x^mask, y^mask]
+
+                        na = cos*cos*a - sin*cos*(b-c) + sin*sin*d
+                        nb = sin*cos*(a-d) + sin*sin*b + cos*cos*b
+                        nc = sin*cos*(d-a) + sin*sin*c + cos*cos*c
+                        nd = cos*cos*d - sin*cos*(c-b) + sin*sin*a
+
+                        im[x, y] = na
+                        re[x^mask, y] = nb
+                        re[x, y^mask] = nc 
+                        im[x^mask, y^mask] = nd
+
+    def rotate_y(self, bit, cos, sin):
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
@@ -219,15 +273,15 @@ cdef class Density:
                         c = re[x, y^mask]
                         d = re[x^mask, y^mask]
 
-                        na = cosine*a + sine*b
-                        nb = -sine*a + cosine*b
-                        nc = cosine*c + sine*d
-                        nd = -sine*c + cosine*d
+                        na = cos*a + sin*b
+                        nb = -sin*a + cos*b
+                        nc = cos*c + sin*d
+                        nd = -sin*c + cos*d
 
-                        a = cosine*na + sine*nc
-                        b = cosine*nb + sine*nd
-                        c = -sine*na + cosine*nc
-                        d = -sine*nb + cosine*nd
+                        a = cos*na + sin*nc
+                        b = cos*nb + sin*nd
+                        c = -sin*na + cos*nc
+                        d = -sin*nb + cos*nd
 
                         re[x, y] = a
                         re[x^mask, y] = b
@@ -239,20 +293,59 @@ cdef class Density:
                         c = im[x, y^mask]
                         d = im[x^mask, y^mask]
 
-                        na = cosine*a + sine*b
-                        nb = -sine*a + cosine*b
-                        nc = cosine*c + sine*d
-                        nd = -sine*c + cosine*d
+                        na = cos*a + sin*b
+                        nb = -sin*a + cos*b
+                        nc = cos*c + sin*d
+                        nd = -sin*c + cos*d
 
-                        a = cosine*na + sine*nc
-                        b = cosine*nb + sine*nd
-                        c = -sine*na + cosine*nc
-                        d = -sine*nb + cosine*nd
+                        a = cos*na + sin*nc
+                        b = cos*nb + sin*nd
+                        c = -sin*na + cos*nc
+                        d = -sin*nb + cos*nd
 
                         im[x, y] = a
                         im[x^mask, y] = b
                         im[x, y^mask] = c
                         im[x^mask, y^mask] = d
+
+    def rotate_z(self, bit, cos2, sin2):
+        cdef unsigned int il, jl, ih, jh, x, y
+
+        cdef np.ndarray[double, ndim=2] re
+        cdef np.ndarray[double, ndim=2] im
+
+        re = self.data_re
+        im = self.data_im
+
+        assert bit < self.no_qubits
+
+        cdef double b_re, b_im, c_re, c_im
+        cdef double nb_re, nb_im, nc_re, nc_im
+
+        cdef unsigned int mask = (1<<bit)
+
+        for ih in range(1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
+                for il in range(1<<bit):
+                    for jl in range(1<<bit):
+                        x = (ih << (bit + 1)) | il
+                        y = (jh << (bit + 1)) | jl
+
+
+                        b_re = re[x^mask, y]
+                        b_im = im[x^mask, y]
+                        c_re = re[x, y^mask]
+                        c_im = im[x, y^mask]
+
+                        nb_re = cos2*b_re - sin2*b_im
+                        nb_im = cos2*b_im + sin2*b_re
+                        nc_re = cos2*c_re + sin2*c_im
+                        nc_im = cos2*c_im - sin2*c_re
+
+                        re[x^mask, y] = nb_re
+                        im[x^mask, y] = nb_im
+                        re[x, y^mask] = nc_re
+                        im[x, y^mask] = nc_im
 
     def add_ancilla(self, bit, anc_st):
         cdef unsigned int i, j
