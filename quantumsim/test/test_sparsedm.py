@@ -323,8 +323,46 @@ def test_rotate_y():
 
     assert np.allclose(sdm.trace(), 0.25)
 
+def test_rotate_x():
+    sdm = SparseDM(2)
+
+    sdm.rotate_x(0, np.pi)
+    sdm.rotate_x(1, np.pi)
+
+    assert np.allclose(sdm.trace(), 1)
+
+    sdm.project_measurement(1, 1)
+    sdm.project_measurement(0, 1)
+
+    assert np.allclose(sdm.trace(), 1)
+
+    sdm.rotate_x(0, np.pi / 2)
+    sdm.rotate_x(1, np.pi / 2)
+
+    sdm.project_measurement(1, 1)
+    sdm.project_measurement(0, 1)
+
+    assert np.allclose(sdm.trace(), 0.25)
+
+
+def test_rotate_xyz():
+    sdm = SparseDM(1)
+
+    sdm.rotate_x(0, np.pi/2)
+    sdm.rotate_z(0, np.pi/2)
+    sdm.rotate_y(0, np.pi/2)
+
+    assert np.allclose(sdm.trace(), 1)
+
+    sdm.project_measurement(0, 0)
+
+    assert np.allclose(sdm.trace(), 1)
+
+
 
 def test_max_no_bits():
+
+    
     sdm = SparseDM(3)
 
     assert sdm.max_bits_in_full_dm == 0

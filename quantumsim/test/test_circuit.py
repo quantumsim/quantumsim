@@ -193,11 +193,11 @@ class TestRotateYGate:
 
     def test_label_pi(self):
         h = circuit.RotateY("A", 7, np.pi)
-        assert h.label == r"$\pi$"
+        assert h.label == r"$R_y(\pi)$"
 
     def test_label_piover2(self):
         h = circuit.RotateY("A", 7, np.pi/2)
-        assert h.label == r"$\pi/2$"
+        assert h.label == r"$R_y(\pi/2)$"
 
     def test_apply_piover2(self):
         sdm = MagicMock()

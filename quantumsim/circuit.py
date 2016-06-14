@@ -94,14 +94,54 @@ class RotateY(Gate):
 
         multiple_of_pi = angle/np.pi
         if np.allclose(multiple_of_pi, 1):
-            self.label = r"$\pi$"
+            self.label = r"$R_y(\pi)$"
         elif not np.allclose(angle, 0) and np.allclose(np.round(1/multiple_of_pi, 0), 1/multiple_of_pi):
                 divisor = 1/multiple_of_pi
-                self.label = r"$\pi/%d$"%divisor
+                self.label = r"$R_y(\pi/%d)$"%divisor
         else:
             self.label = r"$R_y(%g)$"%angle
 
         self.method_name = "rotate_y"
+        self.method_params = {"angle": angle}
+
+class RotateX(Gate):
+    def __init__(self, bit, time, angle, **kwargs):
+        """ A rotation around the x-axis on the bloch sphere by `angle`.
+        Other arguments: conditional_bit
+        """
+        super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+
+        multiple_of_pi = angle/np.pi
+        if np.allclose(multiple_of_pi, 1):
+            self.label = r"$R_x(\pi)$"
+        elif not np.allclose(angle, 0) and np.allclose(np.round(1/multiple_of_pi, 0), 1/multiple_of_pi):
+                divisor = 1/multiple_of_pi
+                self.label = r"$R_x(\pi/%d)$"%divisor
+        else:
+            self.label = r"$R_x(%g)$"%angle
+
+        self.method_name = "rotate_x"
+        self.method_params = {"angle": angle}
+
+class RotateZ(Gate):
+    def __init__(self, bit, time, angle, **kwargs):
+        """ A rotation around the z-axis on the bloch sphere by `angle`.
+        Other arguments: conditional_bit
+        """
+        super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+
+        multiple_of_pi = angle/np.pi
+        if np.allclose(multiple_of_pi, 1):
+            self.label = r"$R_z(\pi)$"
+        elif not np.allclose(angle, 0) and np.allclose(np.round(1/multiple_of_pi, 0), 1/multiple_of_pi):
+                divisor = 1/multiple_of_pi
+                self.label = r"$R_z(\pi/%d)$"%divisor
+        else:
+            self.label = r"$R_z(%g)$"%angle
+
+        self.method_name = "rotate_z"
         self.method_params = {"angle": angle}
 
 class CPhase(Gate):
@@ -244,6 +284,8 @@ class Circuit:
             "amp_ph_damping": AmpPhDamp,
             "measurement" : Measurement,
             "rotate_y": RotateY,
+            "rotate_x": RotateX,
+            "rotate_z": RotateZ,
             }
 
     def __init__(self, title="Unnamed circuit"):
