@@ -10,6 +10,10 @@ cimport numpy as np
 
 
 cdef class Density:
+    """Density(no_qubits)
+
+    Create a density matrix with the given number of qubits, labelled from 0 to no_qubits-1.
+    """
 
     cdef np.ndarray data_re
     cdef np.ndarray data_im
@@ -17,6 +21,12 @@ cdef class Density:
     cdef int size
 
     def __init__(self, no_qubits, data=None):
+        """Density(no_qubits)
+
+        Create a density matrix with the given number of qubits, labelled from 0 to no_qubits-1.
+
+        This version runs on the CPU with operations implemented in cython.
+        """
         self.no_qubits = no_qubits
         if no_qubits > 20:
             raise ValueError("Way too many qubits!")
@@ -36,24 +46,54 @@ cdef class Density:
             raise ValueError("type of data not understood")
         
     def trace(self):
+        """trace(self)
+
+        Return the trace of the density matrix.
+        """
         return self.data_re.trace()
 
     def renormalize(self):
+        """renormalize(self)
+
+        Renormalize the density matrix to trace() == 1
+        """
         trace = self.trace()
         self.data_re /= trace
         self.data_im /= trace
 
     def copy(self):
+        """copy(self)
+
+        Return a copy of this density matrix.
+        """
         dm = Density(self.no_qubits, self.to_array())
         return dm
 
     def to_array(self):
+        """to_array(self)
+
+        Return the data in the density matrix as a numpy array.
+        """
         return self.data_re + self.data_im*1j
 
     def get_diag(self):
+        """get_diag(self)
+        
+        Return the main diagonal of the density matrix as a numpy array.
+        """
         return self.data_re.diagonal()
 
     def cphase(self, bit0, bit1):
+        """
+        cphase(self, bit0, bit1)
+
+        Apply a cphase gate acting on bit0 and bit1.
+
+        bit0 and bit1 are zero-based indices identifying the qubits.
+
+        (A cphase gate changes the phase of a wave function by pi if both 
+        control bits are 1)
+        """
         cdef unsigned int x, y
 
         cdef unsigned int mask0, mask1, mask_both
@@ -75,6 +115,12 @@ cdef class Density:
                     im[x, y] = -im[x, y]
 
     def hadamard(self, bit):
+        """hadamard(self, bit)
+
+        Apply a Hadamard gate to bit (0..no_qubits-1).
+
+        (A Hadamard gate is defined by the matrix [1, 1; 1 -1]/sqrt(2) in computational basis.)
+        """
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
@@ -129,6 +175,20 @@ cdef class Density:
                         im[x|mask, y|mask] = 0.5*nd
 
     def amp_ph_damping(self, bit, gamma, lamda):
+        """amp_ph_damping(self, bit, gamma, lamda)
+
+        Apply amplitude and phase damping to bit (0..no_qubits).
+
+        Amplitude and phase damping is characterized by the constants gamma and lambda.
+
+        We have gamma = 1 - p1 = 1 - exp(-t/T1)
+                lamda = 1 - p2 = 1 - exp(-t/T2)
+
+
+        where t is the duration of decay and T1, T2 are properties of the qubit.
+        
+        (the stupid misspelling of lamda is because "lambda" is a keyword in python)
+        """
         cdef unsigned int ih, jh, il, jl
 
         cdef double dgamma, dlamda, ds1mgamma, ds1mlamda
@@ -191,6 +251,14 @@ cdef class Density:
                         im[x^mask, y^mask] = nd
 
     def rotate_x(self, bit, cos, sin):
+        """rotate_x(self, bit, cos, sin)
+
+        Rotation on the bloch sphere around the x-axis by angle theta.
+
+        bit: which bit is affected (0..no_qubits)
+        cos: The cosine of theta/2
+        sin: The sine of theta/2
+        """
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
@@ -245,6 +313,14 @@ cdef class Density:
                         im[x^mask, y^mask] = nd
 
     def rotate_y(self, bit, cos, sin):
+        """rotate_y(self, bit, cos, sin)
+
+        Rotation on the bloch sphere around the y-axis by angle theta.
+
+        bit: which bit is affected (0..no_qubits)
+        cos: The cosine of theta/2
+        sin: The sine of theta/2
+        """
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
@@ -309,6 +385,14 @@ cdef class Density:
                         im[x^mask, y^mask] = d
 
     def rotate_z(self, bit, cos2, sin2):
+        """rotate_z(self, bit, cos2, sin2)
+
+        Rotation on the bloch sphere around the z-axis by angle theta.
+
+        bit: which bit is affected (0..no_qubits)
+        cos: The cosine of theta
+        sin: The sine of theta
+        """
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
@@ -348,6 +432,13 @@ cdef class Density:
                         im[x, y^mask] = nc_im
 
     def add_ancilla(self, bit, anc_st):
+        """add_ancilla(self, bit, anc_st)
+
+        Returns a new Density with an ancilla added to the density matrix, increasing no_qubits by 1.
+
+        bit: The index of the new ancilla (0..no_qubits)
+        anc_st: The state of the newly added ancilla (0 or 1)
+        """
         cdef unsigned int i, j
 
         cdef np.ndarray[double, ndim=2] re
@@ -384,6 +475,15 @@ cdef class Density:
         return Density(self.no_qubits + 1, data=re_new + 1j*im_new)
 
     def measure_ancilla(self, bit):
+        """measure_ancilla(self, bit)
+
+        Calculate the projections when measuring bit (0..no_qubits-1).
+
+        Returns (p0, r0, p1, r1), where pi is the probability to measure outcome i,
+        and ri is a the reduced Density of the other bits, given that outcome.
+
+        (We have pi = ri.trace()) 
+        """
         assert bit < self.no_qubits
 
         new_size = self.size >> 1
