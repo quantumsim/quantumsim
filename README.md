@@ -3,18 +3,18 @@ Installation
 
 You need cython installed. If you want to use the GPU, you need a CUDA runtime, NVCC compiler and pycuda installed, but this is not required.
 
-Just 
+Just
 
     git clone https://github.com/brianzi/quantumsim
 
-then 
+then
 
     pip install quantumsim/ [--user]
 
 to install into the current environment or user site-packages,
 or
 
-    pip install -e quantumsim 
+    pip install -e quantumsim
 
 to install in 'editable' mode, so that packages are imported from this directory.
 
@@ -29,7 +29,7 @@ If you do not have pycuda available, GPU related tests will be skipped.
 Usage
 -----
 
-See ipynb files in the root directory.
+See Introduction.ipynb in the root directory.
 
 
 TODOs
