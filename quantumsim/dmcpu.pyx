@@ -290,7 +290,7 @@ cdef class Density:
                         d = re[x^mask, y^mask]
 
                         na = cos*cos*a + sin*cos*(b-c) + sin*sin*d
-                        nb = sin*cos*(d-a) + sin*sin*c + cos*cos*b
+                        nb = -sin*cos*(a-d) + sin*sin*c + cos*cos*b
                         nc = sin*cos*(a-d) + sin*sin*b + cos*cos*c
                         nd = cos*cos*d + sin*cos*(c-b) + sin*sin*a
 
@@ -305,7 +305,7 @@ cdef class Density:
                         d = im[x^mask, y^mask]
 
                         na = cos*cos*a - sin*cos*(b-c) + sin*sin*d
-                        nb = sin*cos*(a-d) + sin*sin*c + cos*cos*b
+                        nb = -sin*cos*(d-a) + sin*sin*c + cos*cos*b
                         nc = sin*cos*(d-a) + sin*sin*b + cos*cos*c
                         nd = cos*cos*d - sin*cos*(c-b) + sin*sin*a
 
@@ -353,7 +353,7 @@ cdef class Density:
 
                         na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
                         nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
-                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*c
+                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*b
                         nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
 
                         re[x, y] = na
@@ -368,7 +368,7 @@ cdef class Density:
 
                         na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
                         nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
-                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*c
+                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*b
                         nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
 
                         im[x, y] = na
