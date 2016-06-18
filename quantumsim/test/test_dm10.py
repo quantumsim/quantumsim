@@ -219,15 +219,15 @@ class TestDensityRotateX:
     def test_excite(self, dmclass):
         dm = dmclass(2)
 
-        dm.rotate_x(0, np.cos(np.pi/2), np.sin(np.pi/2))
-        dm.rotate_x(1, np.cos(np.pi/2), np.sin(np.pi/2))
+        dm.rotate_x(0, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
 
         a1 = dm.to_array()
         assert np.allclose(np.trace(a1), 1)
         assert np.allclose(a1[-1, -1], 1)
 
     def test_preserves_trace(self, dm_random):
-        
+
         assert np.allclose(dm_random.trace(), 1)
         dm_random.rotate_x(2, np.cos(4.2), np.sin(4.2))
         assert np.allclose(dm_random.trace(), 1)
@@ -275,6 +275,7 @@ class TestDensityRotateY:
 
         assert np.allclose(a0, a1)
 
+
 class TestDensityRotateZ:
 
     def test_bit_too_high(self, dm):
@@ -302,14 +303,13 @@ class TestDensityRotateZ:
         assert np.allclose(np.trace(a1), 1)
         assert np.allclose(a1[-1, -1], 1)
 
-
     def test_cubes_to_one(self, dmclass):
         dm = dmclass(1)
 
         a0 = dm.to_array()
 
         dm.hadamard(0)
-        c, s = np.cos(2*np.pi/3), np.sin(2*np.pi/3)
+        c, s = np.cos(2 * np.pi / 3), np.sin(2 * np.pi / 3)
         dm.rotate_z(0, c, s)
         dm.rotate_z(0, c, s)
         dm.rotate_z(0, c, s)
@@ -324,11 +324,11 @@ class TestCommutationXYZ:
 
     def test_excite_deexcite(self, dm):
         a0 = dm.to_array()
-        dm.rotate_x(1, np.cos(np.pi/2), np.sin(np.pi/2))
-        dm.rotate_y(1, np.cos(np.pi/2), np.sin(np.pi/2))
+        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_y(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
         dm.rotate_z(1, np.cos(np.pi), np.sin(np.pi))
-        dm.rotate_x(1, np.cos(np.pi/2), np.sin(np.pi/2))
-        dm.rotate_y(1, np.cos(np.pi/2), np.sin(np.pi/2))
+        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_y(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
         dm.rotate_z(1, np.cos(np.pi), np.sin(np.pi))
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
@@ -338,10 +338,22 @@ class TestCommutationXYZ:
 
         dm.rotate_x(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
         dm.rotate_z(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        #dm.rotate_x(1, np.cos(4.2), np.sin(4.2))  # should do nothing
+        # dm.rotate_x(1, np.cos(4.2), np.sin(4.2))  # should do nothing
         dm.rotate_y(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
 
         a1 = dm.to_array()
+        assert np.allclose(a0, a1)
+
+    def test_xyx(self, dm):
+
+        a0 = dm.to_array()
+
+        dm.rotate_x(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
+        dm.rotate_y(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
+        dm.rotate_x(1, np.cos(np.pi / 4), -np.sin(np.pi / 4))
+
+        a1 = dm.to_array()
+
         assert np.allclose(a0, a1)
 
 
