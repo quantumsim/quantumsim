@@ -35,6 +35,11 @@ See ipynb files in the root directory.
 TODOs
 -----
 
+
+  - auto-generate repetitionerrordata.json from circuit?
+
+  - general process matrix kernel/choi matrix kernel
+  - precompile chain of single qubit gates
   - add a qasm parser to create a `circuit.Circuit`
   - turn into a python package: include dependencies
 

@@ -31,6 +31,8 @@ cdef class Density:
         elif data is None:
             self.data_re = np.zeros((size, size), np.float64)
             self.data_im = np.zeros((size, size), np.float64)
+            assert np.allclose(self.data_im, 0)
+            assert np.allclose(self.data_re, 0)
             self.data_re[0, 0] = 1
         else:
             raise ValueError("type of data not understood")
@@ -273,40 +275,30 @@ cdef class Density:
                         c = re[x, y^mask]
                         d = re[x^mask, y^mask]
 
-                        na = cos*a + sin*b
-                        nb = -sin*a + cos*b
-                        nc = cos*c + sin*d
-                        nd = -sin*c + cos*d
+                        na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
+                        nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
+                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*c
+                        nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
 
-                        a = cos*na + sin*nc
-                        b = cos*nb + sin*nd
-                        c = -sin*na + cos*nc
-                        d = -sin*nb + cos*nd
-
-                        re[x, y] = a
-                        re[x^mask, y] = b
-                        re[x, y^mask] = c
-                        re[x^mask, y^mask] = d
+                        re[x, y] = na
+                        re[x^mask, y] = nb
+                        re[x, y^mask] = nc
+                        re[x^mask, y^mask] = nd
 
                         a = im[x, y]
                         b = im[x^mask, y]
                         c = im[x, y^mask]
                         d = im[x^mask, y^mask]
 
-                        na = cos*a + sin*b
-                        nb = -sin*a + cos*b
-                        nc = cos*c + sin*d
-                        nd = -sin*c + cos*d
+                        na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
+                        nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
+                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*c
+                        nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
 
-                        a = cos*na + sin*nc
-                        b = cos*nb + sin*nd
-                        c = -sin*na + cos*nc
-                        d = -sin*nb + cos*nd
-
-                        im[x, y] = a
-                        im[x^mask, y] = b
-                        im[x, y^mask] = c
-                        im[x^mask, y^mask] = d
+                        im[x, y] = na
+                        im[x^mask, y] = nb
+                        im[x, y^mask] = nc
+                        im[x^mask, y^mask] = nd
 
     def rotate_z(self, bit, cos2, sin2):
         cdef unsigned int il, jl, ih, jh, x, y
