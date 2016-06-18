@@ -232,7 +232,6 @@ class TestDensityRotateX:
         dm_random.rotate_x(2, np.cos(4.2), np.sin(4.2))
         assert np.allclose(dm_random.trace(), 1)
 
-
     def test_cubes_to_one(self, dmclass):
         dm = dmclass(1)
         a0 = dm.to_array()

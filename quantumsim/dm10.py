@@ -45,6 +45,10 @@ _get_diag = mod.get_function("get_diag")
 _get_diag.prepare("PPI")
 _rotate_y = mod.get_function("rotate_y")
 _rotate_y.prepare("PIddI")
+_rotate_x = mod.get_function("rotate_x")
+_rotate_x.prepare("PIddI")
+_rotate_z = mod.get_function("rotate_z")
+_rotate_z.prepare("PIddI")
 
 
 class Density:
@@ -111,7 +115,9 @@ class Density:
 
     def to_array(self):
         "Return the entries of the density matrix as a dense numpy ndarray."
-        return self.data.get()
+        dense = np.triu(self.data.get())
+        dense += np.conjugate(np.transpose(np.triu(dense, 1)))
+        return dense
 
     def get_diag(self):
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
@@ -175,6 +181,30 @@ class Density:
                                 self.data.gpudata,
                                 1 << bit,
                                 cosine, sine,
+                                self.no_qubits)
+
+    def rotate_x(self, bit, cosine, sine):
+        assert bit < self.no_qubits
+
+        block = (self._block_size, self._block_size, 1)
+        grid = (self._grid_size, self._grid_size, 1)
+
+        _rotate_x.prepared_call(grid, block,
+                                self.data.gpudata,
+                                1 << bit,
+                                cosine, sine,
+                                self.no_qubits)
+
+    def rotate_z(self, bit, cosine2, sine2):
+        assert bit < self.no_qubits
+
+        block = (self._block_size, self._block_size, 1)
+        grid = (self._grid_size, self._grid_size, 1)
+
+        _rotate_z.prepared_call(grid, block,
+                                self.data.gpudata,
+                                1 << bit,
+                                cosine2, sine2,
                                 self.no_qubits)
 
     def add_ancilla(self, bit, anc_st):

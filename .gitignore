@@ -11,3 +11,5 @@ dmcpu.c
 .cache/*
 
 *egg-info
+
+build/*
