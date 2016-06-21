@@ -3,9 +3,8 @@ from unittest.mock import MagicMock, patch, call
 import numpy as np
 
 
-
-
 class TestCircuit:
+
     def test_add_qubit(self):
         c = circuit.Circuit()
 
@@ -80,27 +79,27 @@ class TestCircuit:
         c.add_waiting_gates(only_qubits=["A"], tmin=0, tmax=1)
 
         assert len(c.gates) == 1
-        
+
         c.add_waiting_gates(only_qubits=["B"], tmin=0, tmax=1)
 
         assert len(c.gates) == 2
 
     def test_add_waiting_not_to_inf_qubits(self):
         c = circuit.Circuit()
-        c.add_qubit("A") #should have infinite lifetime by default
-        c.add_qubit("B", np.inf, np.inf) #should have infinite lifetime by default
+        c.add_qubit("A")  # should have infinite lifetime by default
+        # should have infinite lifetime by default
+        c.add_qubit("B", np.inf, np.inf)
         c.add_qubit("C", 10, 10)
 
         c.add_waiting_gates(tmin=0, tmax=1)
 
         assert len(c.gates) == 1
 
-
     def test_apply_to(self):
         sdm = MagicMock()
         sdm.hadamard = MagicMock()
         sdm.amp_ph_damping = MagicMock()
-        sdm.peak_measurement = MagicMock(return_value = (1,0))
+        sdm.peak_measurement = MagicMock(return_value=(1, 0))
         sdm.project_measurement = MagicMock()
 
         c = circuit.Circuit()
@@ -117,14 +116,14 @@ class TestCircuit:
 
         c.apply_to(sdm)
 
-        gamma = 1-np.exp(-1)
+        gamma = 1 - np.exp(-1)
 
-        sdm.assert_has_calls([call.hadamard("A"), 
-                call.amp_ph_damping("A", gamma=gamma, lamda=0),
-                call.hadamard("A"),
-                call.amp_ph_damping("A", gamma=gamma, lamda=0),
-                call.peak_measurement("A"),
-                call.project_measurement("A", 0)])
+        sdm.assert_has_calls([call.hadamard("A"),
+                              call.amp_ph_damping("A", gamma=gamma, lamda=0),
+                              call.hadamard("A"),
+                              call.amp_ph_damping("A", gamma=gamma, lamda=0),
+                              call.peak_measurement("A"),
+                              call.project_measurement("A", 0)])
 
     def test_simplified_adding_qubit(self):
         c = circuit.Circuit()
@@ -136,7 +135,7 @@ class TestCircuit:
     def test_add_gate_by_class(self):
         c = circuit.Circuit()
         c.add_qubit("A", 10, 10)
-        
+
         c.add_gate(circuit.Hadamard, "A", time=20)
 
         assert len(c.gates) == 1
@@ -145,7 +144,7 @@ class TestCircuit:
     def test_add_gate_by_class_name(self):
         c = circuit.Circuit()
         c.add_qubit("A", 10, 10)
-        
+
         c.add_gate("hadamard", "A", time=20)
 
         assert len(c.gates) == 1
@@ -159,14 +158,16 @@ class TestCircuit:
     def test_add_gate_by_getattr(self):
         c = circuit.Circuit()
         c.add_qubit("A", 10, 10)
-        
+
         c.add_hadamard("A", time=20)
         c.add_rotate_y("A", time=20, angle=0)
 
         assert len(c.gates) == 2
         assert c.gates[0].time == 20
 
+
 class TestHadamardGate:
+
     def test_init(self):
         h = circuit.Hadamard("A", 7)
         assert h.time == 7
@@ -181,7 +182,9 @@ class TestHadamardGate:
         h.apply_to(sdm)
         sdm.hadamard.assert_called_once_with("A")
 
+
 class TestRotateYGate:
+
     def test_init(self):
         h = circuit.RotateY("A", 7, 0)
         assert h.time == 7
@@ -196,17 +199,19 @@ class TestRotateYGate:
         assert h.label == r"$R_y(\pi)$"
 
     def test_label_piover2(self):
-        h = circuit.RotateY("A", 7, np.pi/2)
+        h = circuit.RotateY("A", 7, np.pi / 2)
         assert h.label == r"$R_y(\pi/2)$"
 
     def test_apply_piover2(self):
         sdm = MagicMock()
         sdm.rotate_y = MagicMock()
-        h = circuit.RotateY("A", 7, np.pi/2)
+        h = circuit.RotateY("A", 7, np.pi / 2)
         h.apply_to(sdm)
-        sdm.rotate_y.assert_called_once_with("A", angle=np.pi/2)
+        sdm.rotate_y.assert_called_once_with("A", angle=np.pi / 2)
+
 
 class TestCPhaseGate:
+
     def test_init(self):
         cp = circuit.CPhase("A", "B", 10)
         assert cp.time == 10
@@ -218,39 +223,42 @@ class TestCPhaseGate:
         sdm.cphase = MagicMock()
 
         cp = circuit.CPhase("A", "B", 10)
-        
+
         cp.apply_to(sdm)
 
         sdm.cphase.assert_called_once_with("A", "B")
 
+
 class TestAmpPhDamping:
+
     def test_init(self):
         apd = circuit.AmpPhDamp("A", 0, 1, 10, 10)
         assert apd.time == 0
         assert apd.duration == 1
         assert apd.involves_qubit("A")
         assert not apd.is_measurement
-        
 
     def test_apply(self):
         sdm = MagicMock()
         sdm.amp_ph_damping = MagicMock()
 
         apd = circuit.AmpPhDamp("A", 0, 1, 10, 5)
-        
+
         apd.apply_to(sdm)
 
-        g = 1 - np.exp(-1/10)
-        l = 1 - np.exp(-1/5)
+        g = 1 - np.exp(-1 / 10)
+        l = 1 - np.exp(-1 / 5)
         sdm.amp_ph_damping.assert_called_once_with("A", gamma=g, lamda=l)
 
+
 class TestMeasurement:
+
     def test_init(self):
         m = circuit.Measurement("A", 0, sampler=None)
         assert m.is_measurement
         assert m.involves_qubit("A")
         assert m.time == 0
-        
+
     def test_apply_with_uniform_sampler(self):
         m = circuit.Measurement("A", 0, sampler=None)
 
@@ -352,12 +360,13 @@ class TestMeasurement:
         sdm.project_measurement.assert_called_once_with("A", 0)
         sdm.set_bit.assert_called_once_with("O", 0)
 
+
 class TestConditionalGates:
+
     def test_simple(self):
         sdm = MagicMock()
         sdm.classical = {"A": 0, "B": 1}
         sdm.hadamard = MagicMock()
-        
 
         c = circuit.Circuit()
 
@@ -377,7 +386,9 @@ class TestConditionalGates:
         sdm.hadamard.assert_not_called()
         sdm.ensure_classical.assert_called_once_with("B")
 
+
 class TestSamplers:
+
     def test_selection_sampler(self):
         s = circuit.selection_sampler(0)
         next(s)
@@ -388,11 +399,10 @@ class TestSamplers:
             assert prob == 1
 
     def test_uniform_sampler(self):
-        s = circuit.uniform_sampler()
         with patch("numpy.random.RandomState") as rsclass:
             rs = MagicMock()
             rsclass.return_value = rs
-            rs.random_sample = MagicMock(return_value = 0.5)
+            rs.random_sample = MagicMock(return_value=0.5)
 
             s = circuit.uniform_sampler(seed=42)
             next(s)
@@ -406,11 +416,10 @@ class TestSamplers:
                 assert proj == int(p0 < 0.5)
 
     def test_uniform_noisy_sampler(self):
-        s = circuit.uniform_sampler()
         with patch("numpy.random.RandomState") as rsclass:
             rs = MagicMock()
             rsclass.return_value = rs
-            rs.random_sample = MagicMock(return_value = 0.5)
+            rs.random_sample = MagicMock(return_value=0.5)
 
             s = circuit.uniform_noisy_sampler(0.4, seed=42)
             next(s)
@@ -431,14 +440,12 @@ class TestSamplers:
             assert (proj, dec, prob) == (0, 1, 0.7)
 
     def test_BiasedSampler(self):
-        bs = circuit.BiasedSampler(alpha=1)
-        s = circuit.uniform_sampler()
         with patch("numpy.random.RandomState") as rsclass:
             rs = MagicMock()
             rsclass.return_value = rs
-            rs.random_sample = MagicMock(return_value = 0.5)
+            rs.random_sample = MagicMock(return_value=0.5)
 
-            s = bs.sample(0.4, seed=42)
+            s = circuit.BiasedSampler(alpha=1, readout_error=0.4)
             next(s)
 
             rsclass.assert_called_once_with(42)
@@ -449,10 +456,10 @@ class TestSamplers:
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 0, 0.6)
 
-            s = bs.sample(0.7, seed=42)
+            s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
             next(s)
             dec, proj, prob = s.send((0.2, 0.8))
             assert (proj, dec, prob) == (1, 0, 0.7)
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 1, 0.7)
-        assert bs.p_twiddle < 1 and bs.p_twiddle > 0
+        assert s.p_twiddle < 1 and s.p_twiddle > 0

@@ -550,47 +550,48 @@ class BiasedSampler:
 
     All the class does is to store the product of all p_twiddles for renormalisation purposes
     '''
-    def __init__(self,alpha):
+    def __init__(self, readout_error, alpha, seed=42):
         '''
         @alpha: number between 0 and 1 for renormalisation purposes.
         '''
         self.alpha = alpha
         self.p_twiddle = 1
+        self.rng = np.random.RandomState(seed)
 
-    def sample(self,readout_error,seed=42):
+        self.readout_error = readout_error
+        ro_temp = readout_error ** self.alpha
+        self.ro_renormalized = ro_temp / (ro_temp + (1-readout_error)**self.alpha)
+
+    def __next__(self):
+        pass
+
+    def send(self, ps):
         '''
         @readout_error: probability of the state update and classical output disagreeing
         @seed: seed for rng
         '''
 
-        rng = np.random.RandomState(seed)
-        p0, p1 = yield
+        p0, p1 = ps
 
-        # renormalise readout error
-        ro_temp = readout_error ** self.alpha
-        ro_renormalized = ro_temp / (ro_temp + (1-readout_error)**self.alpha)
+        # renormalise probability values
+        p0_temp = (p0/(p0+p1))**self.alpha
+        p1_temp = (p1/(p0+p1))**self.alpha
+        p0_renormalized = p0_temp/(p0_temp+p1_temp)
 
-        while True:
-
-            # renormalise probability values
-            p0_temp = (p0/(p0+p1))**self.alpha
-            p1_temp = (p1/(p0+p1))**self.alpha
-            p0_renormalized = p0_temp/(p0_temp+p1_temp)
-
-            r = rng.random_sample()
-            if r < p0_renormalized:
-                proj = 0
-                self.p_twiddle = self.p_twiddle * p0_renormalized
-            else:
-                proj = 1
-                self.p_twiddle = self.p_twiddle * (1-p0_renormalized)
-            r = rng.random_sample()
-            if r < ro_renormalized:
-                decl = 1 - proj
-                prob = readout_error
-                self.p_twiddle = self.p_twiddle * ro_renormalized
-            else:
-                decl = proj
-                prob = 1 - readout_error
-                self.p_twiddle = self.p_twiddle * (1-ro_renormalized)
-            p0, p1 = yield decl, proj, prob
+        r = self.rng.random_sample()
+        if r < p0_renormalized:
+            proj = 0
+            self.p_twiddle = self.p_twiddle * p0_renormalized
+        else:
+            proj = 1
+            self.p_twiddle = self.p_twiddle * (1-p0_renormalized)
+        r = self.rng.random_sample()
+        if r < self.ro_renormalized:
+            decl = 1 - proj
+            prob = self.readout_error
+            self.p_twiddle = self.p_twiddle * self.ro_renormalized
+        else:
+            decl = proj
+            prob = 1 - self.readout_error
+            self.p_twiddle = self.p_twiddle * (1-self.ro_renormalized)
+        return decl, proj, prob
