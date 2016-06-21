@@ -542,4 +542,55 @@ def uniform_noisy_sampler(readout_error, seed=42):
         else:
             decl = proj
             prob = 1 - readout_error
-        p0, p1 = yield decl, proj, prob 
+        p0, p1 = yield decl, proj, prob
+
+class BiasedSampler:
+    '''A sampler that returns a uniform choice but with probabilities weighted as p_twiddle=p^alpha/Z,
+    with Z a normalisation constant. Also allows for readout error to be input when the sampling is called.
+
+    All the class does is to store the product of all p_twiddles for renormalisation purposes
+    '''
+    def __init__(self,alpha):
+        '''
+        @alpha: number between 0 and 1 for renormalisation purposes.
+        '''
+        self.alpha = alpha
+        self.p_twiddle = 1
+
+    def sample(self,readout_error,seed=42):
+        '''
+        @readout_error: probability of the state update and classical output disagreeing
+        @seed: seed for rng
+        '''
+
+        rng = np.random.RandomState(seed)
+        p0, p1 = yield
+
+        # renormalise readout error
+        ro_temp = readout_error ** self.alpha
+        ro_renormalized = ro_temp / (ro_temp + (1-readout_error)**self.alpha)
+
+        while True:
+
+            # renormalise probability values
+            p0_temp = (p0/(p0+p1))**self.alpha
+            p1_temp = (p1/(p0+p1))**self.alpha
+            p0_renormalized = p0_temp/(p0_temp+p1_temp)
+
+            r = rng.random_sample()
+            if r < p0_renormalized:
+                proj = 0
+                self.p_twiddle = self.p_twiddle * p0_renormalized
+            else:
+                proj = 1
+                self.p_twiddle = self.p_twiddle * (1-p0_renormalized)
+            r = rng.random_sample()
+            if r < ro_renormalized:
+                decl = 1 - proj
+                prob = readout_error
+                self.p_twiddle = self.p_twiddle * ro_renormalized
+            else:
+                decl = proj
+                prob = 1 - readout_error
+                self.p_twiddle = self.p_twiddle * (1-ro_renormalized)
+            p0, p1 = yield decl, proj, prob

@@ -429,3 +429,30 @@ class TestSamplers:
             assert (proj, dec, prob) == (1, 0, 0.7)
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 1, 0.7)
+
+    def test_BiasedSampler(self):
+        bs = circuit.BiasedSampler(alpha=1)
+        s = circuit.uniform_sampler()
+        with patch("numpy.random.RandomState") as rsclass:
+            rs = MagicMock()
+            rsclass.return_value = rs
+            rs.random_sample = MagicMock(return_value = 0.5)
+
+            s = bs.sample(0.4, seed=42)
+            next(s)
+
+            rsclass.assert_called_once_with(42)
+
+            # no readout error
+            dec, proj, prob = s.send((0.2, 0.8))
+            assert (proj, dec, prob) == (1, 1, 0.6)
+            dec, proj, prob = s.send((0.9, 0.1))
+            assert (proj, dec, prob) == (0, 0, 0.6)
+
+            s = bs.sample(0.7, seed=42)
+            next(s)
+            dec, proj, prob = s.send((0.2, 0.8))
+            assert (proj, dec, prob) == (1, 0, 0.7)
+            dec, proj, prob = s.send((0.9, 0.1))
+            assert (proj, dec, prob) == (0, 1, 0.7)
+        assert bs.p_twiddle < 1 and bs.p_twiddle > 0
