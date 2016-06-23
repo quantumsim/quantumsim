@@ -149,7 +149,7 @@ class SparseDM:
             for bit in bits: 
                 outcome[bit] = int(idx & (1 << self.idx_in_full_dm[bit])>0)
 
-            res.append((outcome, probs[idx]))
+            res.append((outcome, probs[idx] * self.classical_probability))
 
         return res
 

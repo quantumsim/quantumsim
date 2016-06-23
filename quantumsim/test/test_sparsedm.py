@@ -287,6 +287,20 @@ class TestMultipleMeasurement:
 
         assert meas == [({0: 0}, 1)]
 
+    def test_multiple_measurement_classical_prob(self):
+        sdm = SparseDM(3)
+
+        sdm.hadamard(0)
+        sdm.hadamard(1)
+
+        sdm.classical_probability = 0.7
+
+        r = sdm.peak_multiple_measurements([0, 1, 2])
+
+        total_prob = sum(prob for outcome, prob in r)
+
+        assert total_prob == sdm.trace()
+
 
 def test_renormalize():
     sdm = SparseDM(2)
@@ -323,6 +337,7 @@ def test_rotate_y():
 
     assert np.allclose(sdm.trace(), 0.25)
 
+
 def test_rotate_x():
     sdm = SparseDM(2)
 
@@ -348,9 +363,9 @@ def test_rotate_x():
 def test_rotate_xyz():
     sdm = SparseDM(1)
 
-    sdm.rotate_x(0, np.pi/2)
-    sdm.rotate_z(0, np.pi/2)
-    sdm.rotate_y(0, np.pi/2)
+    sdm.rotate_x(0, np.pi / 2)
+    sdm.rotate_z(0, np.pi / 2)
+    sdm.rotate_y(0, np.pi / 2)
 
     assert np.allclose(sdm.trace(), 1)
 
@@ -359,10 +374,8 @@ def test_rotate_xyz():
     assert np.allclose(sdm.trace(), 1)
 
 
-
 def test_max_no_bits():
 
-    
     sdm = SparseDM(3)
 
     assert sdm.max_bits_in_full_dm == 0
@@ -386,6 +399,7 @@ def test_max_no_bits():
 
 
 class TestMajorityVote:
+
     def test_majority_vote_gs_classical(self):
 
         bits = [1, 2, 3]
@@ -409,7 +423,7 @@ class TestMajorityVote:
 
         p = sdm.majority_vote(bits)
         assert np.allclose(p, 1)
-        assert sdm._last_majority_vote_mask == 0 
+        assert sdm._last_majority_vote_mask == 0
 
     def test_majority_vote_on_excited_quantum(self):
         bits = [1, 2, 3]
@@ -417,7 +431,7 @@ class TestMajorityVote:
 
         sdm.rotate_y(1, np.pi)
         sdm.rotate_y(2, np.pi)
-        sdm.rotate_y(3, 2*np.pi)
+        sdm.rotate_y(3, 2 * np.pi)
 
         p = sdm.majority_vote(bits)
         assert np.allclose(p, 1)
@@ -442,5 +456,5 @@ class TestMajorityVote:
         assert np.allclose(p, 0.25)
 
     def test_majority_vote_reuse_of_cached(self):
-        #TODO?!
+        # TODO?!
         pass
