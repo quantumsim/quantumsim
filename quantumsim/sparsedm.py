@@ -229,23 +229,44 @@ class SparseDM:
         self.classical[bit] = value
 
     def majority_vote(self, bits):
-        """Return the (total) probability for measuring more than half 1 
+        """Return the (total) probability for measuring more than half 1 (or a specified result)
         when measuring all the given bits. Do not actually perform the measurement.
 
         This is evaluated as Tr(ρ.M) with M a diagonal matrix. 
         The diagonal of M is constructed when needed, then cached and reused when possible.
+
+        bits: any iterable containing bit names, then return the probability for a majority of one measurements.
+              if bits is a dict of the form {bit1: result1, bit2: result2 , ...} with result in {0, 1}, 
+              return the probabilty for the majority of the measurements coinciding with the given result.
         """
 
         dense_bits = {b for b in bits if b in self.idx_in_full_dm}
 
-        classical_bits_sum = sum(self.classical[b] for b in bits if b in self.classical)
+
+        bit_result = {}
+        for b in bits:
+            try:
+                v = bits.get(b)
+                if v not in [0, 1]:
+                    raise ValueError("Measurement result can only be 0 or 1, not "+str(v))
+                bit_result[b] = v
+            except AttributeError:
+                bit_result[b] = 1
+
+        classical_bits_sum = sum(self.classical[b] ^ (1-bit_result[b])
+                for b in bits if b in self.classical)
 
         mask = 0
+        result_mask = 0
         for b in dense_bits:
             mask += 1 << self.idx_in_full_dm[b]
+            try:
+                result_mask |= ((1-bit_result[b]) << self.idx_in_full_dm[b])
+            except AttributeError:
+                pass
 
         if mask != self._last_majority_vote_mask:
-            adresses = np.arange(2**len(self.idx_in_full_dm))
+            adresses = np.arange(2**len(self.idx_in_full_dm)) ^ result_mask
             majority = np.zeros_like(adresses)
             for _ in range(len(self.idx_in_full_dm)):
                 majority += adresses & 1
@@ -256,8 +277,10 @@ class SparseDM:
         else:
             majority = self._last_majority_vote_array
 
+        
+
         majority = (majority+classical_bits_sum > len(bits)/2).astype(np.int)
 
         diag = self.full_dm.get_diag()
 
-        return np.dot(majority, diag)
+        return np.dot(majority, diag)*self.classical_probability

@@ -455,6 +455,70 @@ class TestMajorityVote:
 
         assert np.allclose(p, 0.25)
 
+    def test_majority_vote_after_hadamard_inverted(self):
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+        sdm.hadamard(1)
+        sdm.hadamard(2)
+        sdm.hadamard(3)
+
+
+        result = {b: 0 for b in bits}
+        p = sdm.majority_vote(result)
+
+        assert np.allclose(p, 0.5)
+
+        sdm.hadamard(3)
+
+        p = sdm.majority_vote(result)
+
+        assert np.allclose(p, 0.75)
+
+        p = sdm.majority_vote({1:0, 2:1, 3:0})
+
+        assert np.allclose(p, 0.75)
+
+    def test_majority_vote_invalid_results_error(self):
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+
+        with pytest.raises(ValueError):
+            sdm.majority_vote({1: "bla"})
+
+        with pytest.raises(ValueError):
+            sdm.majority_vote({1: 2})
+
+    def test_majority_vote_classical_prob(self):
+
+        bits = [1, 2, 3]
+        sdm = SparseDM(bits)
+        sdm.hadamard(1)
+        sdm.hadamard(2)
+        sdm.hadamard(3)
+
+        p0 = 0.42
+        sdm.classical_probability = p0
+
+        result = {b: 0 for b in bits}
+        p = sdm.majority_vote(result)
+
+        assert np.allclose(p, 0.5*p0)
+
+        sdm.hadamard(3)
+
+        p = sdm.majority_vote(result)
+
+        assert np.allclose(p, 0.75*p0)
+
+        p = sdm.majority_vote({1:0, 2:1, 3:0})
+
+        assert np.allclose(p, 0.75*p0)
+
+
+
+
+
+
     def test_majority_vote_reuse_of_cached(self):
         # TODO?!
         pass
