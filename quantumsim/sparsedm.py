@@ -242,7 +242,6 @@ class SparseDM:
 
         dense_bits = {b for b in bits if b in self.idx_in_full_dm}
 
-
         bit_result = {}
         for b in bits:
             try:
@@ -260,12 +259,9 @@ class SparseDM:
         result_mask = 0
         for b in dense_bits:
             mask += 1 << self.idx_in_full_dm[b]
-            try:
-                result_mask |= ((1-bit_result[b]) << self.idx_in_full_dm[b])
-            except AttributeError:
-                pass
+            result_mask |= ((1-bit_result[b]) << self.idx_in_full_dm[b])
 
-        if mask != self._last_majority_vote_mask:
+        if 1: #mask != self._last_majority_vote_mask:
             adresses = np.arange(2**len(self.idx_in_full_dm)) ^ result_mask
             majority = np.zeros_like(adresses)
             for _ in range(len(self.idx_in_full_dm)):
@@ -276,8 +272,6 @@ class SparseDM:
             self._last_majority_vote_array = majority
         else:
             majority = self._last_majority_vote_array
-
-        
 
         majority = (majority+classical_bits_sum > len(bits)/2).astype(np.int)
 
