@@ -416,15 +416,13 @@ class Circuit:
         See also: Circuit.apply_to
         """
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
-        measurements = [n for n, gate in all_gates if gate.is_measurement]
-        dependencies = {n: set() for n, gate in all_gates}
 
+        gts_list = []
         for b in self.qubits:
             gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
-            for g1, g2 in zip(gts[:-1], gts[1:]):
-                dependencies[g2] |= {g1}
+            gts_list.append(gts)
 
-        order = tp.greedy_toposort(dependencies, set(measurements))
+        order = tp.partial_greedy_toposort(gts_list)
 
         for n, i in enumerate(order):
             all_gates[i][1].annotation = "%d" % n
