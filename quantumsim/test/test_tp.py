@@ -35,22 +35,6 @@ test_data_list = [[11, 4, 12], [1, 13, 3, 14, 4, 15, 7, 16, 9],
                   [25, 6, 26]]
 
 
-def test_greedy_toposort():
-    solution = [1, 17, 13, 3, 11, 14, 4, 15, 7, 16,
-                9, 20, 2, 21, 25, 6, 18, 22, 5, 23, 8, 24, 10, 26, 19, 12]
-
-    result = tp.greedy_toposort(test_data_dict, {9, 10})
-    assert solution == result
-
-    # check wether A topological sorting
-
-    indices = {s: i for i, s in enumerate(result)}
-
-    assert set(result) == set(test_data_dict.keys())
-
-    for s, s_set in test_data_dict.items():
-        for s2 in s_set:
-            assert indices[s2] < indices[s]
 
 
 def test_greedy_list_toposort():
