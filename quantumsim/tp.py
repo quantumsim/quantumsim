@@ -144,7 +144,7 @@ def partial_greedy_toposort(partial_orders):
     result = []
     while trees != []:
         trees.sort(key=lambda xy: xy[1], reverse=True)
-        print(smallest[1])
+        smallest = trees.pop()
         smallest = smallest[0]
         smallest.reverse()
         smallest = [x for n, x in smallest]
