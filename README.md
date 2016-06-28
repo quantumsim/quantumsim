@@ -31,17 +31,18 @@ Usage
 
 See Introduction.ipynb in the root directory.
 
-
 TODOs
 -----
 
+These are just for the author, ignore.
 
   - auto-generate repetitionerrordata.json from circuit?
 
   - general process matrix kernel/choi matrix kernel
   - precompile chain of single qubit gates
   - add a qasm parser to create a `circuit.Circuit`
-  - turn into a python package: include dependencies
+
+  - a circuit should know about periodic boundary conditions so that it can reorder more efficiently
 
   - a circuit should order its gates automatically before the every apply that follows an edit.
 

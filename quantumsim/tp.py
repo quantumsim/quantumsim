@@ -2,7 +2,7 @@
 # (c) 2016 Brian Tarasinski
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
-import pytools
+
 
 def partial_greedy_toposort(partial_orders, targets=set()):
     """Given a list of partial orders [p1, p2, ...] of hashable items pi = [a_i0, a_i1, ...],
@@ -11,16 +11,21 @@ def partial_greedy_toposort(partial_orders, targets=set()):
         a_i0 < a_i1 < ...
 
     construct a total ordering P: i0 < i1 < i2 < ...
-    satisfying the following the following minimization problem:
 
-    For each i in P, construct the set of P_i = {pi| a_i0 <= i <= ai_n-1 }.
-    Then minimize
+    Some of the lists are denoted as target,
+    and the ordering is chosen so that the number of overlaps between target lists is minimized, i.e.
+    if p1 and p2 are targets, try to prevent
 
-    max_i | P_i |
-
-    (morally: try to completely embed one list before going for the next)
+    a_10 < a_20 < a_1n < a_2n.
 
     This is done by a greedy algorithm.
+
+    Parameters:
+
+        partial_order: lists of lists of items, representing partial sequences
+        targets: list of indices into partial_order, signifying which lists are targets
+
+
     """
 
     targets = set(targets)
