@@ -22,7 +22,7 @@ mod = None
 for kernel_file in [sys.prefix+"/pycudakernels/primitives.cu", package_path + "/primitives.cu"]:
     try:
         with open(kernel_file, "r") as kernel_source_file:
-            mod = SourceModule(kernel_source_file.read())
+            mod = SourceModule(kernel_source_file.read(), options=["--default-stream", "per-thread"])
             break
     except FileNotFoundError:
         pass
