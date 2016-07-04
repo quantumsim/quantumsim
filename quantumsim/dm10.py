@@ -58,7 +58,7 @@ _rotate_x.prepare("PIddI")
 _rotate_z = mod.get_function("rotate_z")
 _rotate_z.prepare("PIddI")
 _bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
-_rotate_z.prepare("PII")
+_bit_to_pauli_basis.prepare("PII")
 
 
 class Density:

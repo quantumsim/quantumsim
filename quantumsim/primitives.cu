@@ -22,21 +22,25 @@ __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsign
 
     const double sqrt2 =  0.70710678118654752440;
 
-    if (x == y) return;
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
 
-    int b_addr = ((x|mask)<<no_qubits | y) << 1;
-    int c_addr = (x<<no_qubits | (y|mask)) << 1;
+    int b_addr = ((x|mask)<<no_qubits | (y&~mask)) << 1;
+    int c_addr = ((x&~mask)<<no_qubits | (y|mask)) << 1;
 
-    if (x < y) {
-        b_addr += 1;
-        c_addr += 1;
+    if (x&mask && (~y&mask)){
+        double b = complex_dm[b_addr];
+        double c = complex_dm[c_addr];
+        complex_dm[b_addr] = (b+c)*sqrt2;
+        complex_dm[c_addr] = (b-c)*sqrt2;
     }
-
-    double b = complex_dm[b_addr];
-    double c = complex_dm[c_addr];
-
-    complex_dm[b_addr] = (b+c)*sqrt2;
-    complex_dm[c_addr] = (b-c)*sqrt2;
+    if (~(x&mask) && (y&mask)){
+        b_addr+=1;
+        c_addr+=1;
+        double b = complex_dm[b_addr];
+        double c = complex_dm[c_addr];
+        complex_dm[b_addr] = (b+c)*sqrt2;
+        complex_dm[c_addr] = (b-c)*sqrt2;
+    }
 }
 
 
