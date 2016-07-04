@@ -62,8 +62,8 @@ class Density:
               If data is None, create a new density matrix with all qubits in ground state.
         """
         self.no_qubits = no_qubits
-        self._block_size = 2**3
-        self._grid_size = 2**max(no_qubits - 3, 0)
+        self._block_size = 2**4
+        self._grid_size = 2**max(no_qubits - 4, 0)
 
         # self._size = max(self._block_size, 2**no_qubits)
         self._size = 2**no_qubits
