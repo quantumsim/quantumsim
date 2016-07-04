@@ -33,7 +33,7 @@ __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsign
         complex_dm[b_addr] = (b+c)*sqrt2;
         complex_dm[c_addr] = (b-c)*sqrt2;
     }
-    if (~(x&mask) && (y&mask)){
+    if ((~x&mask) && (y&mask)){
         b_addr+=1;
         c_addr+=1;
         double b = complex_dm[b_addr];

@@ -21,11 +21,15 @@ try:
     get_diag = mod.get_function("get_diag")
     rotate_y = mod.get_function("rotate_y")
     rotate_z = mod.get_function("rotate_z")
+
+    bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
 except ImportError:
     hascuda = False
 
 
 no_qubits = 10
+block = (32,32,1)
+grid = (1<<(no_qubits-5), 1<<(no_qubits-5), 1)
 
 x = np.random.random((2**no_qubits, 2**no_qubits)).astype(np.complex128)
 x += np.random.random((2**no_qubits, 2**no_qubits)) * 1j
@@ -38,6 +42,39 @@ pytestmark = pytest.mark.skipif(not hascuda, reason="pycuda not installed")
 def random_dm10():
     "return a random (2**no_qubits, 2**no_qubits) density matrix"
     return x
+
+
+class TestToPauli:
+
+    def test_diag_preserve(self):
+        dm = random_dm10()
+
+        dm_gpu = drv.to_device(dm)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(np.diag(dm), np.diag(dm2))
+
+    def test_all_real_or_imag(self):
+        dm = random_dm10()
+
+        dm_gpu = drv.to_device(dm)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        where_real = dm2.real == dm2
+        where_imag = 1j*dm2.imag == dm2
+        where_all = where_real + where_imag
+
+        assert np.all(where_all)
 
 
 class TestCphase:
