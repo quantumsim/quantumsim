@@ -14,6 +14,31 @@
 #define ADDR_IMAG(x,y,n) ADDR_TRIU(x,y,1,n)
 
 
+//kernel to transform to pauli basis (up, x, y, down)
+//to be run on a complete complex density matrix, once for each bit
+__global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsigned int no_qubits) {
+    const int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    const int y = (blockIdx.y *blockDim.y) + threadIdx.y;
+
+    const double sqrt2 =  0.70710678118654752440;
+
+    if (x == y) return;
+
+    int b_addr = ((x|mask)<<no_qubits | y) << 1;
+    int c_addr = (x<<no_qubits | (y|mask)) << 1;
+
+    if (x < y) {
+        b_addr += 1;
+        c_addr += 1;
+    }
+
+    double b = complex_dm[b_addr];
+    double c = complex_dm[c_addr];
+
+    complex_dm[b_addr] = (b+c)*sqrt2;
+    complex_dm[c_addr] = (b-c)*sqrt2;
+}
+
 
 //do the cphase gate. set a bit in mask to 1 if you want the corresponding qubit to 
 //partake in the cphase.

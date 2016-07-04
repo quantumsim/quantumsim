@@ -1,6 +1,7 @@
 # This file is part of quantumsim. (https://github.com/brianzi/quantumsim)
 # (c) 2016 Brian Tarasinski
-# Distributed under the GNU GPLv3. See LICENSE.txt or https://www.gnu.org/licenses/gpl.txt
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
 import pycuda.driver as drv
@@ -9,20 +10,27 @@ import pycuda.gpuarray as ga
 
 import pycuda.autoinit
 
-
 # load the kernels
 from pycuda.compiler import SourceModule
 
 import sys
-import os 
+import os
+pycuda.autoinit
+
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
 mod = None
-for kernel_file in [sys.prefix+"/pycudakernels/primitives.cu", package_path + "/primitives.cu"]:
+for kernel_file in [
+        sys.prefix +
+        "/pycudakernels/primitives.cu",
+        package_path +
+        "/primitives.cu"]:
     try:
         with open(kernel_file, "r") as kernel_source_file:
-            mod = SourceModule(kernel_source_file.read(), options=["--default-stream", "per-thread"])
+            mod = SourceModule(
+                kernel_source_file.read(), options=[
+                    "--default-stream", "per-thread"])
             break
     except FileNotFoundError:
         pass
@@ -49,14 +57,16 @@ _rotate_x = mod.get_function("rotate_x")
 _rotate_x.prepare("PIddI")
 _rotate_z = mod.get_function("rotate_z")
 _rotate_z.prepare("PIddI")
+_bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
+_rotate_z.prepare("PII")
 
 
 class Density:
 
     def __init__(self, no_qubits, data=None):
-        """create a new density matrix for several qubits. 
-        no_qubits: number of qubits. 
-        data: a numpy.ndarray, gpuarray.array, or pycuda.driver.DeviceAllocation. 
+        """create a new density matrix for several qubits.
+        no_qubits: number of qubits.
+        data: a numpy.ndarray, gpuarray.array, or pycuda.driver.DeviceAllocation.
               must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if not already there.
               Only upper triangle is relevant.
               If data is None, create a new density matrix with all qubits in ground state.
@@ -70,7 +80,8 @@ class Density:
 
         if no_qubits > 15:
             raise ValueError(
-                "no_qubits=%d is way too many qubits, are you sure?" % no_qubits)
+                "no_qubits=%d is way too many qubits, are you sure?" %
+                no_qubits)
 
         if isinstance(data, np.ndarray):
             assert data.shape == (self._size, self._size)
@@ -95,8 +106,13 @@ class Density:
         block = (self._block_size, 1, 1)
         grid = (self._grid_size, 1, 1)
 
-        _get_diag.prepared_call(grid, block,
-                                self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits))
+        _get_diag.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            diag.gpudata,
+            np.uint32(
+                self.no_qubits))
 
         trace = ga.sum(diag, dtype=np.float64).get()
         return trace
@@ -124,8 +140,13 @@ class Density:
         block = (self._block_size, 1, 1)
         grid = (self._grid_size, 1, 1)
 
-        _get_diag.prepared_call(grid, block,
-                                self.data.gpudata, diag.gpudata, np.uint32(self.no_qubits))
+        _get_diag.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            diag.gpudata,
+            np.uint32(
+                self.no_qubits))
 
         return diag.get()
 
@@ -253,3 +274,13 @@ class Density:
         p0 = dm0.trace()
         p1 = dm1.trace()
         return p0, dm0, p1, dm1
+
+    def to_pauli_basis(self):
+        block = (self._block_size, self._block_size, 1)
+        grid = (self._grid_size, self._grid_size, 1)
+        for bit in range(self.no_qubits):
+            _bit_to_pauli_basis.prepared_call(grid, block,
+                                              self.data.gpudata,
+                                              1 << bit,
+                                              self.no_qubits)
+        return self.data.get()

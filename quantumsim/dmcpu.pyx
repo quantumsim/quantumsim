@@ -528,3 +528,56 @@ cdef class Density:
 
 
 
+    def to_pauli_basis(self, bit):
+        cdef unsigned int il, jl, ih, jh, x, y
+
+        cdef np.ndarray[double, ndim=2] re
+        cdef np.ndarray[double, ndim=2] im
+
+        re = self.data_re
+        im = self.data_im
+
+        assert bit < self.no_qubits
+
+        cdef double a, b, c, d
+        cdef double na, nb, nc, nd
+
+        cdef unsigned int mask = (1<<bit)
+
+        for ih in range(1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
+                for il in range(1<<bit):
+                    for jl in range(1<<bit):
+                        x = (ih << (bit + 1)) | il
+                        y = (jh << (bit + 1)) | jl
+
+
+                        a = re[x, y]
+                        b = re[x|mask, y]
+                        c = re[x, y|mask]
+                        d = re[x|mask, y|mask]
+
+                        na = a
+                        nb = (b+c)/np.sqrt(2)
+                        nc = (b-c)/np.sqrt(2)
+                        nd = d
+
+                        re[x, y] = na
+                        re[x|mask, y] = nb
+                        re[x, y|mask] = nc
+                        re[x|mask, y|mask] = nd
+
+                        a = im[x, y]
+                        b = im[x|mask, y]
+                        c = im[x, y|mask]
+                        d = im[x|mask, y|mask]
+
+                        na = a
+                        nb = (b+c)/np.sqrt(2)
+                        nc = (b-c)/np.sqrt(2)
+                        nd = d
+
+                        im[x, y] = na
+                        im[x|mask, y] = nb
+                        im[x, y|mask] = nc
+                        im[x|mask, y|mask] = nd
