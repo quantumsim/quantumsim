@@ -59,6 +59,8 @@ _rotate_z = mod.get_function("rotate_z")
 _rotate_z.prepare("PIddI")
 _bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
 _bit_to_pauli_basis.prepare("PII")
+_pauli_reshuffle = mod.get_function("pauli_reshuffle")
+_pauli_reshuffle.prepare("PPII")
 
 
 class Density:
@@ -284,3 +286,17 @@ class Density:
                                               1 << bit,
                                               self.no_qubits)
         return self.data.get()
+
+    def pauli_reshuffle(self):
+        block = (self._block_size, self._block_size, 1)
+        grid = (self._grid_size, self._grid_size, 1)
+
+        reshuffled = ga.empty(2**(2*self.no_qubits), np.float64)
+
+        _pauli_reshuffle.prepared_call(grid, block, 
+                self.data.gpudata, reshuffled.gpudata, self.no_qubits, 0)
+
+        return reshuffled.get()
+
+
+

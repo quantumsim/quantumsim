@@ -23,6 +23,7 @@ try:
     rotate_z = mod.get_function("rotate_z")
 
     bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
+    pauli_reshuffle = mod.get_function("pauli_reshuffle")
 except ImportError:
     hascuda = False
 
@@ -75,6 +76,54 @@ class TestToPauli:
         where_all = where_real + where_imag
 
         assert np.all(where_all)
+
+    def test_involution(self):
+        dm = random_dm10()
+
+        dm_gpu = drv.to_device(dm)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm, dm2)
+
+    def test_reshuffle_invertible(self):
+        dm = random_dm10()
+
+        dm_gpu = drv.to_device(dm)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        dmreal = np.zeros(2**(2*no_qubits))
+        dmreal_gpu = drv.to_device(dmreal)
+
+        pauli_reshuffle(dm_gpu, dmreal_gpu, np.int32(no_qubits), np.int32(0),
+                block=block, grid=grid)
+
+        dm_gpu2 = drv.mem_alloc(dm.nbytes)
+        drv.memset_d8(dm_gpu2, 0, dm.nbytes)
+
+        pauli_reshuffle(dm_gpu2, dmreal_gpu, np.int32(no_qubits), np.int32(1),
+                block=block, grid=grid)
+
+        for i in range(no_qubits):
+            bit_to_pauli_basis(dm_gpu2, np.int32(1<<i), np.int32(no_qubits),
+                    block=block, grid=grid)
+
+        dm2 = drv.from_device_like(dm_gpu2, dm)
+
+        assert np.allclose(dm, dm2)
+
+
 
 
 class TestCphase:

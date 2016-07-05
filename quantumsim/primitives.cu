@@ -16,6 +16,8 @@
 
 //kernel to transform to pauli basis (up, x, y, down)
 //to be run on a complete complex density matrix, once for each bit
+//this operation is its own inverse (can also be used in opposite direction)
+//run with a 2d grid of total size (2**no_qubits)^2
 __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsigned int no_qubits) {
     const int x = (blockIdx.x *blockDim.x) + threadIdx.x;
     const int y = (blockIdx.y *blockDim.y) + threadIdx.y;
@@ -40,6 +42,49 @@ __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsign
         double c = complex_dm[c_addr];
         complex_dm[b_addr] = (b+c)*sqrt2;
         complex_dm[c_addr] = (b-c)*sqrt2;
+    }
+}
+
+
+//pauli_reshuffle
+//this function collects the values from a complex density matrix in (0, x, iy, 1) basis
+//and collects the real values only; furthermore it rearranges the address bit order 
+//from (d_state_bits, d_state_bits) to 
+// (alpha_d, alpha_d-1, ..., alpha_0) where alpha = (00, 01, 10, 11) for 0, x, y, 1
+//if direction = 0, the copy is performed from complex to real, otherwise from real to complex
+__global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned int no_qubits, unsigned int direction) {
+
+    const int x = (blockIdx.x *blockDim.x) + threadIdx.x;
+    const int y = (blockIdx.y *blockDim.y) + threadIdx.y;
+
+    if ((x >= (1 << no_qubits)) || (y >= (1 << no_qubits))) return;
+
+
+    //do we need imaginary part? That is the case if we have an odd number of bits for y in our adress (bit in y is 1, bit in x is 0)
+    unsigned int v = ~x & y;
+
+    //short version: while (v>1) { v = (v >> 1) ^ v ;}
+    //bit bang version
+    v ^= v >> 1;
+    v ^= v >> 2;
+    v = (v & 0x11111111U) * 0x11111111U;
+    v = (v >> 28) & 1;
+
+    const unsigned int addr_complex = (((x << no_qubits) | y) << 1) + v;
+
+
+    //the adress in pauli basis is obtained by interleaving
+    unsigned int addr_real = 0;
+    for (int i = 0; i < 16; i++) { 
+          addr_real |= (x & 1U << i) << i | (y & 1U << i) << (i + 1);
+    }
+    
+
+    if(direction == 0) {
+        real_dm[addr_real] = complex_dm[addr_complex];
+    }
+    else {
+        complex_dm[addr_complex] = real_dm[addr_real];
     }
 }
 
