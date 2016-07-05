@@ -365,7 +365,7 @@ def test_rotate_xyz():
 
     sdm.rotate_x(0, np.pi / 2)
     sdm.rotate_z(0, np.pi / 2)
-    sdm.rotate_y(0, np.pi / 2)
+    sdm.rotate_y(0, -np.pi / 2)
 
     assert np.allclose(sdm.trace(), 1)
 

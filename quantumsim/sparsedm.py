@@ -48,7 +48,7 @@ class SparseDM:
         if bit not in self.idx_in_full_dm:
             state = self.classical[bit]
             idx = self.full_dm.no_qubits
-            self.full_dm = self.full_dm.add_ancilla(idx, state)
+            self.full_dm = self.full_dm.add_ancilla(state)
             del self.classical[bit]
             self.idx_in_full_dm[bit] = idx
 
@@ -203,8 +203,7 @@ class SparseDM:
         by `angle` (in radians).
         """
         self.ensure_dense(bit)
-        c, s = np.cos(angle/2), np.sin(angle/2)
-        self.full_dm.rotate_x(self.idx_in_full_dm[bit], c, s)
+        self.full_dm.rotate_x(self.idx_in_full_dm[bit], angle)
 
     def rotate_y(self, bit, angle):
         """Apply a rotation around the y-axis of the Bloch sphere of bit `bit` 
@@ -212,7 +211,7 @@ class SparseDM:
         """
         self.ensure_dense(bit)
         c, s = np.cos(angle/2), np.sin(angle/2)
-        self.full_dm.rotate_y(self.idx_in_full_dm[bit], c, s)
+        self.full_dm.rotate_y(self.idx_in_full_dm[bit], angle)
 
     def rotate_z(self, bit, angle):
         """Apply a rotation around the z-axis of the Bloch sphere of bit `bit` 
@@ -220,7 +219,7 @@ class SparseDM:
         """
         self.ensure_dense(bit)
         c, s = np.cos(angle), np.sin(angle)
-        self.full_dm.rotate_z(self.idx_in_full_dm[bit], c, s)
+        self.full_dm.rotate_z(self.idx_in_full_dm[bit], angle)
 
     def set_bit(self, bit, value):
         """Set the value of a classical bit to `value` (0 or 1).

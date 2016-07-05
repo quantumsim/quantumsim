@@ -7,7 +7,7 @@ import quantumsim.dmcpu as dmcpu
 # here we collect the classes we want to test
 implementations_to_test = []
 
-# implementations_to_test.append(dmcpu.Density)
+#implementations_to_test.append(dmcpu.Density)
 
 hascuda = False
 try:
