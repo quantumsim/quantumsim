@@ -7,7 +7,7 @@ import quantumsim.dmcpu as dmcpu
 # here we collect the classes we want to test
 implementations_to_test = []
 
-#implementations_to_test.append(dmcpu.Density)
+# implementations_to_test.append(dmcpu.Density)
 
 hascuda = False
 try:
@@ -44,6 +44,18 @@ def dm_random(request):
 
 # Test cases begin here
 
+
+class TestPTMCreation:
+
+    def test_tm_convert_unity(self):
+        assert np.allclose(dm10.to_0xy1_basis(np.eye(4)), np.eye(4))
+        assert np.allclose(dm10.to_0xy1_basis(np.eye(3)), np.eye(4))
+
+    def test_hadamard(self):
+        ptm3x3hadamard = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])
+        assert np.allclose(dm10.to_0xy1_basis(ptm3x3hadamard), dm10.hadamard_ptm())
+
+
 class TestDensityInit:
 
     def test_ground_state(self, dmclass):
@@ -65,11 +77,10 @@ class TestDensityInit:
         assert dm.no_qubits == n
         assert np.allclose(dm.to_array(), a)
 
-
     @pytest.mark.skipif(not hascuda, reason="pycuda not installed")
     def test_gpu_array(self):
         n = 10
-        a = ga.zeros(2**(2*n), dtype=np.float64)
+        a = ga.zeros(2**(2 * n), dtype=np.float64)
         dm = dm10.Density(n, a)
         assert a.gpudata is dm.data.gpudata
 
@@ -82,6 +93,7 @@ class TestDensityInit:
         a = np.zeros((2**n, 2**n))
         with pytest.raises(AssertionError):
             dmclass(n + 1, a)
+
 
 class TestDensityTrace:
 
@@ -101,17 +113,18 @@ class TestDensityTrace:
 
         assert np.allclose(trace_dm, trace_np)
 
+
 class TestCopy:
 
     def test_equality(self, dm):
         dm_copy = dm.copy()
         assert np.allclose(dm.to_array(), dm_copy.to_array())
 
-    @pytest.mark.xfail
     def test_not_equality_after_gate(self, dm):
         dm_copy = dm.copy()
         dm_copy.hadamard(0)
         assert not np.allclose(dm.to_array(), dm_copy.to_array())
+
 
 class TestDensityGetDiag:
 
@@ -134,6 +147,7 @@ class TestDensityGetDiag:
         diag_a = a.diagonal()
 
         assert np.allclose(diag_dm, diag_a)
+
 
 class TestRenormalize:
 
@@ -158,8 +172,6 @@ class TestRenormalize:
         assert np.allclose(tr, 1)
         assert np.allclose(a2, a / np.trace(a))
 
-
-@pytest.mark.xfail
 class TestDensityCPhase:
 
     def test_bit_too_high(self, dm):
@@ -196,7 +208,6 @@ class TestDensityCPhase:
         dm.cphase(4, 0)
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
-
 
 class TestDensityHadamard:
 
@@ -245,25 +256,30 @@ class TestDensityHadamard:
 
         assert dm.to_array()[0, 0] == 1
 
+class TestCnot:
+    def test_cnot(self, dmclass):
+        dm = dmclass(2)
+        a = dm.to_array()
+        dm.hadamard(1)
+        dm.cphase(0, 1)
+        dm.hadamard(1)
+        assert np.allclose(dm.to_array(), a)
 
-@pytest.mark.xfail
 class TestDensityRotateX:
 
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
-            dm.rotate_x(10, 1, 0)
+            dm.rotate_x(10, 2.3)
 
     def test_does_something_to_ground_state(self, dm):
         a0 = dm.to_array()
-        dm.rotate_x(4, np.cos(0.5), np.sin(0.5))
-        a1 = dm.to_array()
-        assert not np.allclose(a0, a1)
+        dm.rotate_x(4, 2.3) 
 
     def test_excite(self, dmclass):
         dm = dmclass(2)
 
-        dm.rotate_x(0, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_x(0, np.pi)
+        dm.rotate_x(1, np.pi)
 
         a1 = dm.to_array()
         assert np.allclose(np.trace(a1), 1)
@@ -272,38 +288,35 @@ class TestDensityRotateX:
     def test_preserves_trace(self, dm_random):
 
         assert np.allclose(dm_random.trace(), 1)
-        dm_random.rotate_x(2, np.cos(4.2), np.sin(4.2))
+        dm_random.rotate_x(2, 2.3)
         assert np.allclose(dm_random.trace(), 1)
 
     def test_cubes_to_one(self, dmclass):
         dm = dmclass(1)
         a0 = dm.to_array()
-        c, s = np.cos(np.pi / 3), np.sin(np.pi / 3)
-        dm.rotate_x(0, c, s)
-        dm.rotate_x(0, c, s)
-        dm.rotate_x(0, c, s)
+        dm.rotate_x(0, 2*np.pi/3)
+        dm.rotate_x(0, 2*np.pi/3)
+        dm.rotate_x(0, 2*np.pi/3)
         a1 = dm.to_array()
 
         assert np.allclose(a0, a1)
 
-
-@pytest.mark.xfail
 class TestDensityRotateY:
 
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
-            dm.rotate_y(10, 1, 0)
+            dm.rotate_y(10, 2.3)
 
     def test_does_something_to_ground_state(self, dm):
         a0 = dm.to_array()
-        dm.rotate_y(4, np.cos(0.5), np.sin(0.5))
+        dm.rotate_y(4, 2.3)
         a1 = dm.to_array()
         assert not np.allclose(a0, a1)
 
     def test_excite(self, dmclass):
         dm = dmclass(2)
-        dm.rotate_y(0, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_y(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_y(0, np.pi)
+        dm.rotate_y(1, np.pi)
 
         a1 = dm.to_array()
         assert np.allclose(np.trace(a1), 1)
@@ -311,25 +324,22 @@ class TestDensityRotateY:
 
     def test_cubes_to_one(self, dm):
         a0 = dm.to_array()
-        c, s = np.cos(np.pi / 3), np.sin(np.pi / 3)
-        dm.rotate_y(1, c, s)
-        dm.rotate_y(1, c, s)
-        dm.rotate_y(1, c, s)
+        dm.rotate_y(1, 2*np.pi /3 )
+        dm.rotate_y(1, 2*np.pi /3 )
+        dm.rotate_y(1, 2*np.pi /3 )
         a1 = dm.to_array()
 
         assert np.allclose(a0, a1)
 
-
-@pytest.mark.xfail
 class TestDensityRotateZ:
 
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
-            dm.rotate_z(10, 1, 0)
+            dm.rotate_z(10, 2.3)
 
     def test_does_nothing_to_ground_state(self, dm):
         a0 = dm.to_array()
-        dm.rotate_z(4, np.cos(0.5), np.sin(0.5))
+        dm.rotate_z(4, 2.3)
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
@@ -337,11 +347,11 @@ class TestDensityRotateZ:
         dm = dmclass(2)
 
         dm.hadamard(0)
-        dm.rotate_z(0, np.cos(np.pi), np.sin(np.pi))
+        dm.rotate_z(0, np.pi)
         dm.hadamard(0)
 
         dm.hadamard(1)
-        dm.rotate_z(1, np.cos(np.pi), np.sin(np.pi))
+        dm.rotate_z(1, np.pi)
         dm.hadamard(1)
 
         a1 = dm.to_array()
@@ -354,38 +364,35 @@ class TestDensityRotateZ:
         a0 = dm.to_array()
 
         dm.hadamard(0)
-        c, s = np.cos(2 * np.pi / 3), np.sin(2 * np.pi / 3)
-        dm.rotate_z(0, c, s)
-        dm.rotate_z(0, c, s)
-        dm.rotate_z(0, c, s)
+        dm.rotate_z(0, 2*np.pi/3)
+        dm.rotate_z(0, 2*np.pi/3)
+        dm.rotate_z(0, 2*np.pi/3)
         dm.hadamard(0)
 
         a1 = dm.to_array()
 
         assert np.allclose(a0, a1)
 
-
-@pytest.mark.xfail
 class TestCommutationXYZ:
 
     def test_excite_deexcite(self, dm):
         a0 = dm.to_array()
-        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_y(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_z(1, np.cos(np.pi), np.sin(np.pi))
-        dm.rotate_x(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_y(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
-        dm.rotate_z(1, np.cos(np.pi), np.sin(np.pi))
+        dm.rotate_x(1, np.pi)
+        dm.rotate_y(1, np.pi)
+        dm.rotate_z(1, np.pi)
+        dm.rotate_x(1, np.pi)
+        dm.rotate_y(1, np.pi)
+        dm.rotate_z(1, np.pi)
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
     def test_pauli_xyz(self, dm):
         a0 = dm.to_array()
 
-        dm.rotate_x(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
-        dm.rotate_z(1, np.cos(np.pi / 2), np.sin(np.pi / 2))
+        dm.rotate_x(1, np.pi/2)
+        dm.rotate_z(1, np.pi/2)
         # dm.rotate_x(1, np.cos(4.2), np.sin(4.2))  # should do nothing
-        dm.rotate_y(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
+        dm.rotate_y(1, -np.pi/2)
 
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
@@ -394,18 +401,15 @@ class TestCommutationXYZ:
 
         a0 = dm.to_array()
 
-        dm.rotate_x(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
-        dm.rotate_y(1, np.cos(np.pi / 4), np.sin(np.pi / 4))
-        dm.rotate_x(1, np.cos(np.pi / 4), -np.sin(np.pi / 4))
+        dm.rotate_x(1, np.pi/2)
+        dm.rotate_y(1, np.pi/2)
+        dm.rotate_x(1, -np.pi/2)
 
         a1 = dm.to_array()
 
         assert np.allclose(a0, a1)
 
-
-@pytest.mark.xfail
 class TestDensityAmpPhDamping:
-
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
             dm.amp_ph_damping(10, 0.0, 0.0)
@@ -438,7 +442,6 @@ class TestDensityAmpPhDamping:
 
         assert np.allclose(a2[0, 0], 1)
 
-
 class TestDensityAddAncilla:
 
     def test_add_high_ancilla_to_gs_gives_gs(self, dmclass):
@@ -462,8 +465,6 @@ class TestDensityAddAncilla:
         dm2 = dm.add_ancilla(1)
         assert np.allclose(dm2.trace(), 1)
 
-
-@pytest.mark.xfail
 class TestDensityMeasure:
 
     def test_bit_too_high(self, dm):
@@ -506,4 +507,3 @@ class TestDensityMeasure:
         p0, dm0, p1, dm1 = dm.measure_ancilla(2)
         assert np.allclose(p1, 0)
         assert np.allclose(p0, 1)
-

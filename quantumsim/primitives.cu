@@ -92,8 +92,28 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 
 //do the cphase gate. set a bit in mask to 1 if you want the corresponding qubit to 
 //partake in the cphase.
-//run in a 2d grid that stretches over dm10
-__global__ void cphase(double *dm10, unsigned int mask, unsigned int no_qubits) {
+__global__ void cphase(double *dm, unsigned int bit0, unsigned int bit1, unsigned int no_qubits) {
+
+    const unsigned int addr = blockIdx.x*blockDim.x + threadIdx.x;
+    if (addr >= (1 << (2*no_qubits))) return;
+
+    int idx0 = (addr >> (2*bit0)) & 0x3;
+
+    int idx1 = (addr >> (2*bit1)) & 0x3;
+
+    if (idx0 == 3 && idx1 != 0) 
+        dm[addr] = -dm[addr];
+    if (idx1 == 3 && idx0 != 0)
+        dm[addr] = -dm[addr];
+    
+    if (idx1 == 1 && (idx0 == 1 || idx0 == 2)) { 
+        unsigned int other_addr = addr ^ ( (0x3 << (2*bit0)) | (0x3 << (2*bit1)));
+        double t, u;
+        t = -dm[addr];
+        u = -dm[other_addr];
+        dm[other_addr] = t;
+        dm[addr] = u;
+    }
 }
 
 
@@ -152,10 +172,23 @@ __global__ void single_qubit_ptm(double *dm, double *ptm_g,  unsigned int bit, u
 
 
 //copy the two diagonal blocks of one ancilla into reduced density matrices
-//multiply the two with two numbers (inverse of the traces for instance, to implement measurement)
-//note that because major bit banging is required to figure out the new adresses,
 //the qubit index is passed as an integer, not as a bitmask!
-__global__ void dm_reduce(double *dm10, unsigned int bit_idx, double *dm9_0, double *dm9_1, double mul0, double mul1, unsigned int no_qubits) {
+__global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, double *dm1, 
+        unsigned int no_qubits) {
+
+    const int addr = blockIdx.x*blockDim.x + threadIdx.x;
+
+    if(addr >= (1<< (2*no_qubits))) return;
+
+    const int low_mask = (1 << (2*bit))-1;      //0000011111
+    const int high_mask = (~low_mask) << 2;     //1110000000
+
+    if(((addr >> (2*bit)) & 0x3) == 0) {
+        dm0[ (addr & low_mask) | ((addr & high_mask) >> 2) ] = dm[addr];
+    }
+    if(((addr >> (2*bit)) & 0x3) == 0x3) {
+        dm1[ (addr & low_mask) | ((addr & high_mask) >> 2) ] = dm[addr];
+    }
 }
 
 

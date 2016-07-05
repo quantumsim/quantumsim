@@ -40,7 +40,7 @@ if mod is None:
 
 
 _cphase = mod.get_function("cphase")
-_cphase.prepare("PII")
+_cphase.prepare("PIII")
 _get_diag = mod.get_function("get_diag")
 _get_diag.prepare("PPI")
 _bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
@@ -49,29 +49,69 @@ _pauli_reshuffle = mod.get_function("pauli_reshuffle")
 _pauli_reshuffle.prepare("PPII")
 _single_qubit_ptm = mod.get_function("single_qubit_ptm")
 _single_qubit_ptm.prepare("PPII")
+_dm_reduce = mod.get_function("dm_reduce")
+_dm_reduce.prepare("PIPPI")
 
 
 
-common_ptms = {
-        "hadamard": ga.to_gpu(np.array( 
-                        [[0.5, np.sqrt(0.5), 0, 0.5], 
+def to_0xy1_basis(ptm):
+
+    ptm = np.array(ptm)
+
+    if ptm.shape == (3,3):
+        ptm = np.hstack(([[0],[0],[0]], ptm))
+
+    if ptm.shape == (3, 4):
+        ptm = np.vstack(([1,0,0,0], ptm))
+
+    assert ptm.shape == (4, 4)
+    t = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)], 
+                  [0, 1, 0, 0], 
+                  [0, 0, 1, 0],
+                  [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
+
+    return np.dot(t, np.dot(ptm, t))
+
+
+def hadamard_ptm():
+    return np.array([[0.5, np.sqrt(0.5), 0, 0.5], 
                          [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)], 
                          [0, 0, -1, 0], 
-                         [0.5, -np.sqrt(0.5), 0, 0.5]], np.float64)), 
-                }
-        
+                         [0.5, -np.sqrt(0.5), 0, 0.5]], np.float64)
 
 
+def amp_ph_damping_ptm(gamma, lamda):
+    ptm = np.array( [
+            [1, 0, 0, 0],
+            [0, np.sqrt((1-gamma)*(1-lamda)), 0, 0],
+            [0, 0, np.sqrt((1-gamma)*(1-lamda)), 0],
+            [gamma, 0, 0, 1 - gamma]]
+            )
+    return to_0xy1_basis(ptm)
 
+def rotate_x_ptm(angle):
+    ptm = np.array([[1, 0, 0], 
+                    [0, np.cos(angle), -np.sin(angle)],
+                    [0, np.sin(angle), np.cos(angle)]])
+
+    return to_0xy1_basis(ptm)
+
+def rotate_y_ptm(angle):
+    ptm = np.array([[np.cos(angle), 0, np.sin(angle)], 
+                    [0, 1, 0],
+                    [-np.sin(angle), 0, np.cos(angle)]])
+
+    return to_0xy1_basis(ptm)
+
+def rotate_z_ptm(angle):
+    ptm = np.array([[np.cos(angle), -np.sin(angle), 0],
+                    [np.sin(angle), np.cos(angle), 0],
+                    [0, 0, 1]])
+    return to_0xy1_basis(ptm)
 
 
 
 class Density:
-
-
-
-
-
     def __init__(self, no_qubits, data=None):
         """create a new density matrix for several qubits.
         no_qubits: number of qubits.
@@ -176,15 +216,14 @@ class Density:
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
-        pass
 
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
 
-        # _cphase.prepared_call(grid, block,
-        # self.data.gpudata,
-        # (1 << bit0) | (1 << bit1),
-        # self.no_qubits)
+        _cphase.prepared_call(grid, block,
+             self.data.gpudata,
+             bit0, bit1,
+             self.no_qubits)
 
     def hadamard(self, bit):
         assert bit < self.no_qubits
@@ -192,67 +231,62 @@ class Density:
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
+        ptm = ga.to_gpu(hadamard_ptm())
+
         _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, common_ptms["hadamard"].gpudata, bit, self.no_qubits,
+                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
                 shared_size=8 * ( 16+ self._blocksize))
 
     def amp_ph_damping(self, bit, gamma, lamda):
         assert bit < self.no_qubits
-        pass
 
-        # gamma = np.float64(gamma)
-        # lamda = np.float64(lamda)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
 
-        # s1mgamma = np.float64(np.sqrt(1 - gamma))
-        # s1mlamda = np.float64(np.sqrt(1 - lamda))
+        ptm = ga.to_gpu(amp_ph_damping_ptm(gamma, lamda))
 
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
+        _single_qubit_ptm.prepared_call(grid, block, 
+                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
+                shared_size=8 * ( 16+ self._blocksize))
 
-        # _amp_ph_damping.prepared_call(grid, block,
-        # self.data.gpudata,
-        # 1 << bit,
-        # gamma, s1mgamma, s1mlamda,
-        # self.no_qubits)
 
-    def rotate_y(self, bit, cosine, sine):
+    def rotate_y(self, bit, angle):
         assert bit < self.no_qubits
-        pass
 
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
 
-        # _rotate_y.prepared_call(grid, block,
-        # self.data.gpudata,
-        # 1 << bit,
-        # cosine, sine,
-        # self.no_qubits)
+        ptm = ga.to_gpu(rotate_y_ptm(angle))
 
-    def rotate_x(self, bit, cosine, sine):
+        _single_qubit_ptm.prepared_call(grid, block, 
+                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
+                shared_size=8 * ( 16+ self._blocksize))
+
+    def rotate_x(self, bit, angle):
         assert bit < self.no_qubits
-        pass
 
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
 
-        # _rotate_x.prepared_call(grid, block,
-        # self.data.gpudata,
-        # 1 << bit,
-        # cosine, sine,
-        # self.no_qubits)
+        ptm = ga.to_gpu(rotate_x_ptm(angle))
 
-    def rotate_z(self, bit, cosine2, sine2):
+        _single_qubit_ptm.prepared_call(grid, block, 
+                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
+                shared_size=8 * ( 16+ self._blocksize))
+
+
+    def rotate_z(self, bit, angle):
         assert bit < self.no_qubits
+
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
+
+        ptm = ga.to_gpu(rotate_z_ptm(angle))
+
+        _single_qubit_ptm.prepared_call(grid, block, 
+                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
+                shared_size=8 * ( 16+ self._blocksize))
         pass
-
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
-
-        # _rotate_z.prepared_call(grid, block,
-        # self.data.gpudata,
-        # 1 << bit,
-        # cosine2, sine2,
-        # self.no_qubits)
 
     def add_ancilla(self, anc_st):
         """Add an ancilla in the ground or excited state as the highest new bit.
@@ -269,25 +303,20 @@ class Density:
 
     def measure_ancilla(self, bit):
         assert bit < self.no_qubits
-        pass
 
-        # d0 = ga.zeros((2**(self.no_qubits - 1), 2**(self.no_qubits - 1)),
-        # np.complex128)
-        # d1 = ga.zeros((2**(self.no_qubits - 1), 2**(self.no_qubits - 1)),
-        # np.complex128)
+        d0 = ga.empty(self._size >> 2, np.float64)
+        d1 = ga.empty(self._size >> 2, np.float64)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
 
-        # block = (self._block_size, self._block_size, 1)
-        # grid = (self._grid_size, self._grid_size, 1)
+        _dm_reduce.prepared_call(grid, block,
+          self.data.gpudata,
+          bit,
+          d0.gpudata, d1.gpudata, self.no_qubits)
 
-        # _dm_reduce.prepared_call(grid, block,
-        # self.data.gpudata,
-        # bit,
-        # d0.gpudata, d1.gpudata,
-        # 1, 1, self.no_qubits)
+        dm0 = Density(self.no_qubits - 1, d0)
+        dm1 = Density(self.no_qubits - 1, d1)
 
-        # dm0 = Density(self.no_qubits - 1, d0)
-        # dm1 = Density(self.no_qubits - 1, d1)
-
-        # p0 = dm0.trace()
-        # p1 = dm1.trace()
-        # return p0, dm0, p1, dm1
+        p0 = dm0.trace()
+        p1 = dm1.trace()
+        return p0, dm0, p1, dm1
