@@ -1,6 +1,7 @@
 import quantumsim.circuit as circuit
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch, call, ANY
 import numpy as np
+import quantumsim.ptm as ptm
 import pytest
 
 class TestCircuit:
@@ -95,11 +96,11 @@ class TestCircuit:
 
         assert len(c.gates) == 1
 
-    @pytest.mark.xfail
     def test_apply_to(self):
         sdm = MagicMock()
         sdm.hadamard = MagicMock()
         sdm.amp_ph_damping = MagicMock()
+        sdm.apply_ptm = MagicMock()
         sdm.peak_measurement = MagicMock(return_value=(1, 0))
         sdm.project_measurement = MagicMock()
 
@@ -119,10 +120,10 @@ class TestCircuit:
 
         gamma = 1 - np.exp(-1)
 
-        sdm.assert_has_calls([call.hadamard("A"),
-                              call.amp_ph_damping("A", gamma=gamma, lamda=0),
-                              call.hadamard("A"),
-                              call.amp_ph_damping("A", gamma=gamma, lamda=0),
+        sdm.assert_has_calls([call.apply_ptm("A", ptm=ANY),
+                              call.apply_ptm("A", ptm=ANY),
+                              call.apply_ptm("A", ptm=ANY),  
+                              call.apply_ptm("A", ptm=ANY),
                               call.peak_measurement("A"),
                               call.project_measurement("A", 0)])
 
@@ -176,13 +177,12 @@ class TestHadamardGate:
         assert not h.involves_qubit("B")
         assert not h.is_measurement
 
-    @pytest.mark.xfail
     def test_apply(self):
         sdm = MagicMock()
-        sdm.hadamard = MagicMock()
+        sdm.apply_ptm = MagicMock()
         h = circuit.Hadamard("A", 7)
         h.apply_to(sdm)
-        sdm.hadamard.assert_called_once_with("A")
+        sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
 
 
 class TestRotateYGate:
@@ -204,13 +204,12 @@ class TestRotateYGate:
         h = circuit.RotateY("A", 7, np.pi / 2)
         assert h.label == r"$R_y(\pi/2)$"
 
-    @pytest.mark.xfail
     def test_apply_piover2(self):
         sdm = MagicMock()
-        sdm.rotate_y = MagicMock()
+        sdm.apply_ptm = MagicMock()
         h = circuit.RotateY("A", 7, np.pi / 2)
         h.apply_to(sdm)
-        sdm.rotate_y.assert_called_once_with("A", angle=np.pi / 2)
+        sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
 
 
 class TestCPhaseGate:
@@ -243,7 +242,7 @@ class TestAmpPhDamping:
 
     def test_apply(self):
         sdm = MagicMock()
-        sdm.amp_ph_damping = MagicMock()
+        sdm.apply_ptm = MagicMock()
 
         apd = circuit.AmpPhDamp("A", 0, 1, 10, 5)
 
@@ -251,7 +250,7 @@ class TestAmpPhDamping:
 
         g = 1 - np.exp(-1 / 10)
         l = 1 - np.exp(-1 / 5)
-        sdm.amp_ph_damping.assert_called_once_with("A", gamma=g, lamda=l)
+        sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
 
 
 class TestMeasurement:
@@ -365,12 +364,10 @@ class TestMeasurement:
 
 
 class TestConditionalGates:
-
-    @pytest.mark.xfail
     def test_simple(self):
         sdm = MagicMock()
         sdm.classical = {"A": 0, "B": 1}
-        sdm.hadamard = MagicMock()
+        sdm.apply_ptm = MagicMock()
 
         c = circuit.Circuit()
 
@@ -378,7 +375,7 @@ class TestConditionalGates:
 
         c.apply_to(sdm)
 
-        sdm.hadamard.assert_called_once_with("A")
+        sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
         sdm.ensure_classical.assert_called_once_with("B")
 
         sdm = MagicMock()
@@ -387,7 +384,7 @@ class TestConditionalGates:
 
         c.apply_to(sdm)
 
-        sdm.hadamard.assert_not_called()
+        sdm.apply_ptm.assert_not_called()
         sdm.ensure_classical.assert_called_once_with("B")
 
 
