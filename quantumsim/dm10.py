@@ -15,7 +15,7 @@ from pycuda.compiler import SourceModule
 
 import sys
 import os
-pycuda.autoinit
+
 
 
 package_path = os.path.dirname(os.path.realpath(__file__))
@@ -30,13 +30,15 @@ for kernel_file in [
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
                 kernel_source_file.read(), options=[
-                    "--default-stream", "per-thread"])
+                    "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
         pass
 
 if mod is None:
     raise ImportError("could not find primitives.cu")
+
+pycuda.autoinit.context.set_shared_config(drv.shared_config.EIGHT_BYTE_BANK_SIZE)
 
 
 _cphase = mod.get_function("cphase")
@@ -112,6 +114,9 @@ def rotate_z_ptm(angle):
 
 
 class Density:
+
+    _ptm_cache = {}
+
     def __init__(self, no_qubits, data=None):
         """create a new density matrix for several qubits.
         no_qubits: number of qubits.
@@ -125,6 +130,8 @@ class Density:
         self._size = 1 << (2 * no_qubits)
         self._blocksize = 2**8
         self._gridsize = 2**max(0, 2*no_qubits-8)
+
+        self.ptm = ga.empty((4,4), np.float64)
 
         if no_qubits > 15:
             raise ValueError(
@@ -225,68 +232,48 @@ class Density:
              bit0, bit1,
              self.no_qubits)
 
-    def hadamard(self, bit):
-        assert bit < self.no_qubits
 
+    def set_ptm(self, new_ptm, key=None):
+        #if key is None:
+        key = hash(new_ptm.tobytes())
+
+        try:
+            self.ptm = self._ptm_cache[key]
+        except KeyError:
+            assert new_ptm.shape == (4,4)
+            assert new_ptm.dtype == np.float64
+            self._ptm_cache[key] = ga.to_gpu(new_ptm)
+            self.ptm = self._ptm_cache[key]
+
+
+    def apply_ptm(self, bit):
+        assert bit < self.no_qubits
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        ptm = ga.to_gpu(hadamard_ptm())
-
         _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 16+ self._blocksize))
+                self.data.gpudata, self.ptm.gpudata, bit, self.no_qubits,
+                shared_size=8 * ( 17+ self._blocksize))
+
+    def hadamard(self, bit):
+        self.set_ptm(hadamard_ptm())
+        self.apply_ptm(bit)
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        assert bit < self.no_qubits
-
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
-
-        ptm = ga.to_gpu(amp_ph_damping_ptm(gamma, lamda))
-
-        _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 16+ self._blocksize))
-
+        self.set_ptm(amp_ph_damping_ptm(gamma, lamda))
+        self.apply_ptm(bit)
 
     def rotate_y(self, bit, angle):
-        assert bit < self.no_qubits
-
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
-
-        ptm = ga.to_gpu(rotate_y_ptm(angle))
-
-        _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 16+ self._blocksize))
+        self.set_ptm(rotate_y_ptm(angle))
+        self.apply_ptm(bit)
 
     def rotate_x(self, bit, angle):
-        assert bit < self.no_qubits
-
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
-
-        ptm = ga.to_gpu(rotate_x_ptm(angle))
-
-        _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 16+ self._blocksize))
-
+        self.set_ptm(rotate_x_ptm(angle))
+        self.apply_ptm(bit)
 
     def rotate_z(self, bit, angle):
-        assert bit < self.no_qubits
-
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
-
-        ptm = ga.to_gpu(rotate_z_ptm(angle))
-
-        _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 16+ self._blocksize))
-        pass
+        self.set_ptm(rotate_z_ptm(angle))
+        self.apply_ptm(bit)
 
     def add_ancilla(self, anc_st):
         """Add an ancilla in the ground or excited state as the highest new bit.
