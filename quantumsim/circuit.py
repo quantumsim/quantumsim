@@ -143,6 +143,33 @@ class RotateZ(SinglePTMGate):
         else:
             self.label = r"$R_z(%g)$" % angle
 
+class AmpPhDamp(SinglePTMGate):
+    def __init__(self, bit, time, duration, t1, t2, **kwargs):
+        """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
+        with amplitude damping time t1 and phase damping t2.
+
+        Note that the gate acts at only one point in time, but acts as if the damping was active for
+        the time `duration`.
+
+        kwargs: conditional_bit
+
+        See also: Circuit.add_waiting_gates to add these gates automatically.
+        """
+        self.t1 = t1
+        self.t2 = t2
+        self.duration = duration
+        gamma = 1 - np.exp(-duration/t1)
+        lamda = 1 - np.exp(-duration/t2)
+        super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
+
+    def plot_gate(self, ax, coords):
+        ax.scatter((self.time),
+                   (coords[self.involved_qubits[-1]]), color='k', marker='x')
+        ax.annotate(
+            r"$%g\,\mathrm{ns}$" %
+            self.duration, (self.time, coords[
+                self.involved_qubits[0]]), xytext=(
+                0, 20), textcoords='offset points', ha='center')
 
 class CPhase(Gate):
     def __init__(self, bit0, bit1, time, **kwargs):
@@ -168,36 +195,6 @@ class CPhase(Gate):
         ax.add_line(line)
 
 
-class AmpPhDamp(Gate):
-
-    def __init__(self, bit, time, duration, t1, t2, **kwargs):
-        """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
-        with amplitude damping time t1 and phase damping t2.
-
-        Note that the gate acts at only one point in time, but acts as if the damping was active for
-        the time `duration`.
-
-        kwargs: conditional_bit
-
-        See also: Circuit.add_waiting_gates to add these gates automatically.
-        """
-        super().__init__(time, **kwargs)
-        self.involved_qubits.append(bit)
-        self.duration = duration
-        self.t1 = t1
-        self.t2 = t2
-        self.method_name = "amp_ph_damping"
-        self.method_params = {"gamma": 1 - np.exp(-duration / t1),
-                              "lamda": 1 - np.exp(-duration / t2)}
-
-    def plot_gate(self, ax, coords):
-        ax.scatter((self.time),
-                   (coords[self.involved_qubits[-1]]), color='k', marker='x')
-        ax.annotate(
-            r"$%g\,\mathrm{ns}$" %
-            self.duration, (self.time, coords[
-                self.involved_qubits[0]]), xytext=(
-                0, 20), textcoords='offset points', ha='center')
 
 
 class Measurement(Gate):
