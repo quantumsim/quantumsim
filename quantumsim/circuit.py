@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from . import tp
+from . import ptm
 
 import functools
 
@@ -76,29 +77,25 @@ class Gate:
             f(*self.involved_qubits, **self.method_params)
 
 
-class Hadamard(Gate):
-
-    def __init__(self, bit, time, **kwargs):
-        """A Hadamard gate on Qubit bit acting at a point in time `time`
-
-        Other arguments: conditional_bit
-
+class SinglePTMGate(Gate):
+    def __init__(self, bit, time, ptm, **kwargs):
+        """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit `bit` at point `time`.
         """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
-        self.label = r"$H$"
-        self.method_name = "hadamard"
-        self.method_params = {}
+
+        self.label = "G"
+
+        self.ptm = ptm
+        self.method_name = "apply_ptm"
+        self.method_params = {'ptm': self.ptm}
 
 
-class RotateY(Gate):
-
+class RotateY(SinglePTMGate):
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
-        Other arguments: conditional_bit
         """
-        super().__init__(time, **kwargs)
-        self.involved_qubits.append(bit)
+        super().__init__(bit, time, ptm.rotate_y_ptm(angle), **kwargs)
 
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -109,18 +106,18 @@ class RotateY(Gate):
         else:
             self.label = r"$R_y(%g)$" % angle
 
-        self.method_name = "rotate_y"
-        self.method_params = {"angle": angle}
+class Hadamard(SinglePTMGate):
+    def __init__(self, bit, time, **kwargs):
+        """A Hadamard gate on qubit `bit` acting at a point in time `time`
+        """
+        super().__init__(bit, time, ptm.hadamard_ptm(), **kwargs)
+        self.label = r"$H$"
 
-
-class RotateX(Gate):
-
+class RotateX(SinglePTMGate):
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
-        Other arguments: conditional_bit
         """
-        super().__init__(time, **kwargs)
-        self.involved_qubits.append(bit)
+        super().__init__(bit, time, ptm.rotate_x_ptm(angle), **kwargs)
 
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -131,18 +128,11 @@ class RotateX(Gate):
         else:
             self.label = r"$R_x(%g)$" % angle
 
-        self.method_name = "rotate_x"
-        self.method_params = {"angle": angle}
-
-
-class RotateZ(Gate):
-
+class RotateZ(SinglePTMGate):
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the z-axis on the bloch sphere by `angle`.
-        Other arguments: conditional_bit
         """
-        super().__init__(time, **kwargs)
-        self.involved_qubits.append(bit)
+        super().__init__(bit, time, ptm.rotate_z_ptm(angle), **kwargs)
 
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -153,12 +143,8 @@ class RotateZ(Gate):
         else:
             self.label = r"$R_z(%g)$" % angle
 
-        self.method_name = "rotate_z"
-        self.method_params = {"angle": angle}
-
 
 class CPhase(Gate):
-
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
 
