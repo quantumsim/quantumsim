@@ -185,6 +185,10 @@ class SparseDM:
         self.ensure_dense(bit1)
         self.full_dm.cphase(self.idx_in_full_dm[bit0], 
                 self.idx_in_full_dm[bit1])
+    
+    def apply_ptm(self, bit, ptm):
+        self.ensure_dense(bit)
+        self.full_dm.apply_ptm(self.idx_in_full_dm[bit], ptm)
 
     def hadamard(self, bit):
         """Apply a hadamard gate to qubit #bit.
@@ -210,7 +214,6 @@ class SparseDM:
         by `angle` (in radians).
         """
         self.ensure_dense(bit)
-        c, s = np.cos(angle/2), np.sin(angle/2)
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], angle)
 
     def rotate_z(self, bit, angle):
@@ -218,7 +221,6 @@ class SparseDM:
         by `angle` (in radians).
         """
         self.ensure_dense(bit)
-        c, s = np.cos(angle), np.sin(angle)
         self.full_dm.rotate_z(self.idx_in_full_dm[bit], angle)
 
     def set_bit(self, bit, value):
