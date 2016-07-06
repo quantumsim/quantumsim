@@ -34,27 +34,24 @@ See Introduction.ipynb in the root directory.
 TODOs
 -----
 
-These are just for the author, ignore.
+These are just for development, ignore.
 
-  - auto-generate repetitionerrordata.json from circuit?
+  - adapt dmcpu to new api, add to tests again
+  - phase out old api
+  - reduce time for allocating/freeing memory. Reallocate memory lazily. Calculate traces more
+    efficiently. Should save about 50% time now.
 
-  - general process matrix kernel/choi matrix kernel
-  - precompile chain of single qubit gates
-  - add a qasm parser to create a `circuit.Circuit`
+For the future:
 
-  - a circuit should know about periodic boundary conditions so that it can reorder more efficiently
+  - add a qasm parser to create and store a `circuit.Circuit`
 
+For much later:
   - a circuit should order its gates automatically before the every apply that follows an edit.
-
-For later:
+  - a circuit should know about periodic boundary conditions so that it can reorder more efficiently
+  - auto-generate repetitionerrordata.json from circuit?
   - Make the Density class use cython for small dms and switch to cuda when large, automatically
   - automatic calculation of ancilla decay rates due to stray photons after measurement?
-  - Better memory layout (we always have stride 2 for real part, and `2**no_bitsize` stride 
-for imaginary part, which should be very poor(?)
-    - turns out that did not help. too much overhead for launching kernels maybe?
 
-  - Kernels that do more hadamards or dampings at the same time? Could save overhead, 
-      but would take some effort to collect with the current Circuit.
 
 Overview
 ========
