@@ -50,6 +50,8 @@ def test_three_qbit_clean():
     for i in range(100):
         c.apply_to(sdm)
 
+    sdm.apply_all_pending()
+
     assert len(m1.measurements) == 100
     assert len(m2.measurements) == 100
 
