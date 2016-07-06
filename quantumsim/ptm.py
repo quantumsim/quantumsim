@@ -23,7 +23,7 @@ def to_0xy1_basis(ptm):
         ptm = np.vstack(([1, 0, 0, 0], ptm))
 
     assert ptm.shape == (4, 4)
-    assert np.allclose(ptm[:, 0], [1, 0, 0, 0])
+    assert np.allclose(ptm[0, :], [1, 0, 0, 0])
     t = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
                   [0, 1, 0, 0],
                   [0, 0, 1, 0],
