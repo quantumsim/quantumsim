@@ -48,12 +48,12 @@ def dm_random(request):
 class TestPTMCreation:
 
     def test_tm_convert_unity(self):
-        assert np.allclose(dm10.to_0xy1_basis(np.eye(4)), np.eye(4))
-        assert np.allclose(dm10.to_0xy1_basis(np.eye(3)), np.eye(4))
+        assert np.allclose(dm10.ptm.to_0xy1_basis(np.eye(4)), np.eye(4))
+        assert np.allclose(dm10.ptm.to_0xy1_basis(np.eye(3)), np.eye(4))
 
     def test_hadamard(self):
         ptm3x3hadamard = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])
-        assert np.allclose(dm10.to_0xy1_basis(ptm3x3hadamard), dm10.hadamard_ptm())
+        assert np.allclose(dm10.ptm.to_0xy1_basis(ptm3x3hadamard), dm10.ptm.hadamard_ptm())
 
 
 class TestDensityInit:

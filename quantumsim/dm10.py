@@ -7,6 +7,7 @@ import numpy as np
 import pycuda.driver as drv
 import pycuda.gpuarray as ga
 
+from . import ptm
 
 import pycuda.autoinit
 
@@ -15,7 +16,6 @@ from pycuda.compiler import SourceModule
 
 import sys
 import os
-
 
 
 package_path = os.path.dirname(os.path.realpath(__file__))
@@ -38,7 +38,8 @@ for kernel_file in [
 if mod is None:
     raise ImportError("could not find primitives.cu")
 
-pycuda.autoinit.context.set_shared_config(drv.shared_config.EIGHT_BYTE_BANK_SIZE)
+pycuda.autoinit.context.set_shared_config(
+    drv.shared_config.EIGHT_BYTE_BANK_SIZE)
 
 
 _cphase = mod.get_function("cphase")
@@ -54,62 +55,6 @@ _single_qubit_ptm.prepare("PPII")
 _dm_reduce = mod.get_function("dm_reduce")
 _dm_reduce.prepare("PIPPI")
 
-
-
-def to_0xy1_basis(ptm):
-
-    ptm = np.array(ptm)
-
-    if ptm.shape == (3,3):
-        ptm = np.hstack(([[0],[0],[0]], ptm))
-
-    if ptm.shape == (3, 4):
-        ptm = np.vstack(([1,0,0,0], ptm))
-
-    assert ptm.shape == (4, 4)
-    t = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)], 
-                  [0, 1, 0, 0], 
-                  [0, 0, 1, 0],
-                  [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
-
-    return np.dot(t, np.dot(ptm, t))
-
-
-def hadamard_ptm():
-    return np.array([[0.5, np.sqrt(0.5), 0, 0.5], 
-                         [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)], 
-                         [0, 0, -1, 0], 
-                         [0.5, -np.sqrt(0.5), 0, 0.5]], np.float64)
-
-
-def amp_ph_damping_ptm(gamma, lamda):
-    ptm = np.array( [
-            [1, 0, 0, 0],
-            [0, np.sqrt((1-gamma)*(1-lamda)), 0, 0],
-            [0, 0, np.sqrt((1-gamma)*(1-lamda)), 0],
-            [gamma, 0, 0, 1 - gamma]]
-            )
-    return to_0xy1_basis(ptm)
-
-def rotate_x_ptm(angle):
-    ptm = np.array([[1, 0, 0], 
-                    [0, np.cos(angle), -np.sin(angle)],
-                    [0, np.sin(angle), np.cos(angle)]])
-
-    return to_0xy1_basis(ptm)
-
-def rotate_y_ptm(angle):
-    ptm = np.array([[np.cos(angle), 0, np.sin(angle)], 
-                    [0, 1, 0],
-                    [-np.sin(angle), 0, np.cos(angle)]])
-
-    return to_0xy1_basis(ptm)
-
-def rotate_z_ptm(angle):
-    ptm = np.array([[np.cos(angle), -np.sin(angle), 0],
-                    [np.sin(angle), np.cos(angle), 0],
-                    [0, 0, 1]])
-    return to_0xy1_basis(ptm)
 
 
 
@@ -129,9 +74,7 @@ class Density:
 
         self._size = 1 << (2 * no_qubits)
         self._blocksize = 2**8
-        self._gridsize = 2**max(0, 2*no_qubits-8)
-
-        self.ptm = ga.empty((4,4), np.float64)
+        self._gridsize = 2**max(0, 2 * no_qubits - 8)
 
         if no_qubits > 15:
             raise ValueError(
@@ -167,14 +110,14 @@ class Density:
     def trace(self):
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
         block = (2**8, 1, 1)
-        grid = (2**max(0, self.no_qubits-8), 1, 1)
+        grid = (2**max(0, self.no_qubits - 8), 1, 1)
 
         _get_diag.prepared_call(
-         grid,
-         block,
-         self.data.gpudata,
-         diag.gpudata,
-         np.uint32(self.no_qubits))
+            grid,
+            block,
+            self.data.gpudata,
+            diag.gpudata,
+            np.uint32(self.no_qubits))
 
         trace = ga.sum(diag, dtype=np.float64).get()
         return trace
@@ -207,18 +150,18 @@ class Density:
         return complex_dm.get()
 
     def get_diag(self):
-         diag = ga.empty((1<<self.no_qubits), dtype=np.float64)
-         block = (2**8, 1, 1)
-         grid = (2**max(0, self.no_qubits-8), 1, 1)
+        diag = ga.empty((1 << self.no_qubits), dtype=np.float64)
+        block = (2**8, 1, 1)
+        grid = (2**max(0, self.no_qubits - 8), 1, 1)
 
-         _get_diag.prepared_call(
-             grid,
-             block,
-             self.data.gpudata,
-             diag.gpudata,
-             np.uint32(self.no_qubits))
+        _get_diag.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            diag.gpudata,
+            np.uint32(self.no_qubits))
 
-         return diag.get()
+        return diag.get()
 
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
@@ -228,63 +171,54 @@ class Density:
         grid = (self._gridsize, 1, 1)
 
         _cphase.prepared_call(grid, block,
-             self.data.gpudata,
-             bit0, bit1,
-             self.no_qubits)
+                              self.data.gpudata,
+                              bit0, bit1,
+                              self.no_qubits)
 
-
-    def set_ptm(self, new_ptm, key=None):
-        #if key is None:
-        key = hash(new_ptm.tobytes())
-
-        try:
-            self.ptm = self._ptm_cache[key]
-        except KeyError:
-            assert new_ptm.shape == (4,4)
-            assert new_ptm.dtype == np.float64
-            self._ptm_cache[key] = ga.to_gpu(new_ptm)
-            self.ptm = self._ptm_cache[key]
-
-
-    def apply_ptm(self, bit):
+    def apply_ptm(self, bit, ptm):
         assert bit < self.no_qubits
+
+        key = hash(ptm.tobytes())
+        try:
+            ptm_gpu = self._ptm_cache[key]
+        except KeyError:
+            assert ptm.shape == (4, 4)
+            assert ptm.dtype == np.float64
+            self._ptm_cache[key] = ga.to_gpu(ptm)
+            ptm_gpu = self._ptm_cache[key]
+
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        _single_qubit_ptm.prepared_call(grid, block, 
-                self.data.gpudata, self.ptm.gpudata, bit, self.no_qubits,
-                shared_size=8 * ( 17+ self._blocksize))
+        _single_qubit_ptm.prepared_call(grid, block,
+                                        self.data.gpudata, ptm_gpu.gpudata, bit, self.no_qubits,
+                                        shared_size=8 * (17 + self._blocksize))
 
     def hadamard(self, bit):
-        self.set_ptm(hadamard_ptm())
-        self.apply_ptm(bit)
+        self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        self.set_ptm(amp_ph_damping_ptm(gamma, lamda))
-        self.apply_ptm(bit)
+        self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
-        self.set_ptm(rotate_y_ptm(angle))
-        self.apply_ptm(bit)
+        self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
-        self.set_ptm(rotate_x_ptm(angle))
-        self.apply_ptm(bit)
+        self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
     def rotate_z(self, bit, angle):
-        self.set_ptm(rotate_z_ptm(angle))
-        self.apply_ptm(bit)
+        self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def add_ancilla(self, anc_st):
         """Add an ancilla in the ground or excited state as the highest new bit.
         """
 
-        new_dm = ga.zeros(self._size*4, np.float64)
+        new_dm = ga.zeros(self._size * 4, np.float64)
 
-        offset = anc_st*(0x3 << (2*self.no_qubits))*8
+        offset = anc_st * (0x3 << (2 * self.no_qubits)) * 8
 
-        drv.memcpy_dtod(int(new_dm.gpudata) + offset, self.data.gpudata, self.data.nbytes)
-
+        drv.memcpy_dtod(int(new_dm.gpudata) + offset,
+                        self.data.gpudata, self.data.nbytes)
 
         return Density(self.no_qubits + 1, new_dm)
 
@@ -297,9 +231,9 @@ class Density:
         grid = (self._gridsize, 1, 1)
 
         _dm_reduce.prepared_call(grid, block,
-          self.data.gpudata,
-          bit,
-          d0.gpudata, d1.gpudata, self.no_qubits)
+                                 self.data.gpudata,
+                                 bit,
+                                 d0.gpudata, d1.gpudata, self.no_qubits)
 
         dm0 = Density(self.no_qubits - 1, d0)
         dm1 = Density(self.no_qubits - 1, d1)
