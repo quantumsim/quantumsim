@@ -1,5 +1,6 @@
 from quantumsim.sparsedm import SparseDM
 
+import quantumsim.ptm as ptm
 
 import numpy as np
 import pytest
@@ -83,7 +84,9 @@ def test_peak_on_ground_state():
 
 def test_peak_on_hadamard():
     sdm = SparseDM(1)
-    sdm.hadamard(0)
+
+    hadamard = ptm.hadamard_ptm()
+    sdm.apply_ptm(0, hadamard)
 
     p0, p1 = sdm.peak_measurement(0)
 
@@ -514,11 +517,33 @@ class TestMajorityVote:
 
         assert np.allclose(p, 0.75*p0)
 
-
-
-
-
-
     def test_majority_vote_reuse_of_cached(self):
         # TODO?!
         pass
+
+
+
+
+
+class TestCachedSinglePTMs:
+    def test_deferred_apply(self):
+        sdm = SparseDM(1)
+
+        assert 0 in sdm.classical
+
+        p = ptm.hadamard_ptm()
+        sdm.apply_ptm(0, p)
+
+        assert 0 in sdm.classical
+        assert 0 in sdm.single_ptms_to_do
+
+        sdm.combine_and_apply_single_ptm(0)
+
+        assert 0 not in sdm.classical
+
+        assert 0 not in sdm.single_ptms_to_do
+
+
+
+
+

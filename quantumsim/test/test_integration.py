@@ -78,8 +78,6 @@ def test_noisy_measurement_sampler():
         c.apply_to(sdm)
         true_state.append(sdm.classical['A'])
 
-        
-
     # these samples assume a certain seed (=42)
     assert m1.measurements == [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1]
     assert true_state != m1.measurements
@@ -120,6 +118,8 @@ def test_measurement_with_output_bit():
 
 
     c.apply_to(sdm)
+
+    sdm.apply_all_pending()
 
     assert np.allclose(sdm.trace(), 0.25)
 

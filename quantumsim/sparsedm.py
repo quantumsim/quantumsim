@@ -4,6 +4,8 @@
 
 import numpy as np
 
+from collections import defaultdict
+
 try:
     from . import dm10
     using_gpu = True
@@ -35,6 +37,8 @@ class SparseDM:
 
         self.classical_probability = 1
 
+        self.single_ptms_to_do = defaultdict(list)
+
         self.last_peak = None
         self._last_majority_vote_array = None
         self._last_majority_vote_mask = None
@@ -59,6 +63,7 @@ class SparseDM:
         """Try to make a qubit classical. This only succeeds if the qubit already is classical, or if a measurement
         returns a definite result with fidelity > (1-epsilon), in which case the measurement is performed with the probable outcome.
         """
+        self.combine_and_apply_single_ptm(bit)
         if bit not in self.names:
             raise ValueError("This bit does not exist")
         if bit in self.idx_in_full_dm:
@@ -77,6 +82,7 @@ class SparseDM:
         The density matrices are stored internally and will be used 
         without recalculation if `project_measurement` is called with the same bit immediately afterwards.
         """
+        self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
             qbit = self.idx_in_full_dm[bit]
             p0, dm0, p1, dm1 = self.full_dm.measure_ancilla(qbit)
@@ -93,6 +99,7 @@ class SparseDM:
         The reduced density matrix is not normalized, so that
         its trace after projection represents the probability for that event.
         """
+        self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
             if self.last_peak == None or self.last_peak['bit'] != bit:
                 self.peak_measurement(bit)
@@ -121,6 +128,10 @@ class SparseDM:
 
         Note that these probabilities are not normalized if previous projections took place.
         """
+
+        for bit in bits: 
+            self.combine_and_apply_single_ptm(bit)
+
         classical_bits = {bit: self.classical[bit] for bit in bits if bit in self.classical}
 
         res = [(classical_bits, self.full_dm.copy())]
@@ -171,6 +182,7 @@ class SparseDM:
         """
 
         cp = SparseDM(self.names)
+        cp.single_ptms_to_do = self.single_ptms_to_do
         cp.classical = self.classical.copy()
         cp.idx_in_full_dm = self.idx_in_full_dm.copy()
         cp.last_peak = None
@@ -183,12 +195,28 @@ class SparseDM:
         """
         self.ensure_dense(bit0)
         self.ensure_dense(bit1)
+        self.combine_and_apply_single_ptm(bit0)
+        self.combine_and_apply_single_ptm(bit1)
         self.full_dm.cphase(self.idx_in_full_dm[bit0], 
                 self.idx_in_full_dm[bit1])
-    
+
+    def apply_all_pending(self):
+        for bit in list(self.single_ptms_to_do.keys()):
+            self.combine_and_apply_single_ptm(bit)
+
+
+    def combine_and_apply_single_ptm(self, bit):
+        if bit in self.single_ptms_to_do:
+            self.ensure_dense(bit)
+            ptm = self.single_ptms_to_do[bit][0]
+            for ptm2 in self.single_ptms_to_do[bit][1:]:
+                ptm = ptm2.dot(ptm)
+            self.full_dm.apply_ptm(self.idx_in_full_dm[bit], ptm)
+
+            del self.single_ptms_to_do[bit]
+
     def apply_ptm(self, bit, ptm):
-        self.ensure_dense(bit)
-        self.full_dm.apply_ptm(self.idx_in_full_dm[bit], ptm)
+        self.single_ptms_to_do[bit].append(ptm)
 
     def hadamard(self, bit):
         """Apply a hadamard gate to qubit #bit.
@@ -242,6 +270,9 @@ class SparseDM:
         """
 
         dense_bits = {b for b in bits if b in self.idx_in_full_dm}
+
+        for bit in bits:
+            self.combine_and_apply_single_ptm(bit)
 
         bit_result = {}
         for b in bits:
