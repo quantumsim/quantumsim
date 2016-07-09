@@ -19,6 +19,7 @@ try:
     bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
     pauli_reshuffle = mod.get_function("pauli_reshuffle")
     single_qubit_ptm = mod.get_function("single_qubit_ptm")
+    trace  = mod.get_function("trace")
 except ImportError:
     hascuda = False
 
@@ -118,9 +119,73 @@ class TestToPauli:
 
         assert np.allclose(dm, dm2)
 
+class TestTrace:
+    def test_simple(self):
+        n = 32
+        x = np.random.random(n);
 
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(-1), block=(n,1,1), grid=(1,1,1), shared = 8*128)
 
+        x2 = drv.from_device_like(x_gpu, x)
+        
 
+        assert np.allclose(x2[0], np.sum(x))
+
+    def test_sum_bit0(self):
+
+        n = 32 
+        x = np.random.random(n);
+        # x = np.arange(n).astype(np.float64)
+
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(0), block=(n,1,1), grid=(1,1,1), shared = 8*128)
+
+        x2 = drv.from_device_like(x_gpu, x)
+
+        print(x)
+        print(x2)
+        
+        assert np.allclose(x2[1], np.sum(x[::2]))
+        assert np.allclose(x2[0], np.sum(x[1::2]))
+
+    def test_sum_bit1(self):
+
+        n = 32 
+        x = np.random.random(n);
+        # x = np.arange(n).astype(np.float64)
+
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(1), block=(n,1,1), grid=(1,1,1), shared = 8*128)
+
+        x2 = drv.from_device_like(x_gpu, x)
+
+        print(x)
+        print(x2)
+        
+        assert np.allclose(x2[1], np.sum(x[::4]) + np.sum(x[1::4]))
+        assert np.allclose(x2[0], np.sum(x[2::4]) + np.sum(x[3::4]))
+
+    def test_sum_bit_high(self):
+
+        n = 32 
+        x = np.random.random(n);
+        # x = np.arange(n).astype(np.float64)
+
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(4), block=(n,1,1), grid=(1,1,1), shared = 8*128)
+
+        x2 = drv.from_device_like(x_gpu, x)
+
+        print(x)
+        print(x2)
+        
+        assert np.allclose(x2[1], np.sum(x[:16]))
+        assert np.allclose(x2[0], np.sum(x[16:]))
 
 class TestPTM:
 
