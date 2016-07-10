@@ -78,8 +78,6 @@ def test_peak_on_ground_state():
     p0, p1 = sdm.peak_measurement(0)
     assert p0 == 1
     assert p1 == 0
-    assert len(sdm.last_peak) == 3
-    assert sdm.last_peak['bit'] == 0
 
 
 def test_peak_on_hadamard():
@@ -92,9 +90,6 @@ def test_peak_on_hadamard():
 
     assert np.allclose(p0, 0.5)
     assert np.allclose(p1, 0.5)
-
-    assert np.allclose(sdm.last_peak[0].trace(), 0.5)
-    assert np.allclose(sdm.last_peak[1].trace(), 0.5)
 
 
 def test_peak_on_decay():
@@ -131,11 +126,9 @@ def test_peak_then_measure():
 
     assert np.allclose(p0, 1)
     assert np.allclose(p1, 0)
-    assert sdm.last_peak['bit'] == 0
 
     sdm.project_measurement(0, 0)
 
-    assert sdm.last_peak is None
     assert len(sdm.classical) == 1
     assert 0 in sdm.classical
     assert sdm.classical[0] == 0

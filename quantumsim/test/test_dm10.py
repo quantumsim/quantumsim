@@ -453,23 +453,29 @@ class TestDensityAddAncilla:
         dm2 = dm.add_ancilla(1)
         assert np.allclose(dm2.trace(), 1)
 
-class TestDensityMeasure:
-
+class TestDensityProjectMeasurement:
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
-            dm.measure_ancilla(12)
+            dm.project_measurement(12, 1)
+
+
+    def test_project_reduces_no_qubits(self, dm):
+
+        dm2 = dm.project_measurement(0, 0)
+        assert dm2.no_qubits == dm.no_qubits - 1
+
+
+
 
     def test_gs_always_gives_zero(self, dm):
-        p0, dm0, p1, dm1 = dm.measure_ancilla(4)
+        p0, p1 = dm.partial_trace(4)
 
         assert np.allclose(p0, 1)
-        assert np.allclose(dm0.to_array()[0, 0], 1)
         assert np.allclose(p1, 0)
-        assert np.allclose(dm1.to_array()[0, 0], 0)
 
     def test_hadamard_gives_50_50(self, dm):
         dm.hadamard(4)
-        p0, dm0, p1, dm1 = dm.measure_ancilla(4)
+        p0, p1 = dm.partial_trace(4)
 
         assert np.allclose(p0, 0.5)
         assert np.allclose(p1, 0.5)
@@ -478,20 +484,20 @@ class TestDensityMeasure:
         dm = dmclass(1)
 
         dm.hadamard(0)
-        p0, dm0, p1, dm1 = dm.measure_ancilla(0)
+        p0, p1 = dm.partial_trace(0)
 
         assert np.allclose(p0, 0.5)
         assert np.allclose(p1, 0.5)
 
     def test_trace_preserve(self, dm_random):
         dm = dm_random
-        p0, dm0, p1, dm1 = dm.measure_ancilla(2)
+        p0, p1 = dm.partial_trace(2)
 
         assert np.allclose(p0 + p1, 1)
 
     def test_relax_then_measure_gives_gs(self, dm_random):
         dm = dm_random
         dm.amp_ph_damping(2, 1.0, 1.0)
-        p0, dm0, p1, dm1 = dm.measure_ancilla(2)
+        p0, p1 = dm.partial_trace(2)
         assert np.allclose(p1, 0)
         assert np.allclose(p0, 1)

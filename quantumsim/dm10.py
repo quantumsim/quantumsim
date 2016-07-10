@@ -54,12 +54,9 @@ _pauli_reshuffle.prepare("PPII")
 _single_qubit_ptm = mod.get_function("single_qubit_ptm")
 _single_qubit_ptm.prepare("PPII")
 _dm_reduce = mod.get_function("dm_reduce")
-_dm_reduce.prepare("PIPPI")
+_dm_reduce.prepare("PIPII")
 _trace = mod.get_function("trace")
 _trace.prepare("Pi")
-
-
-
 
 class Density:
 
@@ -124,8 +121,6 @@ class Density:
             self.data.gpudata,
             diag.gpudata,
             np.uint32(self.no_qubits))
-
-        print(grid, block)
 
         _trace.prepared_call(grid, block,
                 diag.gpudata, -1, shared_size=8*block[0])
@@ -239,11 +234,51 @@ class Density:
 
         return Density(self.no_qubits + 1, new_dm)
 
+    def partial_trace(self, bit):
+        assert bit < self.no_qubits
+        if self.no_qubits > 10:
+            raise NotImplementedError("Trace not implemented for more than 10 qubits yet")
+        diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        block = (2**self.no_qubits, 1, 1)
+        grid = (1,1,1)
+
+        _get_diag.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            diag.gpudata,
+            np.uint32(self.no_qubits))
+
+        print(grid, block)
+
+        _trace.prepared_call(grid, block,
+                diag.gpudata, bit, shared_size=8*block[0])
+
+        tr1 = diag[0].get()
+        tr0 = diag[1].get()
+
+        return tr0, tr1
+
+    def project_measurement(self, bit, state):
+        assert bit < self.no_qubits
+
+        d_new = ga.empty(self._size >> 2, np.float64)
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
+
+        _dm_reduce.prepared_call(grid, block,
+                                 self.data.gpudata,
+                                 bit,
+                                 d_new.gpudata, state, self.no_qubits)
+
+        return Density(self.no_qubits-1, d_new)
+
     def measure_ancilla(self, bit):
         assert bit < self.no_qubits
 
-        d0 = ga.empty(self._size >> 2, np.float64)
-        d1 = ga.empty(self._size >> 2, np.float64)
+        raise NotImplementedError("use project_measurement")
+
+        d_new = ga.empty(self._size >> 2, np.float64)
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 

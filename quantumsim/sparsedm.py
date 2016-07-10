@@ -85,8 +85,7 @@ class SparseDM:
         self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
             qbit = self.idx_in_full_dm[bit]
-            p0, dm0, p1, dm1 = self.full_dm.measure_ancilla(qbit)
-            self.last_peak = {'bit': bit, 0: dm0, 1: dm1}
+            p0, p1 = self.full_dm.partial_trace(qbit)
             return (p0, p1)
         elif self.classical[bit] == 0:
             return (1, 0)
@@ -101,15 +100,12 @@ class SparseDM:
         """
         self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
-            if self.last_peak == None or self.last_peak['bit'] != bit:
-                self.peak_measurement(bit)
-            self.full_dm = self.last_peak[state]
+            self.full_dm = self.full_dm.project_measurement(self.idx_in_full_dm[bit], state)
             self.classical[bit] = state
             for b in self.idx_in_full_dm:
                 if self.idx_in_full_dm[b] > self.idx_in_full_dm[bit]:
                     self.idx_in_full_dm[b] -= 1
             del self.idx_in_full_dm[bit]
-            self.last_peak = None
         else:
             raise ValueError("trying to measure classical bit")
     
