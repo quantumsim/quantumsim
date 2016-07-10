@@ -55,6 +55,8 @@ _single_qubit_ptm = mod.get_function("single_qubit_ptm")
 _single_qubit_ptm.prepare("PPII")
 _dm_reduce = mod.get_function("dm_reduce")
 _dm_reduce.prepare("PIPPI")
+_trace = mod.get_function("trace")
+_trace.prepare("Pi")
 
 
 
@@ -109,9 +111,12 @@ class Density:
             raise ValueError("type of data not understood")
 
     def trace(self):
+
+        if self.no_qubits > 10:
+            raise NotImplementedError("Trace not implemented for more than 10 qubits yet")
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
-        block = (2**8, 1, 1)
-        grid = (2**max(0, self.no_qubits - 8), 1, 1)
+        block = (2**self.no_qubits, 1, 1)
+        grid = (1,1,1)
 
         _get_diag.prepared_call(
             grid,
@@ -120,7 +125,13 @@ class Density:
             diag.gpudata,
             np.uint32(self.no_qubits))
 
-        trace = ga.sum(diag, dtype=np.float64).get()
+        print(grid, block)
+
+        _trace.prepared_call(grid, block,
+                diag.gpudata, -1, shared_size=8*block[0])
+
+        trace = diag[0].get()
+
         return trace
 
     def renormalize(self):
