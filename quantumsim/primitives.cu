@@ -173,7 +173,7 @@ __global__ void single_qubit_ptm(double *dm, double *ptm_g,  unsigned int bit, u
 
 //copy the two diagonal blocks of one ancilla into reduced density matrices
 //the qubit index is passed as an integer, not as a bitmask!
-__global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, double *dm1, 
+__global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned int state,
         unsigned int no_qubits) {
 
     const int addr = blockIdx.x*blockDim.x + threadIdx.x;
@@ -183,11 +183,8 @@ __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, double *dm1
     const int low_mask = (1 << (2*bit))-1;      //0000011111
     const int high_mask = (~low_mask) << 2;     //1110000000
 
-    if(((addr >> (2*bit)) & 0x3) == 0) {
+    if(((addr >> (2*bit)) & 0x3) == state*0x3) {
         dm0[ (addr & low_mask) | ((addr & high_mask) >> 2) ] = dm[addr];
-    }
-    if(((addr >> (2*bit)) & 0x3) == 0x3) {
-        dm1[ (addr & low_mask) | ((addr & high_mask) >> 2) ] = dm[addr];
     }
 }
 

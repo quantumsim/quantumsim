@@ -70,11 +70,9 @@ class Density:
               Only upper triangle is relevant.
               If data is None, create a new density matrix with all qubits in ground state.
         """
-        self.no_qubits = no_qubits
 
-        self._size = 1 << (2 * no_qubits)
-        self._blocksize = 2**8
-        self._gridsize = 2**max(0, 2 * no_qubits - 8)
+        self.allocated_qubits = 0
+        self._set_no_qubits(no_qubits)
 
         if no_qubits > 15:
             raise ValueError(
@@ -106,6 +104,14 @@ class Density:
             self.data = ga.to_gpu(d)
         else:
             raise ValueError("type of data not understood")
+
+    def _set_no_qubits(self, no_qubits):
+        self.allocated_qubits = max(self.allocated_qubits, no_qubits)
+        self.no_qubits = no_qubits
+
+        self._size = 1 << (2 * no_qubits)
+        self._blocksize = 2**8
+        self._gridsize = 2**max(0, 2 * no_qubits - 8)
 
     def trace(self):
 
@@ -249,7 +255,6 @@ class Density:
             diag.gpudata,
             np.uint32(self.no_qubits))
 
-        print(grid, block)
 
         _trace.prepared_call(grid, block,
                 diag.gpudata, bit, shared_size=8*block[0])
@@ -273,23 +278,3 @@ class Density:
 
         return Density(self.no_qubits-1, d_new)
 
-    def measure_ancilla(self, bit):
-        assert bit < self.no_qubits
-
-        raise NotImplementedError("use project_measurement")
-
-        d_new = ga.empty(self._size >> 2, np.float64)
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
-
-        _dm_reduce.prepared_call(grid, block,
-                                 self.data.gpudata,
-                                 bit,
-                                 d0.gpudata, d1.gpudata, self.no_qubits)
-
-        dm0 = Density(self.no_qubits - 1, d0)
-        dm1 = Density(self.no_qubits - 1, d1)
-
-        p0 = dm0.trace()
-        p1 = dm1.trace()
-        return p0, dm0, p1, dm1
