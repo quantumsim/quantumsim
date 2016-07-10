@@ -224,9 +224,16 @@ __global__ void trace(double *diag, int bit) {
     s_diag[x] = diag[x];
     __syncthreads(); 
 
-    for(int i=1; i <= x; i <<= 1) {
-        if(i != mask) { 
-            s_diag[x] += s_diag[x - i];
+    double a;
+
+    for(unsigned int i=1; i < blockDim.x; i <<= 1) {
+        if(i != mask && i <= x) { 
+            a = s_diag[x-i];
+        
+        }
+        __syncthreads();
+        if(i != mask && i <= x) { 
+            s_diag[x] += a;
         }
         __syncthreads();
     }
@@ -237,7 +244,7 @@ __global__ void trace(double *diag, int bit) {
         diag[blockIdx.x] = s_diag[blockDim.x - 1];
         return;
     }
-    if(x == 1) {
+    if(x == 1 && bit >= 0) {
         diag[blockIdx.x + 1] = s_diag[blockDim.x - 1 - mask];
         return;
     }

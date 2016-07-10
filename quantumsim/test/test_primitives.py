@@ -120,6 +120,20 @@ class TestToPauli:
         assert np.allclose(dm, dm2)
 
 class TestTrace:
+
+    def test_size_one(self):
+        n = 1
+        x = np.random.random(n);
+
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(-1), block=(n,1,1), grid=(1,1,1), shared = 8*128)
+
+        x2 = drv.from_device_like(x_gpu, x)
+        
+
+        assert np.allclose(x2[0], np.sum(x))
+
     def test_simple(self):
         n = 32
         x = np.random.random(n);
@@ -131,6 +145,18 @@ class TestTrace:
         x2 = drv.from_device_like(x_gpu, x)
         
 
+        assert np.allclose(x2[0], np.sum(x))
+
+    def test_large(self):
+        n = 1024
+        x = np.random.random(n);
+
+        x_gpu = drv.to_device(x)
+        
+        trace(x_gpu, np.int32(-1), block=(n,1,1), grid=(1,1,1), shared = 8*n)
+
+        x2 = drv.from_device_like(x_gpu, x)
+        
         assert np.allclose(x2[0], np.sum(x))
 
     def test_sum_bit0(self):
