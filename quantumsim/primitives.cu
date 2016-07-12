@@ -246,3 +246,27 @@ __global__ void trace(double *diag, int bit) {
         return;
     }
 }
+
+//shuffle_bit_up kernel
+//moves a bit to be the bit with highest number. That makes it trivial to project it out after.
+//if flip is not zero, the bit is flipped at the same time, making projection to one or zero state easy.
+
+__global__ void swap(double *dm, unsigned int bit1, unsigned int bit2, unsigned int no_qubits) {
+    unsigned int addr = threadIdx.x + blockDim.x*blockIdx.x;
+
+    if (addr >= (1<<2*no_qubits)) return;
+
+    unsigned int bit1_mask = (0x3 << (2*bit1));
+    unsigned int bit2_mask = (0x3 << (2*bit2));
+    
+    unsigned int addr2 = ( addr & ~(bit1_mask | bit2_mask)) |
+        ((addr & bit1_mask) << (2*(bit2 - bit1))) |
+        ((addr & bit2_mask) >> (2*(bit2 - bit1)));
+   
+    double t;
+    if (addr > addr2) {
+        t = dm[addr2];
+        dm[addr2] = dm[addr];
+        dm[addr] = t;
+    }
+}

@@ -57,6 +57,9 @@ _dm_reduce = mod.get_function("dm_reduce")
 _dm_reduce.prepare("PIPII")
 _trace = mod.get_function("trace")
 _trace.prepare("Pi")
+_swap = mod.get_function("swap")
+_swap.prepare("PIII")
+
 
 class Density:
 
@@ -116,10 +119,11 @@ class Density:
     def trace(self):
 
         if self.no_qubits > 10:
-            raise NotImplementedError("Trace not implemented for more than 10 qubits yet")
+            raise NotImplementedError(
+                "Trace not implemented for more than 10 qubits yet")
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
         block = (2**self.no_qubits, 1, 1)
-        grid = (1,1,1)
+        grid = (1, 1, 1)
 
         _get_diag.prepared_call(
             grid,
@@ -129,7 +133,7 @@ class Density:
             np.uint32(self.no_qubits))
 
         _trace.prepared_call(grid, block,
-                diag.gpudata, -1, shared_size=8*block[0])
+                             diag.gpudata, -1, shared_size=8 * block[0])
 
         trace = diag[0].get()
 
@@ -231,22 +235,37 @@ class Density:
         """Add an ancilla in the ground or excited state as the highest new bit.
         """
 
-        new_dm = ga.zeros(self._size * 4, np.float64)
+        byte_size_of_smaller_dm = 2**(2 * self.no_qubits) * 8
 
-        offset = anc_st * (0x3 << (2 * self.no_qubits)) * 8
+        if self.allocated_qubits == self.no_qubits:
+            # allocate larger memory
+            new_dm = ga.zeros(self._size * 4, np.float64)
+            offset = anc_st * 3 * byte_size_of_smaller_dm
+            drv.memcpy_dtod(int(new_dm.gpudata) + offset,
+                                  self.data.gpudata, byte_size_of_smaller_dm)
 
-        drv.memcpy_dtod(int(new_dm.gpudata) + offset,
-                        self.data.gpudata, self.data.nbytes)
+            self.data = new_dm
+        else:
+            # reuse previously allocated memory
+            if anc_st == 0:
+                drv.memset_d8(int(self.data.gpudata) + byte_size_of_smaller_dm,
+                              0, 3 * byte_size_of_smaller_dm)
+            if anc_st == 1:
+                drv.memcpy_dtod(int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
+                                      self.data.gpudata, byte_size_of_smaller_dm)
+                drv.memset_d8(self.data.gpudata, 0, 3 *
+                              byte_size_of_smaller_dm)
 
-        return Density(self.no_qubits + 1, new_dm)
+        self._set_no_qubits(self.no_qubits + 1)
 
     def partial_trace(self, bit):
         assert bit < self.no_qubits
         if self.no_qubits > 10:
-            raise NotImplementedError("Trace not implemented for more than 10 qubits yet")
+            raise NotImplementedError(
+                "Trace not implemented for more than 10 qubits yet")
         diag = ga.empty((2**self.no_qubits), dtype=np.float64)
         block = (2**self.no_qubits, 1, 1)
-        grid = (1,1,1)
+        grid = (1, 1, 1)
 
         _get_diag.prepared_call(
             grid,
@@ -255,9 +274,8 @@ class Density:
             diag.gpudata,
             np.uint32(self.no_qubits))
 
-
         _trace.prepared_call(grid, block,
-                diag.gpudata, bit, shared_size=8*block[0])
+                             diag.gpudata, bit, shared_size=8 * block[0])
 
         tr1 = diag[0].get()
         tr0 = diag[1].get()
@@ -267,14 +285,23 @@ class Density:
     def project_measurement(self, bit, state):
         assert bit < self.no_qubits
 
-        d_new = ga.empty(self._size >> 2, np.float64)
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        _dm_reduce.prepared_call(grid, block,
-                                 self.data.gpudata,
-                                 bit,
-                                 d_new.gpudata, state, self.no_qubits)
+        if bit != self.no_qubits - 1:
+            _swap.prepared_call(grid, block,
+                                self.data.gpudata,
+                                bit,
+                                self.no_qubits - 1,
+                                self.no_qubits)
 
-        return Density(self.no_qubits-1, d_new)
+        if state == 1:
+            byte_size_of_smaller_dm = 2**(2 * self.no_qubits - 2) * 8
+            drv.memcpy_dtod(self.data.gpudata,
+                                  int(self.data.gpudata) + 3 *
+                                  byte_size_of_smaller_dm,
+                                  byte_size_of_smaller_dm)
 
+        self._set_no_qubits(self.no_qubits - 1)
+
+        return self

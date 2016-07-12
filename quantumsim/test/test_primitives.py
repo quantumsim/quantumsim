@@ -20,6 +20,7 @@ try:
     pauli_reshuffle = mod.get_function("pauli_reshuffle")
     single_qubit_ptm = mod.get_function("single_qubit_ptm")
     trace  = mod.get_function("trace")
+    swap = mod.get_function("swap")
 except ImportError:
     hascuda = False
 
@@ -278,4 +279,26 @@ class TestPTM:
         dm2 = drv.from_device_like(dm_gpu, dm)
 
         assert np.allclose(dm2, dm)
+
+
+class TestSwap:
+    def test_stupid(self):
+
+        n = 8
+
+        x = np.random.random(2**(2*n))
+
+        x_gpu = drv.to_device(x)
+
+        block = (128, 1, 1)
+        grid = (2**(2*n) // 128, 1, 1)
+
+
+        swap(x_gpu, np.int32(4), np.int32(5), np.int32(n), grid=grid, block=block) 
+
+        x2 = drv.from_device_like(x_gpu, x)
+
+        assert np.allclose(np.sum(x2), np.sum(x))
+
+        assert not np.allclose(x, x2)
 

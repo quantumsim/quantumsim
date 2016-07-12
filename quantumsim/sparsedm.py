@@ -52,7 +52,7 @@ class SparseDM:
         if bit not in self.idx_in_full_dm:
             state = self.classical[bit]
             idx = self.full_dm.no_qubits
-            self.full_dm = self.full_dm.add_ancilla(state)
+            self.full_dm.add_ancilla(state)
             del self.classical[bit]
             self.idx_in_full_dm[bit] = idx
 
@@ -100,11 +100,11 @@ class SparseDM:
         """
         self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
-            self.full_dm = self.full_dm.project_measurement(self.idx_in_full_dm[bit], state)
+            self.full_dm.project_measurement(self.idx_in_full_dm[bit], state)
             self.classical[bit] = state
             for b in self.idx_in_full_dm:
-                if self.idx_in_full_dm[b] > self.idx_in_full_dm[bit]:
-                    self.idx_in_full_dm[b] -= 1
+                if self.idx_in_full_dm[b] == self.full_dm.no_qubits:
+                    self.idx_in_full_dm[b] = self.idx_in_full_dm[bit] 
             del self.idx_in_full_dm[bit]
         else:
             raise ValueError("trying to measure classical bit")

@@ -434,24 +434,86 @@ class TestDensityAddAncilla:
 
     def test_add_high_ancilla_to_gs_gives_gs(self, dmclass):
         dm = dmclass(9)
-        dm2 = dm.add_ancilla(0)
-        assert dm2.no_qubits == 10
-        assert np.allclose(dm2.trace(), 1)
-        a = dm2.to_array()
+        dm.add_ancilla(0)
+        assert dm.no_qubits == 10
+        assert np.allclose(dm.trace(), 1)
+        a = dm.to_array()
         assert np.allclose(a[0, 0], 1)
 
     def test_add_exc_ancilla_to_gs_gives_no_gs(self, dm):
-        dm2 = dm.add_ancilla(1)
-        assert dm2.no_qubits == dm.no_qubits + 1
-        assert np.allclose(dm2.trace(), 1)
-        a = dm2.to_array()
+        old_no_qubits = dm.no_qubits
+        dm.add_ancilla(1)
+        assert dm.no_qubits == old_no_qubits + 1
+        assert np.allclose(dm.trace(), 1)
+        a = dm.to_array()
         assert np.allclose(a[0, 0], 0)
 
     def test_preserve_trace_random_state(self, dm_random):
         dm = dm_random
         assert np.allclose(dm.trace(), 1)
-        dm2 = dm.add_ancilla(1)
-        assert np.allclose(dm2.trace(), 1)
+        dm.add_ancilla(1)
+        assert np.allclose(dm.trace(), 1)
+
+    def test_add_then_project_exc(self, dm_random):
+        a = dm_random.to_array()
+
+        dm_random.add_ancilla(1)
+        dm_random.project_measurement(dm_random.no_qubits - 1, 1)
+
+        a2 = dm_random.to_array()
+
+        assert np.allclose(a, a2)
+
+    def test_add_then_project_gs(self, dm_random):
+        a = dm_random.to_array()
+
+        dm_random.add_ancilla(0)
+        dm_random.project_measurement(dm_random.no_qubits - 1, 0)
+
+        a2 = dm_random.to_array()
+
+        assert np.allclose(a, a2)
+        
+
+    def test_multiple_add_project(self, dmclass):
+
+        dm = dmclass(0)
+
+        dm.add_ancilla(1)
+        dm.add_ancilla(0)
+        dm.add_ancilla(1)
+        dm.add_ancilla(0)
+        dm.add_ancilla(1)
+
+        assert dm.no_qubits == 5
+        assert dm.allocated_qubits == 5
+        assert np.allclose(dm.trace(), 1)
+
+        # 01234
+        # 10101
+        print("{:05b}".format(np.argmax(dm.get_diag())))
+        dm.project_measurement(2, 1)
+        assert np.allclose(dm.trace(), 1)
+        # 1010
+        print("{:05b}".format(np.argmax(dm.get_diag())))
+        dm.project_measurement(3, 0)
+        # 101
+        print("{:05b}".format(np.argmax(dm.get_diag())))
+        dm.project_measurement(1, 0)
+        assert np.allclose(dm.trace(), 1)
+        # 11
+        print("{:05b}".format(np.argmax(dm.get_diag())))
+        dm.project_measurement(1, 1)
+        assert np.allclose(dm.trace(), 1)
+        # 1
+        print("{:05b}".format(np.argmax(dm.get_diag())))
+        dm.project_measurement(0, 1)
+        assert np.allclose(dm.trace(), 1)
+
+
+
+
+
 
 class TestDensityProjectMeasurement:
     def test_bit_too_high(self, dm):
@@ -460,12 +522,27 @@ class TestDensityProjectMeasurement:
 
 
     def test_project_reduces_no_qubits(self, dm):
+        old_no_qubits = dm.no_qubits
 
-        dm2 = dm.project_measurement(0, 0)
-        assert dm2.no_qubits == dm.no_qubits - 1
+        dm.project_measurement(0, 0)
+        assert dm.no_qubits == old_no_qubits - 1
+        assert dm.allocated_qubits == old_no_qubits
 
 
+    def test_measure_on_gs_gives_gs(self, dm):
+        dm.project_measurement(3, 0)
+        assert np.allclose(dm.trace(), 1)
 
+    def test_measure_1_on_gs_gives_0(self, dm):
+        dm.project_measurement(3, 1)
+        assert np.allclose(dm.trace(), 0)
+
+    def test_project_after_hadamard_gives_half(self, dm):
+        dm.hadamard(3)
+        dm.project_measurement(2, 0)
+        assert np.allclose(dm.trace(), 1)
+        dm.project_measurement(3, 1)
+        assert np.allclose(dm.trace(), 0.5)
 
     def test_gs_always_gives_zero(self, dm):
         p0, p1 = dm.partial_trace(4)
@@ -501,3 +578,5 @@ class TestDensityProjectMeasurement:
         p0, p1 = dm.partial_trace(2)
         assert np.allclose(p1, 0)
         assert np.allclose(p0, 1)
+
+
