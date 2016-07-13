@@ -127,7 +127,103 @@ def test_measurement_with_output_bit():
 
     assert sdm.classical == {'O': 1, 'O2':1}
 
+def test_integration_surface17():
+    def make_circuit(t1=np.inf, t2=np.inf, seed=42, readout_error=0.015, t_gate=40, t_rest=1000):
+        surf17 = circuit.Circuit("Surface 17")
+
+        t_rest += t_gate  # nominal rest time is between two gates
+
+        x_bits = ["X%d" % i for i in range(4)]
+        z_bits = ["Z%d" % i for i in range(4)]
+
+        d_bits = ["D%d" % i for i in range(9)]
+
+        for b in x_bits + z_bits + d_bits:
+            surf17.add_qubit(b, t1, t2)
+
+        def add_x(c, x_anc, d_bits, t=0, t_gate=t_gate):
+            t += t_gate
+            for d in d_bits:
+                if d is not None:
+                    c.add_cphase(d, x_anc, time=t)
+                t += t_gate
+
+        add_x(surf17, "X0", [None, None, "D2", "D1"], t=0)
+        add_x(surf17, "X1", ["D1", "D0", "D4", "D3"], t=0)
+        add_x(surf17, "X2", ["D5", "D4", "D8", "D7"], t=0)
+        add_x(surf17, "X3", ["D7", "D6", None, None], t=0)
+
+        t2 = 4 * t_gate + t_rest
+
+        add_x(surf17, "Z0", ["D0", "D3", None, None], t=t2)
+        add_x(surf17, "Z1", ["D2", "D5", "D1", "D4"], t=t2)
+        add_x(surf17, "Z2", ["D4", "D7", "D3", "D6"], t=t2)
+        add_x(surf17, "Z3", [None, None, "D5", "D8"], t=t2)
+
+        sampler = circuit.BiasedSampler(
+            readout_error=readout_error, alpha=1, seed=seed)
+
+        for b in x_bits + d_bits:
+            surf17.add_hadamard(b, time=0)
+            surf17.add_hadamard(b, time=5 * t_gate)
+
+        for b in z_bits:
+            surf17.add_hadamard(b, time=4 * t_gate + t_rest)
+            surf17.add_hadamard(b, time=4 * t_gate + t_rest + 5 * t_gate)
+
+        for b in z_bits:
+            surf17.add_measurement(b, time=10 * t_gate + t_rest, sampler=sampler)
+
+        for b in x_bits:
+            surf17.add_measurement(b, time=6 * t_gate, sampler=sampler)
+
+        surf17.add_waiting_gates(
+            only_qubits=x_bits, tmax=6 * t_gate, tmin=-t_rest - 5 * t_gate)
+        surf17.add_waiting_gates(only_qubits=z_bits + d_bits, tmin=0)
+
+        surf17.order()
+
+        return surf17
+
+    def syndrome_to_byte(syndrome):
+        byte = 0
+
+        for i in range(4):
+            byte += syndrome["X%d"%i] << (i+4)
+        for i in range(4):
+            byte += syndrome["Z%d"%i] << i 
+
+        return byte
 
 
+    seed = 890793515
 
+    t1 = 25000.0
+    t2 = 35000.0
+    ro_error = 0.015
+    t_gate = 40.0
+    t_rest = 1000.0
+
+    rounds = 20
+
+    c = make_circuit(t1=t1, t2=t2, seed=seed,
+                     readout_error=ro_error, t_gate=t_gate, t_rest=t_rest)
+
+
+    sdm = sparsedm.SparseDM(c.get_qubit_names())
+    for b in ["D%d"%i for i in range(9)]:
+        sdm.ensure_dense(b)
+
+
+    syndromes = []
+    for _ in range(rounds):
+        c.apply_to(sdm)
+
+        sdm.renormalize()
+
+        syndromes.append(syndrome_to_byte(sdm.classical))
+
+    syndrome = bytes(syndromes)
+
+    assert syndrome == b'jHhJhL\x08L\tK)K\x08K\x08K\x08K\x08I'
 
