@@ -39,7 +39,6 @@ class SparseDM:
 
         self.single_ptms_to_do = defaultdict(list)
 
-        self.last_peak = None
         self._last_majority_vote_array = None
         self._last_majority_vote_mask = None
 
@@ -76,11 +75,8 @@ class SparseDM:
                 raise ValueError("Trying to classicalize entangled quantum bit")
 
     def peak_measurement(self, bit):
-        """Calculate the two smaller density matrices that occur when 
-        measuring qubit #bit. Return the probabilities (not normalized to one).
-
-        The density matrices are stored internally and will be used 
-        without recalculation if `project_measurement` is called with the same bit immediately afterwards.
+        """Obtain the two partial traces (p0, p1) that define the probabilities for measuring bit in state (0, 1).
+        The state of the system is not changed. Use project_measurement to perform the actual measurement projection.
         """
         self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
@@ -111,7 +107,7 @@ class SparseDM:
     
     def peak_multiple_measurements(self, bits):
         """Obtain the probabilities for all combinations of a multiple
-        qubit measurement. Act on a copy, do not destroy this density matrix.
+        qubit measurement. 
 
         bits is a list of qubit names. Return a list with up to `2**len(bits)` tuples of the form
 
@@ -120,9 +116,9 @@ class SparseDM:
         where `result` is a dict describing the measurement result {"bit0": 1, "bit2": 0, ...}, 
         and `probability` is the corresponding probability. 
 
-        If results are omitted from this list, the corresponding probability is assumed to be 0.
+        If results are omitted from this list, the corresponding probability is 0.
 
-        Note that these probabilities are not normalized if previous projections took place.
+        Note that these probabilities sum up to the trace of the density matrix, thus are not normalized if previous projections took place.
         """
 
         for bit in bits: 
@@ -161,7 +157,7 @@ class SparseDM:
         return res
 
     def trace(self):
-        """Return the trace of the density matrix, which is the probability for all measurement projections in the history.
+        """Return the trace of the density matrix, which is the probability for all measurement projections in its history.
         """
         return self.classical_probability * self.full_dm.trace()
 
@@ -173,15 +169,12 @@ class SparseDM:
 
     def copy(self):
         """Return an identical but distinct copy of this object.
-
-        If a measurement has been peaked at, the reduced density matrices are discarded.
         """
 
         cp = SparseDM(self.names)
         cp.single_ptms_to_do = self.single_ptms_to_do
         cp.classical = self.classical.copy()
         cp.idx_in_full_dm = self.idx_in_full_dm.copy()
-        cp.last_peak = None
         cp.full_dm = self.full_dm.copy()
 
         return cp
@@ -197,11 +190,16 @@ class SparseDM:
                 self.idx_in_full_dm[bit1])
 
     def apply_all_pending(self):
+        """Apply all single qubit gates that are still cached. 
+        Should not be necessary to call directly except for testing purposes.
+        """
         for bit in list(self.single_ptms_to_do.keys()):
             self.combine_and_apply_single_ptm(bit)
 
-
     def combine_and_apply_single_ptm(self, bit):
+        """Apply all cached single qubit gates that are cached for bit `bit`.
+        Should not be necessary to call directly except for testing purposes.
+        """
         if bit in self.single_ptms_to_do:
             self.ensure_dense(bit)
             ptm = self.single_ptms_to_do[bit][0]
@@ -212,6 +210,15 @@ class SparseDM:
             del self.single_ptms_to_do[bit]
 
     def apply_ptm(self, bit, ptm):
+        """Apply the Pauli transfer matrix `ptm` to qubit `bit`. 
+        `ptm` is a 4x4 real matrix in 0xy1 basis. 
+
+        The matrix is NOT immediately applied, but is cached until a 2-qubit gate or measurement acts on this bit.
+        Thus, when several PTMs are applied to a single bit in series, they can be multiplied efficiently before application.
+
+        This behaviour is essentially transparent to the user, except that this means that often sdm.classical still
+        contains the last classical state of the qubit.
+        """
         self.single_ptms_to_do[bit].append(ptm)
 
     def hadamard(self, bit):
