@@ -75,7 +75,11 @@ class Density:
         """
 
         self.allocated_qubits = 0
+        self.allocated_diag = -1
+
         self._set_no_qubits(no_qubits)
+
+        self.diag_work = None
 
         if no_qubits > 15:
             raise ValueError(
@@ -121,7 +125,9 @@ class Density:
         if self.no_qubits > 10:
             raise NotImplementedError(
                 "Trace not implemented for more than 10 qubits yet")
-        diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        if self.allocated_diag < self.no_qubits:
+            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
+            self.allocated_qubits = self.no_qubits
         block = (2**self.no_qubits, 1, 1)
         grid = (1, 1, 1)
 
@@ -129,15 +135,15 @@ class Density:
             grid,
             block,
             self.data.gpudata,
-            diag.gpudata,
+            self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
         _trace.prepared_call(grid, block,
-                             diag.gpudata, -1, shared_size=8 * block[0])
+                             self.diag_work.gpudata, -1, shared_size=8 * block[0])
 
-        trace = diag[0].get()
+        tr0 = self.diag_work[0].get()
 
-        return trace
+        return tr0 
 
     def renormalize(self):
         """Renormalize to trace one."""
@@ -167,7 +173,10 @@ class Density:
         return complex_dm.get()
 
     def get_diag(self):
-        diag = ga.empty((1 << self.no_qubits), dtype=np.float64)
+        if self.allocated_diag < self.no_qubits:
+            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
+            self.allocated_qubits = self.no_qubits
+
         block = (2**8, 1, 1)
         grid = (2**max(0, self.no_qubits - 8), 1, 1)
 
@@ -175,10 +184,10 @@ class Density:
             grid,
             block,
             self.data.gpudata,
-            diag.gpudata,
+            self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
-        return diag.get()
+        return self.diag_work.get()
 
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
@@ -263,7 +272,9 @@ class Density:
         if self.no_qubits > 10:
             raise NotImplementedError(
                 "Trace not implemented for more than 10 qubits yet")
-        diag = ga.empty((2**self.no_qubits), dtype=np.float64)
+        if self.allocated_diag < self.no_qubits:
+            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
+            self.allocated_qubits = self.no_qubits
         block = (2**self.no_qubits, 1, 1)
         grid = (1, 1, 1)
 
@@ -271,15 +282,13 @@ class Density:
             grid,
             block,
             self.data.gpudata,
-            diag.gpudata,
+            self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
         _trace.prepared_call(grid, block,
-                             diag.gpudata, bit, shared_size=8 * block[0])
+                             self.diag_work.gpudata, bit, shared_size=8 * block[0])
 
-        tr1 = diag[0].get()
-        tr0 = diag[1].get()
-
+        tr1, tr0 = self.diag_work[:2].get()
         return tr0, tr1
 
     def project_measurement(self, bit, state):
