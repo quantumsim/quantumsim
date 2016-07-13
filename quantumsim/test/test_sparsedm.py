@@ -144,7 +144,6 @@ def test_meas_on_ground_state():
 
     sdm.project_measurement(0, 0)
 
-    assert sdm.last_peak is None
     assert len(sdm.classical) == 1
     assert 0 in sdm.classical
     assert sdm.classical[0] == 0
@@ -185,7 +184,6 @@ def test_copy():
     assert len(sdm_copy.classical) == 4
     assert sdm_copy.classical == {0: 0, 1: 1, 3: 1, 4: 0}
     assert sdm_copy.classical is not sdm.classical
-    assert sdm_copy.last_peak is None
     assert sdm.full_dm is not sdm_copy.full_dm
     assert np.allclose(sdm.full_dm.to_array(), sdm_copy.full_dm.to_array())
 
