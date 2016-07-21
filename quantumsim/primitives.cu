@@ -3,16 +3,6 @@
 /*Distributed under the GNU GPLv3. See LICENSE.txt or https://www.gnu.org/licenses/gpl.txt*/
 
 #include <cuda.h> 
-#include <cuComplex.h>
-
-
-//this defines the scheme by which the density matrix is stored in a dm10
-//we always require x <= y for the real part and
-#define ADDR_BARE(x,y,ri_flag,n) (((((x)<<(n)) | (y)) << 1) | (ri_flag))
-#define ADDR_TRIU(x,y,ri_flag,n) (((x) <= (y)) ? ADDR_BARE(x,y,ri_flag,n) : ADDR_BARE(y,x,ri_flag,n))
-#define ADDR_REAL(x,y,n) ADDR_TRIU(x,y,0,n)
-#define ADDR_IMAG(x,y,n) ADDR_TRIU(x,y,1,n)
-
 
 //kernel to transform to pauli basis (up, x, y, down)
 //to be run on a complete complex density matrix, once for each bit
@@ -49,7 +39,7 @@ __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsign
 
 //pauli_reshuffle
 //this function collects the values from a complex density matrix in (0, x, iy, 1) basis
-//and collects the real values only; furthermore it rearranges the address bit order 
+//and collects the real or values only; furthermore it rearranges the address bit order 
 //from (d_state_bits, d_state_bits) to 
 // (alpha_d, alpha_d-1, ..., alpha_0) where alpha = (00, 01, 10, 11) for 0, x, y, 1
 //if direction = 0, the copy is performed from complex to real, otherwise from real to complex
@@ -168,9 +158,6 @@ __global__ void single_qubit_ptm(double *dm, double *ptm_g,  unsigned int bit, u
 }
 
 
-
-
-
 //copy the two diagonal blocks of one ancilla into reduced density matrices
 //the qubit index is passed as an integer, not as a bitmask!
 __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned int state,
@@ -247,10 +234,9 @@ __global__ void trace(double *diag, int bit) {
     }
 }
 
-//shuffle_bit_up kernel
-//moves a bit to be the bit with highest number. That makes it trivial to project it out after.
-//if flip is not zero, the bit is flipped at the same time, making projection to one or zero state easy.
-
+//swap kernel
+//exchange two qubits. The only purpose of this kernel is to arrange a certain qubit as to be the most significant so that
+//projection is trivial. Actual swap gates should be implemented by relabeling!
 __global__ void swap(double *dm, unsigned int bit1, unsigned int bit2, unsigned int no_qubits) {
     unsigned int addr = threadIdx.x + blockDim.x*blockIdx.x;
 
