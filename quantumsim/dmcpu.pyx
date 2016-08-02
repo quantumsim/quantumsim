@@ -172,60 +172,14 @@ cdef class Density:
 
         Apply a Hadamard gate to bit (0..no_qubits-1).
 
-        (A Hadamard gate is defined by the matrix [1, 1; 1 -1]/sqrt(2) in computational basis.)
+        (A Hadamard gate is defined by the matrix 
+        
+            [1, 1; 1 -1]/sqrt(2) 
+        
+        in computational basis.)
         """
-        cdef unsigned int il, jl, ih, jh, x, y
+        self.apply_ptm(bit, ptm.hadamard_ptm())
 
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        assert bit < self.no_qubits
-
-        cdef double a, b, c, d
-        cdef double na, nb, nc, nd
-
-        cdef unsigned int mask = (1<<bit)
-
-        for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(1<<(self.no_qubits - bit - 1)):
-                for il in range(1<<bit):
-                    for jl in range(1<<bit):
-                        x = (ih << (bit + 1)) | il
-                        y = (jh << (bit + 1)) | jl
-
-
-                        a = re[x, y]
-                        b = re[x|mask, y]
-                        c = re[x, y|mask]
-                        d = re[x|mask, y|mask]
-
-                        na = a+b+c+d
-                        nb = a-b+c-d
-                        nc = a+b-c-d
-                        nd = a-b-c+d
-
-                        re[x, y] = 0.5*na
-                        re[x|mask, y] = 0.5*nb
-                        re[x, y|mask] = 0.5*nc
-                        re[x|mask, y|mask] = 0.5*nd
-
-                        a = im[x, y]
-                        b = im[x|mask, y]
-                        c = im[x, y|mask]
-                        d = im[x|mask, y|mask]
-
-                        na = a+b+c+d
-                        nb = a-b+c-d
-                        nc = a+b-c-d
-                        nd = a-b-c+d
-
-                        im[x, y] = 0.5*na
-                        im[x|mask, y] = 0.5*nb
-                        im[x, y|mask] = 0.5*nc
-                        im[x|mask, y|mask] = 0.5*nd
 
     def amp_ph_damping(self, bit, gamma, lamda):
         """amp_ph_damping(self, bit, gamma, lamda)
