@@ -193,7 +193,6 @@ cdef class Density:
         """
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
-
     def amp_ph_damping(self, bit, gamma, lamda):
         """amp_ph_damping(self, bit, gamma, lamda)
 
@@ -209,237 +208,38 @@ cdef class Density:
         
         (the stupid misspelling of lamda is because "lambda" is a keyword in python)
         """
-        cdef unsigned int ih, jh, il, jl
+        self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
-        cdef double dgamma, dlamda, ds1mgamma, ds1mlamda
-        dgamma = gamma
-        dlamda = lamda
-        ds1mgamma = sqrt(1 - gamma)
-        ds1mlamda = sqrt(1 - lamda)
-
-        assert np.allclose(dgamma + ds1mgamma**2, 1)
-        assert np.allclose(dlamda + ds1mlamda**2, 1)
-
-        assert bit < self.no_qubits
-
-        cdef double a, b, c, d
-        cdef double na, nb, nc, nd
-
-        cdef unsigned int mask = (1<<bit)
-
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(1<<(self.no_qubits - bit - 1)):
-                for il in range(1<<bit):
-                    for jl in range(1<<bit):
-                        x = (ih << (bit + 1)) | il
-                        y = (jh << (bit + 1)) | jl
-
-                        a = re[x, y]
-                        b = re[x^mask, y]
-                        c = re[x, y^mask]
-                        d = re[x^mask, y^mask]
-
-                        na = a + dgamma*d
-                        nb = b*ds1mgamma*ds1mlamda
-                        nc = c*ds1mgamma*ds1mlamda
-                        nd = d - dgamma*d
-
-                        re[x, y] = na
-                        re[x^mask, y] = nb
-                        re[x, y^mask] = nc
-                        re[x^mask, y^mask] = nd
-
-                        a = im[x, y]
-                        b = im[x^mask, y]
-                        c = im[x, y^mask]
-                        d = im[x^mask, y^mask]
-
-                        na = a + dgamma*d
-                        nb = b*ds1mgamma*ds1mlamda
-                        nc = c*ds1mgamma*ds1mlamda
-                        nd = d - dgamma*d
-
-                        im[x, y] = na
-                        im[x^mask, y] = nb
-                        im[x, y^mask] = nc
-                        im[x^mask, y^mask] = nd
-
-    def rotate_x(self, bit, cos, sin):
-        """rotate_x(self, bit, cos, sin)
+    def rotate_x(self, bit, angle):
+        """rotate_x(self, bit, angle)
 
         Rotation on the bloch sphere around the x-axis by angle theta.
 
         bit: which bit is affected (0..no_qubits)
-        cos: The cosine of theta/2
-        sin: The sine of theta/2
+        angle: the angle of rotation
         """
-        cdef unsigned int il, jl, ih, jh, x, y
-
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        assert bit < self.no_qubits
-
-        cdef double a, b, c, d
-        cdef double na, nb, nc, nd
-
-        cdef unsigned int mask = (1<<bit)
-
-        for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(1<<(self.no_qubits - bit - 1)):
-                for il in range(1<<bit):
-                    for jl in range(1<<bit):
-                        x = (ih << (bit + 1)) | il
-                        y = (jh << (bit + 1)) | jl
+        self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
 
-                        a = re[x, y]
-                        b = im[x^mask, y]
-                        c = im[x, y^mask]
-                        d = re[x^mask, y^mask]
-
-                        na = cos*cos*a + sin*cos*(b-c) + sin*sin*d
-                        nb = -sin*cos*(a-d) + sin*sin*c + cos*cos*b
-                        nc = sin*cos*(a-d) + sin*sin*b + cos*cos*c
-                        nd = cos*cos*d + sin*cos*(c-b) + sin*sin*a
-
-                        re[x, y] = na
-                        im[x^mask, y] = nb
-                        im[x, y^mask] = nc 
-                        re[x^mask, y^mask] = nd
-
-                        a = im[x, y]
-                        b = re[x^mask, y]
-                        c = re[x, y^mask]
-                        d = im[x^mask, y^mask]
-
-                        na = cos*cos*a - sin*cos*(b-c) + sin*sin*d
-                        nb = -sin*cos*(d-a) + sin*sin*c + cos*cos*b
-                        nc = sin*cos*(d-a) + sin*sin*b + cos*cos*c
-                        nd = cos*cos*d - sin*cos*(c-b) + sin*sin*a
-
-                        im[x, y] = na
-                        re[x^mask, y] = nb
-                        re[x, y^mask] = nc 
-                        im[x^mask, y^mask] = nd
-
-    def rotate_y(self, bit, cos, sin):
-        """rotate_y(self, bit, cos, sin)
+    def rotate_y(self, bit, angle):
+        """rotate_y(self, bit, angle)
 
         Rotation on the bloch sphere around the y-axis by angle theta.
 
         bit: which bit is affected (0..no_qubits)
-        cos: The cosine of theta/2
-        sin: The sine of theta/2
+        angle: the angle of rotation
         """
-        cdef unsigned int il, jl, ih, jh, x, y
+        self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        assert bit < self.no_qubits
-
-        cdef double a, b, c, d
-        cdef double na, nb, nc, nd
-
-        cdef unsigned int mask = (1<<bit)
-
-        for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(1<<(self.no_qubits - bit - 1)):
-                for il in range(1<<bit):
-                    for jl in range(1<<bit):
-                        x = (ih << (bit + 1)) | il
-                        y = (jh << (bit + 1)) | jl
-
-
-                        a = re[x, y]
-                        b = re[x^mask, y]
-                        c = re[x, y^mask]
-                        d = re[x^mask, y^mask]
-
-                        na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
-                        nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
-                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*b
-                        nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
-
-                        re[x, y] = na
-                        re[x^mask, y] = nb
-                        re[x, y^mask] = nc
-                        re[x^mask, y^mask] = nd
-
-                        a = im[x, y]
-                        b = im[x^mask, y]
-                        c = im[x, y^mask]
-                        d = im[x^mask, y^mask]
-
-                        na = cos*cos*a + cos*sin*(b+c) + sin*sin*d
-                        nb = sin*cos*(d-a) + cos*cos*b - sin*sin*c
-                        nc = sin*cos*(d-a) + cos*cos*c - sin*sin*b
-                        nd = sin*sin*a - cos*sin*(b+c) + cos*cos*d
-
-                        im[x, y] = na
-                        im[x^mask, y] = nb
-                        im[x, y^mask] = nc
-                        im[x^mask, y^mask] = nd
-
-    def rotate_z(self, bit, cos2, sin2):
-        """rotate_z(self, bit, cos2, sin2)
+    def rotate_z(self, bit, angle):
+        """rotate_z(self, bit, angle)
 
         Rotation on the bloch sphere around the z-axis by angle theta.
 
         bit: which bit is affected (0..no_qubits)
-        cos: The cosine of theta
-        sin: The sine of theta
+        angle: the angle of rotation
         """
-        cdef unsigned int il, jl, ih, jh, x, y
-
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        assert bit < self.no_qubits
-
-        cdef double b_re, b_im, c_re, c_im
-        cdef double nb_re, nb_im, nc_re, nc_im
-
-        cdef unsigned int mask = (1<<bit)
-
-        for ih in range(1<<(self.no_qubits - bit - 1)):
-            for jh in range(1<<(self.no_qubits - bit - 1)):
-                for il in range(1<<bit):
-                    for jl in range(1<<bit):
-                        x = (ih << (bit + 1)) | il
-                        y = (jh << (bit + 1)) | jl
-
-
-                        b_re = re[x^mask, y]
-                        b_im = im[x^mask, y]
-                        c_re = re[x, y^mask]
-                        c_im = im[x, y^mask]
-
-                        nb_re = cos2*b_re - sin2*b_im
-                        nb_im = cos2*b_im + sin2*b_re
-                        nc_re = cos2*c_re + sin2*c_im
-                        nc_im = cos2*c_im - sin2*c_re
-
-                        re[x^mask, y] = nb_re
-                        im[x^mask, y] = nb_im
-                        re[x, y^mask] = nc_re
-                        im[x, y^mask] = nc_im
+        self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def add_ancilla(self, bit, anc_st):
         """add_ancilla(self, bit, anc_st)
