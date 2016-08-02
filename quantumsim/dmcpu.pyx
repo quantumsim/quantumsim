@@ -6,6 +6,8 @@ import numpy as np
 from math import sqrt
 
 
+from . import ptm
+
 cimport numpy as np
 
 
@@ -103,11 +105,9 @@ cdef class Density:
         """
         cdef unsigned int il, jl, ih, jh, x, y
 
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
+        cdef np.ndarray[np.float64_t, ndim=2] dt
 
-        re = self.data_re
-        im = self.data_im
+        dt = self.data.reshape((self.size, self.size))
 
         assert bit < self.no_qubits
 
@@ -123,36 +123,18 @@ cdef class Density:
                         x = (ih << (bit + 1)) | il
                         y = (jh << (bit + 1)) | jl
 
+                        a = dt[x, y]
+                        b = dt[x|mask, y]
+                        c = dt[x, y|mask]
+                        d = dt[x|mask, y|mask]
 
-                        a = re[x, y]
-                        b = re[x|mask, y]
-                        c = re[x, y|mask]
-                        d = re[x|mask, y|mask]
 
-                        na = a+b+c+d
-                        nb = a-b+c-d
-                        nc = a+b-c-d
-                        nd = a-b-c+d
+                        na, nb, nc, nd = np.dot(ptm, [a,b,c,d])
 
-                        re[x, y] = 0.5*na
-                        re[x|mask, y] = 0.5*nb
-                        re[x, y|mask] = 0.5*nc
-                        re[x|mask, y|mask] = 0.5*nd
-
-                        a = im[x, y]
-                        b = im[x|mask, y]
-                        c = im[x, y|mask]
-                        d = im[x|mask, y|mask]
-
-                        na = a+b+c+d
-                        nb = a-b+c-d
-                        nc = a+b-c-d
-                        nd = a-b-c+d
-
-                        im[x, y] = 0.5*na
-                        im[x|mask, y] = 0.5*nb
-                        im[x, y|mask] = 0.5*nc
-                        im[x|mask, y|mask] = 0.5*nd
+                        dt[x, y] = na
+                        dt[x|mask, y] = nb
+                        dt[x, y|mask] = nc
+                        dt[x|mask, y|mask] = nd
 
     def cphase(self, bit0, bit1):
         """
