@@ -15,8 +15,7 @@ cdef class Density:
     Create a density matrix with the given number of qubits, labelled from 0 to no_qubits-1.
     """
 
-    cdef np.ndarray data_re
-    cdef np.ndarray data_im
+    cdef public np.ndarray data
     cdef public int no_qubits
     cdef int size
 
@@ -36,39 +35,42 @@ cdef class Density:
         if isinstance(data, np.ndarray):
             assert data.shape == (size, size)
             data = data.astype(np.complex128)
-            self.data_re = data.real
-            self.data_im = data.imag
+
+            self.data = np.zeros(size*size, dtype=np.float64)
+
+            #convert to Pauli basis
+            for i in range(self.no_qubits):
+                self.to_pauli_basis(data, i)
+            self.pauli_reshuffle(data, from_complex=True)
+
         elif data is None:
-            self.data_re = np.zeros((size, size), np.float64)
-            self.data_im = np.zeros((size, size), np.float64)
-            assert np.allclose(self.data_im, 0)
-            assert np.allclose(self.data_re, 0)
-            self.data_re[0, 0] = 1
+            self.data = np.zeros(size*size, np.float64)
+            self.data[0] = 1
         else:
             raise ValueError("type of data not understood")
-        
+
     def trace(self):
         """trace(self)
 
         Return the trace of the density matrix.
         """
-        return self.data_re.trace()
-
+        return self.data.reshape((self.size, self.size)).trace()
+        
     def renormalize(self):
         """renormalize(self)
 
         Renormalize the density matrix to trace() == 1
         """
         trace = self.trace()
-        self.data_re /= trace
-        self.data_im /= trace
+        self.data /= trace
 
     def copy(self):
         """copy(self)
 
         Return a copy of this density matrix.
         """
-        dm = Density(self.no_qubits, self.to_array())
+        dm = Density(self.no_qubits)
+        dm.data = self.data.copy()
         return dm
 
     def to_array(self):
@@ -76,14 +78,81 @@ cdef class Density:
 
         Return the data in the density matrix as a numpy array.
         """
-        return self.data_re + self.data_im*1j
+
+        complex_dm = np.zeros((self.size, self.size), dtype=np.complex128)
+
+        self.pauli_reshuffle(complex_dm, from_complex=False)
+        for i in range(self.no_qubits):
+            self.to_pauli_basis(complex_dm, i)
+
+        return complex_dm
 
     def get_diag(self):
         """get_diag(self)
         
         Return the main diagonal of the density matrix as a numpy array.
         """
-        return self.data_re.diagonal()
+        return self.data.reshape((self.size, self.size)).diagonal()
+
+    def apply_single_ptm(self, bit, ptm):
+        """
+        Apply a single qubit Pauli transfer matrix. 
+
+        The PTM must be given in (0, x, y, 1) basis and as 4x4 reals.
+        See also the quantumsim.ptm module.
+        """
+        cdef unsigned int il, jl, ih, jh, x, y
+
+        cdef np.ndarray[double, ndim=2] re
+        cdef np.ndarray[double, ndim=2] im
+
+        re = self.data_re
+        im = self.data_im
+
+        assert bit < self.no_qubits
+
+        cdef double a, b, c, d
+        cdef double na, nb, nc, nd
+
+        cdef unsigned int mask = (1<<bit)
+
+        for ih in range(1<<(self.no_qubits - bit - 1)):
+            for jh in range(1<<(self.no_qubits - bit - 1)):
+                for il in range(1<<bit):
+                    for jl in range(1<<bit):
+                        x = (ih << (bit + 1)) | il
+                        y = (jh << (bit + 1)) | jl
+
+
+                        a = re[x, y]
+                        b = re[x|mask, y]
+                        c = re[x, y|mask]
+                        d = re[x|mask, y|mask]
+
+                        na = a+b+c+d
+                        nb = a-b+c-d
+                        nc = a+b-c-d
+                        nd = a-b-c+d
+
+                        re[x, y] = 0.5*na
+                        re[x|mask, y] = 0.5*nb
+                        re[x, y|mask] = 0.5*nc
+                        re[x|mask, y|mask] = 0.5*nd
+
+                        a = im[x, y]
+                        b = im[x|mask, y]
+                        c = im[x, y|mask]
+                        d = im[x|mask, y|mask]
+
+                        na = a+b+c+d
+                        nb = a-b+c-d
+                        nc = a+b-c-d
+                        nd = a-b-c+d
+
+                        im[x, y] = 0.5*na
+                        im[x|mask, y] = 0.5*nb
+                        im[x, y|mask] = 0.5*nc
+                        im[x|mask, y|mask] = 0.5*nd
 
     def cphase(self, bit0, bit1):
         """
@@ -526,16 +595,14 @@ cdef class Density:
 
         return tr0, dm0, tr1, dm1
 
-
-
-    def to_pauli_basis(self, bit):
+    def to_pauli_basis(self, complex_dm, bit):
         cdef unsigned int il, jl, ih, jh, x, y
 
         cdef np.ndarray[double, ndim=2] re
         cdef np.ndarray[double, ndim=2] im
 
-        re = self.data_re
-        im = self.data_im
+        re = complex_dm.real
+        im = complex_dm.imag
 
         assert bit < self.no_qubits
 
@@ -581,3 +648,53 @@ cdef class Density:
                         im[x|mask, y] = nb
                         im[x, y|mask] = nc
                         im[x|mask, y|mask] = nd
+    
+    def pauli_reshuffle(self, complex_dm, from_complex=True):
+        cdef int i
+        cdef int v
+        cdef int x, y, addr, addr_new
+
+        cdef float f
+
+        cdef np.ndarray[np.float64_t] re
+        cdef np.ndarray[np.float64_t] im
+
+
+        complex_dm = complex_dm.ravel()
+
+        re = complex_dm.real
+        im = complex_dm.imag
+
+        for x in range(1<<self.no_qubits):
+            for y in range(1<<self.no_qubits):
+                v = ~x & y
+                v ^= v >> 1
+                v ^= v >> 2
+                v = (v & 0x11111111U) * 0x11111111U
+                v = (v >> 28) & 1
+
+                addr = (x << self.no_qubits) | y
+                # addr_new = 0
+                # for i in range(16):
+                    # addr_new |= (x & 1 << i) << i | (y & 1 << i) << (i + 1)
+                addr_new = addr
+
+                if from_complex:
+                    if v == 1:
+                        self.data[addr_new] = im[addr]
+                    else:
+                        self.data[addr_new] = re[addr]
+                else:
+                    if v == 1:
+                        complex_dm.imag[addr] = self.data[addr_new]
+                    else:
+                        complex_dm.real[addr] = self.data[addr_new]
+
+            
+                        
+
+
+
+
+                
+
