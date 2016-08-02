@@ -38,7 +38,7 @@ cdef class Density:
             assert data.shape == (size, size)
             data = data.astype(np.complex128)
 
-            self.data = np.zeros(size*size, dtype=np.float64)
+            self.data = np.zeros((size, size), dtype=np.float64)
 
             #convert to Pauli basis
             for i in range(self.no_qubits):
@@ -46,8 +46,8 @@ cdef class Density:
             self.pauli_reshuffle(data, from_complex=True)
 
         elif data is None:
-            self.data = np.zeros(size*size, np.float64)
-            self.data[0] = 1
+            self.data = np.zeros((size, size), dtype=np.float64)
+            self.data[0, 0] = 1
         else:
             raise ValueError("type of data not understood")
 
@@ -157,7 +157,7 @@ cdef class Density:
 
         assert bit0 < self.no_qubits and bit1 < self.no_qubits
 
-        dt = self.data.reshape((self.size, self.size))
+        dt = self.data
 
         mask = (1 << bit0) | (1 << bit1)
 
@@ -241,48 +241,78 @@ cdef class Density:
         """
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
-    def add_ancilla(self, bit, anc_st):
-        """add_ancilla(self, bit, anc_st)
+    def add_ancilla(self, anc_st):
+        """add_ancilla(self, anc_st)
 
-        Returns a new Density with an ancilla added to the density matrix, increasing no_qubits by 1.
+        Increase the density matrix by adding an ancilla in the state `anc_st`
+        as the highest qubit.
 
-        bit: The index of the new ancilla (0..no_qubits)
         anc_st: The state of the newly added ancilla (0 or 1)
         """
-        cdef unsigned int i, j
-
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
-
-        re = self.data_re
-        im = self.data_im
-
-        cdef np.ndarray[double, ndim=2] re_new
-        cdef np.ndarray[double, ndim=2] im_new
-
-        assert bit < self.no_qubits + 1
-
         new_size = self.size << 1
 
-        re_new = np.zeros((new_size, new_size), np.float64)
-        im_new = np.zeros((new_size, new_size), np.float64)
+        new_data = np.zeros((new_size, new_size), dtype=np.float64)
 
-        cdef unsigned int lower_mask, upper_mask, bit_mask
-        cdef unsigned int new_x, new_y
+        if anc_st == 0:
+            new_data[:self.size, :self.size] = self.data
+        if anc_st == 1:
+            new_data[self.size:, self.size:] = self.data
 
-        lower_mask = (1 << bit) - 1
-        upper_mask = ~lower_mask
-        bit_mask = anc_st << bit
+        self.data = new_data
+        self.size = new_size
+        self.no_qubits += 1
+
+
+    def project_measurement(self, bit, state):
+        cdef i, j, old_i, old_j, lmask, bmask, hmask
+        assert bit < self.no_qubits
+
+
+        new_size = self.size >> 1
+
+        new_data = np.zeros((new_size, new_size), dtype=np.float64)
+
+
+        lmask = ((1 << (self.no_qubits - 1)) - 1) ^ (1 << bit)
+        
+        print(" l {:b}".format(lmask))
+
+        bmask = (state & 1) << bit
+        print(" b {:b}".format(bmask))
+
+
+        for i in range(new_size):
+            for j in range(new_size):
+
+                old_i = (i & lmask) | (((i >> bit) & 1) << (self.no_qubits-1)) | bmask
+                old_j = (j & lmask) | (((j >> bit) & 1) << (self.no_qubits-1)) | bmask
+                
+                new_data[i, j] = self.data[old_i, old_j]
+
+        self.data = new_data
+        self.size = new_size
+        self.no_qubits -= 1
+
+
+    def partial_trace(self, bit):
+        cdef int i, mask
+        cdef float p0, p1
+        assert bit < self.no_qubits
+
+
+        dg = self.get_diag()
+
+        p0 = 0
+        p1 = 0
 
         for i in range(self.size):
-            for j in range(self.size):
-                new_x = ((i & upper_mask) << 1) | (i & lower_mask) | bit_mask
-                new_y = ((j & upper_mask) << 1) | (j & lower_mask) | bit_mask
+            if i & (1 << bit):
+                p1 += dg[i]
+            else:
+                p0 += dg[i]
 
-                re_new[new_x, new_y] = re[i, j]
-                im_new[new_x, new_y] = im[i, j]
+        return p0, p1
 
-        return Density(self.no_qubits + 1, data=re_new + 1j*im_new)
 
     def measure_ancilla(self, bit):
         """measure_ancilla(self, bit)
@@ -414,9 +444,10 @@ cdef class Density:
         re = complex_dm.real
         im = complex_dm.imag
 
+
         for x in range(1<<self.no_qubits):
             for y in range(1<<self.no_qubits):
-                v = ~x & y
+                v = (~x) & y
                 v ^= v >> 1
                 v ^= v >> 2
                 v = (v & 0x11111111U) * 0x11111111U
@@ -430,14 +461,14 @@ cdef class Density:
 
                 if from_complex:
                     if v == 1:
-                        self.data[addr_new] = im[addr]
+                        self.data[x, y] = im[addr]
                     else:
-                        self.data[addr_new] = re[addr]
+                        self.data[x, y] = re[addr]
                 else:
                     if v == 1:
-                        complex_dm.imag[addr] = self.data[addr_new]
+                        im[addr] = self.data[x, y]
                     else:
-                        complex_dm.real[addr] = self.data[addr_new]
+                        re[addr] = self.data[x, y]
 
             
                         
