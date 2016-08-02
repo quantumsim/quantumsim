@@ -149,23 +149,36 @@ cdef class Density:
         """
         cdef unsigned int x, y
 
-        cdef unsigned int mask0, mask1, mask_both
+        cdef np.ndarray[np.float64_t, ndim=2] dt
 
-        cdef np.ndarray[double, ndim=2] re
-        cdef np.ndarray[double, ndim=2] im
+        cdef double t, u
 
-        re = self.data_re
-        im = self.data_im
+        cdef int idx0, idx1, mask
 
         assert bit0 < self.no_qubits and bit1 < self.no_qubits
+
+        dt = self.data.reshape((self.size, self.size))
 
         mask = (1 << bit0) | (1 << bit1)
 
         for x in range(self.size):
             for y in range(self.size):
-                if ((x & mask) == mask) != ((y & mask) == mask):
-                    re[x, y] = -re[x, y]
-                    im[x, y] = -im[x, y]
+                    idx0 = 2*(( x >> bit0) & 1) | ((y >> bit0) & 1)
+                    idx1 = 2*(( x >> bit1) & 1) | ((y >> bit1) & 1)
+
+
+                    if idx0 == 3 and idx1 != 0:
+                        dt[x, y] = - dt[x, y]
+                    if idx1 == 3 and idx0 != 0:
+                        dt[x, y] = - dt[x, y]
+
+                    if idx1 == 1 and (idx0 == 1 or idx0 == 2):
+                        t = -dt[x, y]
+                        u = -dt[x^mask, y^mask]
+                        dt[x^mask, y^mask] = t
+                        dt[x, y] = u
+
+
 
     def hadamard(self, bit):
         """hadamard(self, bit)
