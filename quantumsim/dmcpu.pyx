@@ -96,7 +96,7 @@ cdef class Density:
         """
         return self.data.reshape((self.size, self.size)).diagonal()
 
-    def apply_single_ptm(self, bit, ptm):
+    def apply_ptm(self, bit, ptm):
         """
         Apply a single qubit Pauli transfer matrix. 
 
