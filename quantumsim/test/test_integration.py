@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 
 
+
+
 def test_three_qbit_clean():
     c = circuit.Circuit()
 
@@ -127,6 +129,7 @@ def test_measurement_with_output_bit():
 
     assert sdm.classical == {'O': 1, 'O2':1}
 
+@pytest.mark.skip()
 def test_integration_surface17():
     def make_circuit(t1=np.inf, t2=np.inf, seed=42, readout_error=0.015, t_gate=40, t_rest=1000):
         surf17 = circuit.Circuit("Surface 17")
