@@ -7,13 +7,13 @@ import quantumsim.dmcpu as dmcpu
 # here we collect the classes we want to test
 implementations_to_test = []
 
-#implementations_to_test.append(dmcpu.Density)
+implementations_to_test.append(dmcpu.Density)
 
 hascuda = False
 try:
     import pycuda.gpuarray as ga
     import quantumsim.dm10 as dm10
-    implementations_to_test.append(dm10.Density)
+    #implementations_to_test.append(dm10.Density)
     hascuda = True
 except ImportError:
     pass
@@ -233,8 +233,6 @@ class TestDensityHadamard:
     def test_squares_to_one_small(self, dmclass):
         dm = dmclass(1)
         print(dm.to_array())
-
-        print(dm._blocksize, dm._gridsize)
 
         dm.hadamard(0)
         print(dm.to_array())
