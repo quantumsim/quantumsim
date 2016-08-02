@@ -484,7 +484,6 @@ class TestDensityAddAncilla:
         dm.add_ancilla(1)
 
         assert dm.no_qubits == 5
-        assert dm.allocated_qubits == 5
         assert np.allclose(dm.trace(), 1)
 
         # 01234
@@ -508,11 +507,6 @@ class TestDensityAddAncilla:
         dm.project_measurement(0, 1)
         assert np.allclose(dm.trace(), 1)
 
-
-
-
-
-
 class TestDensityProjectMeasurement:
     def test_bit_too_high(self, dm):
         with pytest.raises(AssertionError):
@@ -524,7 +518,6 @@ class TestDensityProjectMeasurement:
 
         dm.project_measurement(0, 0)
         assert dm.no_qubits == old_no_qubits - 1
-        assert dm.allocated_qubits == old_no_qubits
 
 
     def test_measure_on_gs_gives_gs(self, dm):

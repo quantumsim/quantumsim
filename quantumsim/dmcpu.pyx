@@ -2,6 +2,7 @@
 # (c) 2016 Brian Tarasinski
 # Distributed under the GNU GPLv3. See LICENSE.txt or https://www.gnu.org/licenses/gpl.txt
 
+import cython
 import numpy as np
 from math import sqrt
 
@@ -56,7 +57,7 @@ cdef class Density:
 
         Return the trace of the density matrix.
         """
-        return self.data.reshape((self.size, self.size)).trace()
+        return self.data.trace()
         
     def renormalize(self):
         """renormalize(self)
@@ -94,7 +95,7 @@ cdef class Density:
         
         Return the main diagonal of the density matrix as a numpy array.
         """
-        return self.data.reshape((self.size, self.size)).diagonal()
+        return self.data.diagonal()
 
     def apply_ptm(self, bit, ptm):
         """
@@ -107,7 +108,7 @@ cdef class Density:
 
         cdef np.ndarray[np.float64_t, ndim=2] dt
 
-        dt = self.data.reshape((self.size, self.size))
+        dt = self.data
 
         assert bit < self.no_qubits
 
@@ -241,6 +242,7 @@ cdef class Density:
         """
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
+    @cython.boundscheck(False)
     def add_ancilla(self, anc_st):
         """add_ancilla(self, anc_st)
 
@@ -249,14 +251,25 @@ cdef class Density:
 
         anc_st: The state of the newly added ancilla (0 or 1)
         """
+        cdef np.ndarray[np.float64_t, ndim=2] new_data
+        cdef np.ndarray[np.float64_t, ndim=2] old_data
+        cdef int i, j
+
+
+        old_data = self.data
+
         new_size = self.size << 1
 
         new_data = np.zeros((new_size, new_size), dtype=np.float64)
 
         if anc_st == 0:
-            new_data[:self.size, :self.size] = self.data
+            for j in range(self.size):
+                for i in range(self.size):
+                    new_data[i, j] = old_data[i, j]
         if anc_st == 1:
-            new_data[self.size:, self.size:] = self.data
+            for j in range(self.size):
+                for i in range(self.size):
+                    new_data[i+self.size, j+self.size] = old_data[i, j]
 
         self.data = new_data
         self.size = new_size
