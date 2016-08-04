@@ -456,7 +456,6 @@ class TestMajorityVote:
         sdm.hadamard(2)
         sdm.hadamard(3)
 
-
         result = {b: 0 for b in bits}
         p = sdm.majority_vote(result)
 
@@ -468,7 +467,7 @@ class TestMajorityVote:
 
         assert np.allclose(p, 0.75)
 
-        p = sdm.majority_vote({1:0, 2:1, 3:0})
+        p = sdm.majority_vote({1: 0, 2: 1, 3: 0})
 
         assert np.allclose(p, 0.75)
 
@@ -496,27 +495,25 @@ class TestMajorityVote:
         result = {b: 0 for b in bits}
         p = sdm.majority_vote(result)
 
-        assert np.allclose(p, 0.5*p0)
+        assert np.allclose(p, 0.5 * p0)
 
         sdm.hadamard(3)
 
         p = sdm.majority_vote(result)
 
-        assert np.allclose(p, 0.75*p0)
+        assert np.allclose(p, 0.75 * p0)
 
-        p = sdm.majority_vote({1:0, 2:1, 3:0})
+        p = sdm.majority_vote({1: 0, 2: 1, 3: 0})
 
-        assert np.allclose(p, 0.75*p0)
+        assert np.allclose(p, 0.75 * p0)
 
     def test_majority_vote_reuse_of_cached(self):
         # TODO?!
         pass
 
 
-
-
-
 class TestCachedSinglePTMs:
+
     def test_deferred_apply(self):
         sdm = SparseDM(1)
 
@@ -533,6 +530,17 @@ class TestCachedSinglePTMs:
         assert 0 not in sdm.classical
 
         assert 0 not in sdm.single_ptms_to_do
+
+    def test_mix_direct_and_deferred(self):
+        sdm = SparseDM(1)
+
+        sdm.rotate_y(0, np.pi)
+        sdm.apply_ptm(0, ptm.amp_ph_damping_ptm(1, 0))
+        sdm.rotate_y(0, np.pi)
+
+        sdm.project_measurement(0, 0)
+
+        assert not np.allclose(sdm.trace(), 1)
 
 
 

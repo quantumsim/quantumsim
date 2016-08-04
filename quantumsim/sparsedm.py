@@ -224,12 +224,14 @@ class SparseDM:
     def hadamard(self, bit):
         """Apply a hadamard gate to qubit #bit.
         """
+        self.combine_and_apply_single_ptm(bit)
         self.ensure_dense(bit)
         self.full_dm.hadamard(self.idx_in_full_dm[bit])
 
     def amp_ph_damping(self, bit, gamma, lamda):
         """Apply amplitude and phase damping to qubit #bit.
         """
+        self.combine_and_apply_single_ptm(bit)
         self.ensure_dense(bit)
         self.full_dm.amp_ph_damping(self.idx_in_full_dm[bit], gamma, lamda)
 
@@ -237,6 +239,7 @@ class SparseDM:
         """Apply a rotation around the x-axis of the Bloch sphere of bit `bit` 
         by `angle` (in radians).
         """
+        self.combine_and_apply_single_ptm(bit)
         self.ensure_dense(bit)
         self.full_dm.rotate_x(self.idx_in_full_dm[bit], angle)
 
@@ -244,6 +247,7 @@ class SparseDM:
         """Apply a rotation around the y-axis of the Bloch sphere of bit `bit` 
         by `angle` (in radians).
         """
+        self.combine_and_apply_single_ptm(bit)
         self.ensure_dense(bit)
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], angle)
 
@@ -251,6 +255,7 @@ class SparseDM:
         """Apply a rotation around the z-axis of the Bloch sphere of bit `bit` 
         by `angle` (in radians).
         """
+        self.combine_and_apply_single_ptm(bit)
         self.ensure_dense(bit)
         self.full_dm.rotate_z(self.idx_in_full_dm[bit], angle)
 
