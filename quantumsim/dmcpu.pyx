@@ -288,10 +288,8 @@ cdef class Density:
 
         lmask = ((1 << (self.no_qubits - 1)) - 1) ^ (1 << bit)
         
-        print(" l {:b}".format(lmask))
 
         bmask = (state & 1) << bit
-        print(" b {:b}".format(bmask))
 
 
         for i in range(new_size):
