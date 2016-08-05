@@ -26,35 +26,8 @@ To run the test suite, enter the directory and run py.test:
 If you do not have pycuda available, GPU related tests will be skipped.
 
 
-Usage
------
-
-See Introduction.ipynb in the root directory.
-
-TODOs
------
-
-These are just for development, ignore.
-
-  - adapt dmcpu to new api, add to tests again
-  - phase out old api
-  - reduce time for allocating/freeing memory. Reallocate memory lazily. Calculate traces more
-    efficiently. Should save about 50% time now.
-
-For the future:
-
-  - add a qasm parser to create and store a `circuit.Circuit`
-
-For much later:
-  - a circuit should order its gates automatically before the every apply that follows an edit.
-  - a circuit should know about periodic boundary conditions so that it can reorder more efficiently
-  - auto-generate repetitionerrordata.json from circuit?
-  - Make the Density class use cython for small dms and switch to cuda when large, automatically
-  - automatic calculation of ancilla decay rates due to stray photons after measurement?
-
-
-Overview
-========
+Overview and usage
+==================
 
 To obtain an overview over the capabilities of the package from a user perspective,
 have a look at `Introduction.ipynb`.
@@ -63,81 +36,53 @@ have a look at `Introduction.ipynb`.
 The architecture 
 ========
 
-We hold the full density matrix of the data qubits in memory, which is about two megabyte (so not much).
+The backend of this package is a full density matrix of n qubits, stored on a GPU.
+(a CPU backend is also implemented, but too slow to be useful for big n at the moment).
 
-The density matrix is hermitian, so we only need to store one half.
+Data format
+-----------
 
-However, in order to do address magic, we will store it in full form (memory is not an issue)
-but set the lower triangle to "don't care" and only update the upper half.
+The density matrix is not stored as a hermitian complex matrix, a different basis is used.
+In the single qubit case, we can define the four basis matrices:
 
-This means that we typically run grids that are twice too big. Often we can use the
-second half to do the imaginary parts instead.
-We also store as in numpy format, that is, real and imaginary part next to each other.
-Maybe we want to change this at some point.
-The matrix element Re(dm[x,y]) is actually stored at position
+  s0 = [1 0]  sx = [0 1]
+       [0 0]       [1 0] / sqrt(2)
 
-    dm[x,y] = dm[(x<<noqbits|y)<<1].
+  s1 = [0 0]  sy = [0 -i]
+       [0 1]       [i  0] / sqrt(2)
 
-We add one ancilla to measure a syndrome, then trace it out again to measure it; then add the next ancilla etc.
+We can then store the density matrix `R` as the four real numbers `r(a) = Tr(s_a R)`,
+where `a` takes the four values (0, x, y, 1). We thus refer to this basis as the `0xy1` basis.
+It is not as often used in the literature as the similar `1xyz` or Pauli basis, but has the advantage 
+that the diagonal immediately represents probabilities of local measurement outcomes.
 
-We do NOT precompile any operations, as i believe 
-that block application is easier than actually 
-multiplying with matrices that have been 
-sparsified by hand. The structure is too strong in this one.
+For several qubits, we use the natural extension, `r(abc...) = Tr((s_a x s_b x
+s_c x ...) R)`, where `x` denotes the Kronecker product and `s_a, s_b, s_c, ...` 
+act on the 0th, 1st, 2nd, ... qubit.  By letting 
+    0 -> 00, x -> 01, y -> 10, 1 -> 11
+in the string `abc...`, we immediately obtain an address in binary
+for storing of the numbers r(abc...)
 
 Primitives
 ----------
 
-We thus need the following primitives, which will be implemented by hand as kernels:
-
-At the beginning and end of each syndrome measurement:
-  - Add ancilla qbit, taking a 2^9 x 2^9 density matrix (dm9) into a 2^10 x 2^10 density matrix (dm10)
-  - trace the ancilla out again, obtaining two dm9's (we can hold both of them or throw one away, to explore the statistical tree)
-
-For a single measurement (all acting on one dm10):
-  - Idle gate on a single qbit (amplitude and phase damping, i.e. t1, t2 decay)
-  - cphase gate on any qbit and the ancilla (maybe noisy at some point)
-  - hadamard on any qbit (maybe noisy at some point)
-  - (maybe pi pulses etc)
-
-each of these I expect to take about 500us on a tesla (thats what dgemm(dm10, dm10) takes), 
-and we need about ~500 of them per round; thus 250ms per round?
+The backend supports the following primitives, which are implemented as custom CUDA kernels ("GPU programs"):
 
 
+- Apply any single-qubit channel to any of the qubits. The channels are represented as Pauli transfer matrices.
+- Add a new qubit in the ground state to the density matrix, increasing its size by a factor 4.
+- Project a qubit to either 0 or 1 and remove it from the density matrix. This reduces the 
+size of the density matrix by a factor 4 and reduces its trace. 
+The new trace is the probabilty for this projection to happen during the experiment.
+- Apply a perfect C-Phase gate between any two qubits.
+
+
+More primitives, especially general two-qubit gates, will be added when needed.
 
 Wrappers
 --------
 
-The data structure exposing the above primitives is called `dm10.Density`.
-
-`d = dm10.Density(10)` creates a density matrix with 10 qubits, 
-allocating memory on the device.  
-One can operate on it like
-
-        d.cphase(bit0=2, bit1=3) 
-        d.amp_phase_damping(bit=0, gamma=0.1, lamda=1)
-        d.hadamard(bit=4)`
-        t = d.trace()
-
-The bits are labelled 0 to 9.
-
-Adding an addition of a new ancilla qubit is done by
-
-        d_new = d.add_ancilla(bit=10, anc_state=0)
-
-This creates a new density matrix of larger size, including the allocation of new memory.
-(There is some optimization possible here, maybe add some sort of in-place inflation).
-
-The measurement of an ancilla is done by
-
-      p0, dm0, p1, dm1 = d.measure_ancilla(bit=9)
-
-This creates two new density matrices (including newly allocated memory)
-and returns them, together with their traces.
-Again, this could be done with reuse of allocated memory, so there is some optimization 
-possible here.
-
-It is important to note that dm0 and dm1 are not normalized to trace one, they are the subblocks of the original density matrix.
+The data structure exposing the above primitives to python is called `dm10.Density`.
 
 Sparse density matrix
 ---------------------
@@ -145,31 +90,23 @@ Sparse density matrix
 In order to keep track of which ancillas are in the density matrix at any moment,
 there is a second level of abstraction, implemented in `sparsedm.SparseDM`.
 
-This object keeps track of a set of qubits, which can either be 
-"quantum", that is, part of a dm10.Density; or "classical", that is, be
-in a pure state as a condition for the dm10.Density.
-
-We create one by
-      
-      sdm = sparsedm.SparseDM(["Q1", "Q2", "Q3"])
+This object represents the states of a set of named qubits, which can either be 
+"quantum", that is, part of a dm10.Density; or "classical", that is, not entangled
+with any other qubit.
+Anything hashable (strings, numbers etc) can be used as names for quibits.
 
 
-These are the names of all qubits. Anything hashable (strings, numbers etc) 
-can be used as names for quibits.
-
-In the beginning, all qubits are classical and in the ground state. We can see and change the 
-state of the classical qubits by inspecting the dict `sdm.classical`.
-
-We can then apply gates to qubits, e.g.
+In a newly generated SparseDM, all qubits are classical and in the ground state.
+Its state can be changed by applying gates, e.g.
 
       sdm.cphase("Q1", "Q3")
       sdm.hadamard("Q2")
 
-When this happens, the qubit is added to the dm10.Density and removed from sdm.classical. 
+When this happens, the qubit is added to the internal dm10.Density and removed from the classical qubits.
 Because a dm10.Density always enumerates qubits as zero based integers, there is a dict
 `sdm.idx_in_full_dm`, mapping the qubit names to indices.
 
-Measurement is done in two steps. First, we can look at the probabilities for 
+Measurement sampling can be done in two steps. First, we can obtain the probabilities for 
 the outcome of a measurement:
 
       p0, p1 = sdm.peak_measurement("Q1")
@@ -177,7 +114,7 @@ the outcome of a measurement:
 Note that these two probabilities do not have to sum up to one, they are the total 
 probability of this outcome, taking into account the selected outcomes of all previous measurements.
 
-Then we can select the outcome of the measurement arbitrarily:
+Then we can select the outcome of the measurement arbitrarily, for instance selected using p0, p1 and a source of randomness:
 
       sdm.project_measurement("Q1", state=0)
 
@@ -186,6 +123,16 @@ with this outcome and add it back to sdm.classical with state 0.
 Again, note that the trace of the dm10.Density is not renormalized; this means that the 
 trace gives the total probability with which the selected outcome of the measeruments 
 actually takes place. The trace can be obtained using `sdm.trace()`.
+
+
+Circuits
+========
+
+Finally there is a python module representing experimental protocols ("circuits") 
+in terms of gates and measurements, their timing information, and automatically added decay channels. 
+
+After defining such a circuit, it can be applied to a SparseDM in one line of code.
+
 
 License
 -------
