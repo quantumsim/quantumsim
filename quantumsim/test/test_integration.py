@@ -230,3 +230,36 @@ def test_integration_surface17():
 
     assert syndrome == b'jHhJhL\x08L\tK)K\x08K\x08K\x08K\x08I'
 
+def test_free_decay():
+
+    for t1, t2 in [(np.inf, np.inf), (1000, np.inf), (np.inf, 1000), (1000, 1000)]:
+        c = circuit.Circuit("Free decay")
+        c.add_qubit("Q", t1=t1, t2=t2)
+        c.add_rotate_y("Q", time=0, angle=np.pi)
+        c.add_rotate_y("Q", time=1000, angle=-np.pi)
+        c.add_waiting_gates()
+        c.order()
+
+        sdm = sparsedm.SparseDM(c.get_qubit_names())
+        c.apply_to(sdm)
+        sdm.project_measurement("Q", 0)
+
+        assert np.allclose(sdm.trace(), np.exp(-1000/t1))
+
+
+def test_ramsey():
+
+    for t1, t2 in [(np.inf, np.inf), (1000, np.inf), (np.inf, 1000), (1000, 1000)]:
+        c = circuit.Circuit("Ramsey")
+        c.add_qubit("Q", t1=t1, t2=t2)
+        c.add_rotate_y("Q", time=0, angle=np.pi/2)
+        c.add_rotate_y("Q", time=1000, angle=-np.pi/2)
+        c.add_waiting_gates()
+        c.order()
+
+        sdm = sparsedm.SparseDM(c.get_qubit_names())
+        c.apply_to(sdm)
+        sdm.project_measurement("Q", 0)
+
+        assert np.allclose(sdm.trace(), 0.5*(1+np.exp(-1000/t2)))
+

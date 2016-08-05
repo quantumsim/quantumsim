@@ -146,7 +146,8 @@ class RotateZ(SinglePTMGate):
 class AmpPhDamp(SinglePTMGate):
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
         """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
-        with amplitude damping time t1 and phase damping t2.
+        with amplitude damping time t1 and phase damping t2 
+        (t1 as measured in free decay experiments, t2 as measured in ramsey or echo experiments).
 
         Note that the gate acts at only one point in time, but acts as if the damping was active for
         the time `duration`.
@@ -157,9 +158,13 @@ class AmpPhDamp(SinglePTMGate):
         """
         self.t1 = t1
         self.t2 = t2
+
         self.duration = duration
+
+        t_phi = 1/(1/t2 - 1/(2*t1))/2
+
         gamma = 1 - np.exp(-duration/t1)
-        lamda = 1 - np.exp(-duration/t2)
+        lamda = 1 - np.exp(-duration/t_phi)
         super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
 
     def plot_gate(self, ax, coords):
