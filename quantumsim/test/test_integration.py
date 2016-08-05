@@ -232,7 +232,7 @@ def test_integration_surface17():
 
 def test_free_decay():
 
-    for t1, t2 in [(np.inf, np.inf), (1000, np.inf), (np.inf, 1000), (1000, 1000)]:
+    for t1, t2 in [(np.inf, np.inf), (1000, 2000), (np.inf, 1000), (1000, 1000)]:
         c = circuit.Circuit("Free decay")
         c.add_qubit("Q", t1=t1, t2=t2)
         c.add_rotate_y("Q", time=0, angle=np.pi)
@@ -249,7 +249,7 @@ def test_free_decay():
 
 def test_ramsey():
 
-    for t1, t2 in [(np.inf, np.inf), (1000, np.inf), (np.inf, 1000), (1000, 1000)]:
+    for t1, t2 in [(np.inf, np.inf), (1000, 2000), (np.inf, 1000), (1000, 1000)]:
         c = circuit.Circuit("Ramsey")
         c.add_qubit("Q", t1=t1, t2=t2)
         c.add_rotate_y("Q", time=0, angle=np.pi/2)

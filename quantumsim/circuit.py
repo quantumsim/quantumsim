@@ -18,8 +18,14 @@ class Qubit:
 
     def __init__(self, name, t1=np.inf, t2=np.inf):
         """A Qubit with a name and amplitude damping time t1 and phase damping time t2,
+
+        t1 is defined as measured in a free decay experiment,
+        t2 is defined as measured in a ramsey/hahn echo experiment
+
+        Note especially that you must have t2 <= 2*t1
         """
         self.name = name
+        assert t2 <= 2*t1
         self.t1 = max(t1, 1e-10)
         self.t2 = max(t2, 1e-10)
 
@@ -156,12 +162,19 @@ class AmpPhDamp(SinglePTMGate):
 
         See also: Circuit.add_waiting_gates to add these gates automatically.
         """
+
+        assert t2 <= 2*t1
+
         self.t1 = t1
         self.t2 = t2
 
         self.duration = duration
 
-        t_phi = 1/(1/t2 - 1/(2*t1))/2
+
+        if t2 == 2*t1:
+            t_phi = np.inf
+        else:
+            t_phi = 1/(1/t2 - 1/(2*t1))/2
 
         gamma = 1 - np.exp(-duration/t1)
         lamda = 1 - np.exp(-duration/t_phi)

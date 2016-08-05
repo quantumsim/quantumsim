@@ -106,7 +106,7 @@ class TestCircuit:
 
         c = circuit.Circuit()
 
-        c.add_qubit(circuit.Qubit("A", 10, np.inf))
+        c.add_qubit(circuit.Qubit("A", 10, 20))
         c.add_gate(circuit.Hadamard("A", 0))
         c.add_gate(circuit.Hadamard("A", 10))
 
