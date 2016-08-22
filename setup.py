@@ -12,5 +12,5 @@ setup(name='quantumsim',
       ext_modules=cythonize(Extension("dmcpu", ["quantumsim/dmcpu.pyx"])),
       packages=['quantumsim'],
       ext_package='quantumsim',
-      data_files=[('pycudakernels', ['src/primitives.cu'])]
+      data_files=[('pycudakernels', ['quantumsim/primitives.cu'])]
       )
