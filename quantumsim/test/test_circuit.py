@@ -1,8 +1,7 @@
 import quantumsim.circuit as circuit
 from unittest.mock import MagicMock, patch, call, ANY
 import numpy as np
-import quantumsim.ptm as ptm
-import pytest
+
 
 class TestCircuit:
 
@@ -118,11 +117,9 @@ class TestCircuit:
 
         c.apply_to(sdm)
 
-        gamma = 1 - np.exp(-1)
-
         sdm.assert_has_calls([call.apply_ptm("A", ptm=ANY),
                               call.apply_ptm("A", ptm=ANY),
-                              call.apply_ptm("A", ptm=ANY),  
+                              call.apply_ptm("A", ptm=ANY),
                               call.apply_ptm("A", ptm=ANY),
                               call.peak_measurement("A"),
                               call.project_measurement("A", 0)])
@@ -166,6 +163,30 @@ class TestCircuit:
 
         assert len(c.gates) == 2
         assert c.gates[0].time == 20
+
+    def test_add_subcircuit_normal_use(self):
+        c = circuit.Circuit()
+        subc = circuit.Circuit()
+
+        subc.add_qubit('A')
+
+        subc.add_hadamard("A", 0)
+        subc.add_hadamard("A", 5)
+
+        c.add_qubit('Q')
+        c.add_subcircuit(subc, time=0, name_map={'A': 'Q'})  # call with dict
+        c.add_subcircuit(subc, time=10, name_map=['Q'])  # call with list
+
+        assert len(c.gates) == 4
+        assert {g.time for g in c.gates} == {0, 5, 10, 15}
+        assert {g.involved_qubits[0] for g in c.gates} == {'Q'}
+
+        c.add_qubit("A")
+        c.add_subcircuit(subc, time=0)  # call with None
+
+        assert len(c.gates) == 6
+        assert {g.time for g in c.gates} == {0, 5, 10, 15}
+        assert {g.involved_qubits[0] for g in c.gates} == {'Q', 'A'}
 
 
 class TestHadamardGate:
@@ -248,8 +269,6 @@ class TestAmpPhDamping:
 
         apd.apply_to(sdm)
 
-        g = 1 - np.exp(-1 / 10)
-        l = 1 - np.exp(-1 / 5)
         sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
 
 
@@ -364,6 +383,7 @@ class TestMeasurement:
 
 
 class TestConditionalGates:
+
     def test_simple(self):
         sdm = MagicMock()
         sdm.classical = {"A": 0, "B": 1}

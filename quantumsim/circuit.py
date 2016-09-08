@@ -12,6 +12,7 @@ from . import tp
 from . import ptm
 
 import functools
+import copy
 
 
 class Qubit:
@@ -25,7 +26,7 @@ class Qubit:
         Note especially that you must have t2 <= 2*t1
         """
         self.name = name
-        assert t2 <= 2*t1
+        assert t2 <= 2 * t1
         self.t1 = max(t1, 1e-10)
         self.t2 = max(t2, 1e-10)
 
@@ -84,6 +85,7 @@ class Gate:
 
 
 class SinglePTMGate(Gate):
+
     def __init__(self, bit, time, ptm, **kwargs):
         """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit `bit` at point `time`.
         """
@@ -98,6 +100,7 @@ class SinglePTMGate(Gate):
 
 
 class RotateY(SinglePTMGate):
+
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
@@ -112,14 +115,18 @@ class RotateY(SinglePTMGate):
         else:
             self.label = r"$R_y(%g)$" % angle
 
+
 class Hadamard(SinglePTMGate):
+
     def __init__(self, bit, time, **kwargs):
         """A Hadamard gate on qubit `bit` acting at a point in time `time`
         """
         super().__init__(bit, time, ptm.hadamard_ptm(), **kwargs)
         self.label = r"$H$"
 
+
 class RotateX(SinglePTMGate):
+
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
@@ -134,7 +141,9 @@ class RotateX(SinglePTMGate):
         else:
             self.label = r"$R_x(%g)$" % angle
 
+
 class RotateZ(SinglePTMGate):
+
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the z-axis on the bloch sphere by `angle`.
         """
@@ -149,10 +158,12 @@ class RotateZ(SinglePTMGate):
         else:
             self.label = r"$R_z(%g)$" % angle
 
+
 class AmpPhDamp(SinglePTMGate):
+
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
         """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
-        with amplitude damping time t1 and phase damping t2 
+        with amplitude damping time t1 and phase damping t2
         (t1 as measured in free decay experiments, t2 as measured in ramsey or echo experiments).
 
         Note that the gate acts at only one point in time, but acts as if the damping was active for
@@ -163,21 +174,20 @@ class AmpPhDamp(SinglePTMGate):
         See also: Circuit.add_waiting_gates to add these gates automatically.
         """
 
-        assert t2 <= 2*t1
+        assert t2 <= 2 * t1
 
         self.t1 = t1
         self.t2 = t2
 
         self.duration = duration
 
-
-        if t2 == 2*t1:
+        if t2 == 2 * t1:
             t_phi = np.inf
         else:
-            t_phi = 1/(1/t2 - 1/(2*t1))/2
+            t_phi = 1 / (1 / t2 - 1 / (2 * t1)) / 2
 
-        gamma = 1 - np.exp(-duration/t1)
-        lamda = 1 - np.exp(-duration/t_phi)
+        gamma = 1 - np.exp(-duration / t1)
+        lamda = 1 - np.exp(-duration / t_phi)
         super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
 
     def plot_gate(self, ax, coords):
@@ -189,7 +199,9 @@ class AmpPhDamp(SinglePTMGate):
                 self.involved_qubits[0]]), xytext=(
                 0, 20), textcoords='offset points', ha='center')
 
+
 class CPhase(Gate):
+
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
 
@@ -211,8 +223,6 @@ class CPhase(Gate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
-
-
 
 
 class Measurement(Gate):
@@ -378,6 +388,35 @@ class Circuit:
 
         return self.gates[-1]
 
+    def add_subcircuit(self, subcircuit, time=0, name_map=None):
+        """Add all gates of another circuit to this circuit.
+
+        The qubit names in the subcircuit are mapped to the qubits in this circuit using `name_map`.
+
+        name_map can be a dictionary, a list, or None.
+        If it is a list, it the map is done according to the list subcircuit.gates.
+        If it is None, no mapping takes place.
+
+        All gate times in the subcircuit are shifted by `time`.
+        """
+
+        if not isinstance(name_map, dict):
+            if isinstance(name_map, list):
+                name_map = {sg: g for sg, g in zip(subcircuit.get_qubit_names(), name_map)}
+            elif name_map is None:
+                name_map = {g: g for g in subcircuit.get_qubit_names()}
+            else:
+                raise ValueError(
+                    "name_map not understood. Pass a list, dict or None.")
+
+        for g in subcircuit.gates:
+            new_g = copy.copy(g)
+            new_g.time += time
+            new_g.involved_qubits = [name_map[b]
+                                     for b in new_g.involved_qubits]
+
+            self.add_gate(new_g)
+
     def __getattribute__(self, name):
 
         if name.find("add_") == 0:
@@ -416,8 +455,9 @@ class Circuit:
                 qb for qb in qubits_to_do if qb.name in only_qubits]
 
         for b in qubits_to_do:
-            gts = [gate for gate in all_gates if gate.involves_qubit(str(b)) and
-                   tmin <= gate.time <= tmax]
+            gts = [
+                gate for gate in all_gates if gate.involves_qubit(
+                    str(b)) and tmin <= gate.time <= tmax]
 
             if not gts:
                 self.add_gate(
@@ -464,7 +504,6 @@ class Circuit:
             if any(all_gates[g][1].is_measurement for g in gts):
                 targets.append(n)
             gts_list.append(gts)
-
 
         order = tp.partial_greedy_toposort(gts_list, targets=targets)
 
