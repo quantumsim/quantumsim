@@ -96,28 +96,30 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
 
         for g1, g2 in gate_pairs:
 
-            decay_gate = circuit.AmpPhDamp(
-                bit=qb.name,
-                time=(g2.time + g1.time) / 2,
-                duration=g2.time - g1.time,
-                t1=qb.t1,
-                t2=qb.t2)
+            if g2.time - g1.time > 1:  # skip if too close
+                decay_gate = circuit.AmpPhDamp(
+                    bit=qb.name,
+                    time=(g2.time + g1.time) / 2,
+                    duration=g2.time - g1.time,
+                    t1=qb.t1,
+                    t2=qb.t2)
 
-            if meas_times and pi2_times:
-                last_meas = max(t for t in meas_times if t <= g1.time)
-                pi2s = [t for t in pi2_times if last_meas <= t <= g1.time]
+                if meas_times and pi2_times:
+                    last_meas = max(t for t in meas_times if t <= g1.time)
+                    pi2s = [t for t in pi2_times if last_meas <= t <= g1.time]
 
-                if len(pi2s) == 1:
-                    # we are in the coherent phase
-                    dt = pi2s[0] - last_meas
+                    if len(pi2s) == 1:
+                        # we are in the coherent phase
+                        dt = pi2s[0] - last_meas
 
-                    photon_lamda = get_dephasing(
-                        g1.time, g2.time, dt, chi, kappa, alpha0)
+                        photon_lamda = get_dephasing(
+                            g1.time, g2.time, dt, chi, kappa, alpha0)
 
-                    ptm_patch = circuit.ptm.amp_ph_damping_ptm(0, 1-photon_lamda)
+                        ptm_patch = circuit.ptm.amp_ph_damping_ptm(
+                            0, 1 - photon_lamda)
 
-                    decay_gate.ptm = np.dot(decay_gate.ptm, ptm_patch)
+                        decay_gate.ptm = np.dot(decay_gate.ptm, ptm_patch)
 
-                    decay_gate.annotation = "*"
+                        decay_gate.annotation = "*"
 
             c.add_gate(decay_gate)
