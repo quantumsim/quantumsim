@@ -122,4 +122,4 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
 
                         decay_gate.annotation = "*"
 
-            c.add_gate(decay_gate)
+                c.add_gate(decay_gate)
