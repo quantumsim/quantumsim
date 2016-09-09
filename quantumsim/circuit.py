@@ -106,6 +106,7 @@ class RotateY(SinglePTMGate):
         """
         super().__init__(bit, time, ptm.rotate_y_ptm(angle), **kwargs)
 
+        self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_y(\pi)$"
@@ -132,6 +133,7 @@ class RotateX(SinglePTMGate):
         """
         super().__init__(bit, time, ptm.rotate_x_ptm(angle), **kwargs)
 
+        self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_x(\pi)$"
@@ -149,6 +151,7 @@ class RotateZ(SinglePTMGate):
         """
         super().__init__(bit, time, ptm.rotate_z_ptm(angle), **kwargs)
 
+        self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_z(\pi)$"
