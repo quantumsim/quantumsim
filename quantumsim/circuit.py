@@ -101,10 +101,14 @@ class SinglePTMGate(Gate):
 
 class RotateY(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, **kwargs):
+    def __init__(self, bit, time, angle, dephasing=None, **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
-        super().__init__(bit, time, ptm.rotate_y_ptm(angle), **kwargs)
+        p = ptm.rotate_y_ptm(angle)
+        if dephasing:
+            p = np.dot(p, ptm.dephasing_ptm(dephasing, 0, dephasing))
+
+        super().__init__(bit, time, p, **kwargs)
 
         self.angle = angle
         multiple_of_pi = angle / np.pi
@@ -128,10 +132,15 @@ class Hadamard(SinglePTMGate):
 
 class RotateX(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, **kwargs):
+    def __init__(self, bit, time, angle, dephasing=None, **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
-        super().__init__(bit, time, ptm.rotate_x_ptm(angle), **kwargs)
+
+        p = ptm.rotate_x_ptm(angle)
+        if dephasing:
+            p = np.dot(p, ptm.dephasing_ptm(0, dephasing, dephasing))
+
+        super().__init__(bit, time, p, **kwargs)
 
         self.angle = angle
         multiple_of_pi = angle / np.pi
@@ -146,10 +155,14 @@ class RotateX(SinglePTMGate):
 
 class RotateZ(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, **kwargs):
+    def __init__(self, bit, time, angle, dephasing=None, **kwargs):
         """ A rotation around the z-axis on the bloch sphere by `angle`.
         """
-        super().__init__(bit, time, ptm.rotate_z_ptm(angle), **kwargs)
+        p = ptm.rotate_z_ptm(angle)
+        if dephasing:
+            p = np.dot(p, ptm.dephasing_ptm(dephasing, dephasing, 0))
+
+        super().__init__(bit, time, p, **kwargs)
 
         self.angle = angle
         multiple_of_pi = angle / np.pi

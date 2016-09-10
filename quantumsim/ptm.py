@@ -55,6 +55,15 @@ def amp_ph_damping_ptm(gamma, lamda):
     )
     return to_0xy1_basis(ptm)
 
+def dephasing_ptm(px, py, pz):
+    """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
+    representing dephasing (shrinking of the Bloch sphere along the principal axes),
+    with different rates across the different axes.
+    p_i/2 is the flip probability, so p_i = 0 corresponds to no shrinking, while p_i = 1 is total dephasing.
+    """
+
+    ptm = np.diag([1 - px, 1 - py, 1 - pz])
+    return to_0xy1_basis(ptm)
 
 def rotate_x_ptm(angle):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,

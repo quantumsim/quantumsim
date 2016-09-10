@@ -1,4 +1,5 @@
 import quantumsim.circuit as circuit
+import quantumsim.ptm as ptm
 from unittest.mock import MagicMock, patch, call, ANY
 import numpy as np
 
@@ -231,6 +232,18 @@ class TestRotateYGate:
         h = circuit.RotateY("A", 7, np.pi / 2)
         h.apply_to(sdm)
         sdm.apply_ptm.assert_called_once_with("A", ptm=ANY)
+
+    def test_dephasing(self):
+
+        a = 1
+
+        g = circuit.RotateY("A", angle=a, time=0)
+        g2 = circuit.RotateY("A", angle=a, time=0, dephasing=0)
+        g3 = circuit.RotateY("A", angle=a, time=0, dephasing=1)
+
+        assert np.allclose(g.ptm, g2.ptm)
+        assert np.allclose(g3.ptm, ptm.dephasing_ptm(1, 0, 1))
+
 
 
 class TestCPhaseGate:
