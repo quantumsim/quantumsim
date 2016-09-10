@@ -89,10 +89,12 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
             pi2_times = [pi2_times[-1] - tmax + tmin] + pi2_times
 
         # put a copy of the last gate of the previous round to the front
-        virtual_gate = copy.copy(gs[-1])
-        virtual_gate.time += tmin - tmax
+        virtual_gate1 = copy.copy(gs[-1])
+        virtual_gate1.time = tmin
+        virtual_gate2 = copy.copy(gs[-1])
+        virtual_gate2.time = tmax
 
-        gate_pairs = zip([virtual_gate] + gs[:-1], gs)
+        gate_pairs = zip([virtual_gate1] + gs, gs + [virtual_gate2])
 
         for g1, g2 in gate_pairs:
 
