@@ -1,6 +1,13 @@
 import numpy as np
 
 
+"The transformation matrix between the two basis. Its essentially a Hadamard, so its its own inverse."
+basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
+                                            [0, 1, 0, 0],
+                                            [0, 0, 1, 0],
+                                            [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
+
+
 def to_0xy1_basis(ptm):
     """Transform a Pauli transfer in the "usual" basis (0xyz) [1], 
     to the 0xy1 basis which is required by sparsesdm.apply_ptm.
@@ -24,12 +31,21 @@ def to_0xy1_basis(ptm):
 
     assert ptm.shape == (4, 4)
     assert np.allclose(ptm[0, :], [1, 0, 0, 0])
-    t = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
-                  [0, 1, 0, 0],
-                  [0, 0, 1, 0],
-                  [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
+    return np.dot(basis_transformation_matrix, np.dot(ptm, basis_transformation_matrix))
 
-    return np.dot(t, np.dot(ptm, t))
+
+def to_0xyz_basis(ptm):
+    """Transform a Pauli transfer in the 0xy1 basis [1], 
+    to the the usual 0xyz. The inverse of to_0xy1_basis.
+
+    ptm: The input transfer matrix in 0xy1 basis. Must be 4x4.
+
+    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    """
+
+    ptm = np.array(ptm)
+    assert ptm.shape == (4, 4)
+    return np.dot(basis_transformation_matrix, np.dot(ptm, basis_transformation_matrix))
 
 
 def hadamard_ptm():
@@ -55,6 +71,7 @@ def amp_ph_damping_ptm(gamma, lamda):
     )
     return to_0xy1_basis(ptm)
 
+
 def dephasing_ptm(px, py, pz):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing dephasing (shrinking of the Bloch sphere along the principal axes),
@@ -64,6 +81,7 @@ def dephasing_ptm(px, py, pz):
 
     ptm = np.diag([1 - px, 1 - py, 1 - pz])
     return to_0xy1_basis(ptm)
+
 
 def rotate_x_ptm(angle):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,

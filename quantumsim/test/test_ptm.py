@@ -38,6 +38,15 @@ class TestPTMBasisConversion:
         ptm_hadamard = ptm.to_0xy1_basis(ptm4x4hadamard)
         assert np.allclose(ptm_hadamard_0xy1_should_be, ptm_hadamard)
 
+    def test_inversion(self):
+        p = np.random.random((4,4))
+
+        p[0, :] = np.array([1, 0, 0, 0])
+
+        print(p)
+
+        assert np.allclose(p, ptm.to_0xyz_basis(ptm.to_0xy1_basis(p)))
+
 class TestRotations:
     def test_xyz(self):
         ptm_x = ptm.rotate_x_ptm(np.pi/2)
