@@ -101,12 +101,14 @@ class SinglePTMGate(Gate):
 
 class RotateY(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, dephasing=None, **kwargs):
+    def __init__(self, bit, time, angle, dephasing_angle=None, dephasing_axis=None, **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
         p = ptm.rotate_y_ptm(angle)
-        if dephasing:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing, 0, dephasing))
+        if dephasing_angle:
+            p = np.dot(p, ptm.dephasing_ptm(dephasing_angle, 0, dephasing_angle))
+        if dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
 
         super().__init__(bit, time, p, **kwargs)
 
@@ -132,13 +134,16 @@ class Hadamard(SinglePTMGate):
 
 class RotateX(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, dephasing=None, **kwargs):
+    def __init__(self, bit, time, angle, dephasing_angle=None, dephasing_axis=None, **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
 
         p = ptm.rotate_x_ptm(angle)
-        if dephasing:
-            p = np.dot(p, ptm.dephasing_ptm(0, dephasing, dephasing))
+        if dephasing_angle:
+            p = np.dot(p, ptm.dephasing_ptm(0, dephasing_angle, dephasing_angle))
+        if dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
+
 
         super().__init__(bit, time, p, **kwargs)
 

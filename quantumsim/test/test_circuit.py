@@ -238,8 +238,8 @@ class TestRotateYGate:
         a = 1
 
         g = circuit.RotateY("A", angle=a, time=0)
-        g2 = circuit.RotateY("A", angle=a, time=0, dephasing=0)
-        g3 = circuit.RotateY("A", angle=a, time=0, dephasing=1)
+        g2 = circuit.RotateY("A", angle=a, time=0, dephasing_angle=0)
+        g3 = circuit.RotateY("A", angle=a, time=0, dephasing_angle=1)
 
         assert np.allclose(g.ptm, g2.ptm)
         assert np.allclose(g3.ptm, ptm.dephasing_ptm(1, 0, 1))
