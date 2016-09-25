@@ -6,6 +6,8 @@ import numpy as np
 
 from collections import defaultdict
 
+from . import ptm
+
 try:
     from . import dm10
     using_gpu = True
@@ -38,6 +40,8 @@ class SparseDM:
         self.classical_probability = 1
 
         self.single_ptms_to_do = defaultdict(list)
+
+        self._cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1,1,1,-1]))
 
         self._last_majority_vote_array = None
         self._last_majority_vote_mask = None
@@ -184,10 +188,30 @@ class SparseDM:
         """
         self.ensure_dense(bit0)
         self.ensure_dense(bit1)
-        self.combine_and_apply_single_ptm(bit0)
-        self.combine_and_apply_single_ptm(bit1)
-        self.full_dm.cphase(self.idx_in_full_dm[bit0], 
-                self.idx_in_full_dm[bit1])
+
+        # try:
+        ptm0 = np.eye(4)
+        if bit0 in self.single_ptms_to_do:
+            for ptm2 in self.single_ptms_to_do[bit0]:
+                ptm0 = ptm2.dot(ptm0)
+            del self.single_ptms_to_do[bit0]
+
+        ptm1 = np.eye(4)
+        if bit1 in self.single_ptms_to_do:
+            for ptm2 in self.single_ptms_to_do[bit0]:
+                ptm1 = ptm2.dot(ptm1)
+            del self.single_ptms_to_do[bit0]
+
+        two_ptm = np.dot(self._cphase_ptm, np.kron(ptm1, ptm0))
+        self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
+                self.idx_in_full_dm[bit1], two_ptm)
+
+        # except AttributeError:
+            # self.combine_and_apply_single_ptm(bit0)
+            # self.combine_and_apply_single_ptm(bit1)
+            # self.full_dm.cphase(self.idx_in_full_dm[bit0], 
+                    # self.idx_in_full_dm[bit1])
+
 
     def apply_all_pending(self):
         """Apply all single qubit gates that are still cached. 

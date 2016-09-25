@@ -194,6 +194,8 @@ class Density:
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
 
+        warnings.warn("use apply_two_ptm instead of cphase")
+
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
@@ -207,6 +209,26 @@ class Density:
                               # self.data.gpudata,
                               # bit0, bit1,
                               # self.no_qubits)
+
+    def apply_two_ptm(self, bit0, bit1, ptm):
+        assert bit0 < self.no_qubits
+        assert bit1 < self.no_qubits
+
+        key = hash(ptm.tobytes())
+        try:
+            ptm_gpu = self._ptm_cache[key]
+        except KeyError:
+            assert ptm.shape == (16, 16)
+            assert ptm.dtype == np.float64
+            self._ptm_cache[key] = ga.to_gpu(ptm)
+            ptm_gpu = self._ptm_cache[key]
+
+        block = (self._blocksize, 1, 1)
+        grid = (self._gridsize, 1, 1)
+
+        _two_qubit_ptm.prepared_call(grid, block,
+                                        self.data.gpudata, ptm_gpu.gpudata, bit0, bit1, self.no_qubits,
+                                        shared_size=8 * (256 + self._blocksize))
 
     def apply_ptm(self, bit, ptm):
         assert bit < self.no_qubits
