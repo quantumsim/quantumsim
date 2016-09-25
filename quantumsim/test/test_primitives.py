@@ -301,7 +301,7 @@ class TestOneBitPTM:
 class TestTwoBitPTM:
 
     def test_identity_big(self):
-        ptm = np.eye(16)
+        ptm = np.eye(16, dtype=np.float64)
 
         ptm_gpu = drv.to_device(ptm)
 
@@ -309,13 +309,61 @@ class TestTwoBitPTM:
 
         dm_gpu = drv.to_device(dm)
 
-        single_qubit_ptm(dm_gpu, ptm_gpu, np.int32(2), np.int32(6), np.int32(
-            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (16 + 512))
+        two_qubit_ptm(dm_gpu, ptm_gpu, np.int32(6), np.int32(2), np.int32(
+            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
 
         dm2 = drv.from_device_like(dm_gpu, dm)
 
         assert np.allclose(dm2, dm)
 
+    def test_identity_small(self):
+        ptm = np.eye(16, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((64, 64))
+
+        dm_gpu = drv.to_device(dm)
+
+        two_qubit_ptm(dm_gpu, ptm_gpu, np.int32(1), np.int32(0), np.int32(
+            3), block=(64, 1, 1), grid=(64, 1, 1), shared=8 * (256 + 64))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm2, dm)
+
+    def test_single_ptm_as_two_ptm_hadamard_squares(self):
+        single_hadamard = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [
+                       0, 1, 0, 0], [0, 0, 0, 1]], np.float64)
+
+        single_ptm_gpu = drv.to_device(single_hadamard)
+
+        dm = np.random.random((512, 512))
+
+        dm_gpu = drv.to_device(dm)
+
+        single_qubit_ptm(dm_gpu, single_ptm_gpu, np.int32(2), np.int32(
+            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (16 + 512))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+        assert not np.allclose(dm, dm2)
+
+        double_hadamard = np.kron(single_hadamard, single_hadamard)
+        double_ptm_gpu = drv.to_device(double_hadamard)
+
+        two_qubit_ptm(dm_gpu, double_ptm_gpu, np.int32(2), np.int32(0), np.int32(
+            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert not np.allclose(dm2, dm)
+
+        single_qubit_ptm(dm_gpu, single_ptm_gpu, np.int32(0), np.int32(
+            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (16 + 512))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm2, dm)
 
 class TestSwap:
 
