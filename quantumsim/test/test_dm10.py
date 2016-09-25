@@ -13,7 +13,7 @@ hascuda = False
 try:
     import pycuda.gpuarray as ga
     import quantumsim.dm10 as dm10
-    #implementations_to_test.append(dm10.Density)
+    implementations_to_test.append(dm10.Density)
     hascuda = True
 except ImportError:
     pass
@@ -41,6 +41,16 @@ def dm_random(request):
     dm = request.param(n, a)
     return dm
 
+@pytest.fixture(params=implementations_to_test)
+def dm_random_small(request):
+    n = 2
+    a = np.random.random((2**n, 2**n)) * 1j
+    a += np.random.random((2**n, 2**n))
+
+    a += a.transpose().conj()
+    a = a / np.trace(a)
+    dm = request.param(n, a)
+    return dm
 
 # Test cases begin here
 
@@ -177,14 +187,27 @@ class TestDensityCPhase:
         a0 = dm.to_array()
         dm.cphase(4, 3)
         a1 = dm.to_array()
+        assert np.allclose(np.trace(a0), np.trace(a1))
         assert not np.allclose(a0, a1)
 
-    def test_preserve_trace_empty(self, dm):
+    def test_preserve_trace_empty(self, dm_random):
+        dm = dm_random
         dm.cphase(2, 1)
         assert np.allclose(dm.trace(), 1)
         dm.cphase(2, 3)
         assert np.allclose(dm.trace(), 1)
         dm.cphase(4, 3)
+        assert np.allclose(dm.trace(), 1)
+
+    def test_preserve_trace_small(self, dm_random_small):
+        dm = dm_random_small
+        dm.cphase(0, 1)
+        assert np.allclose(dm.trace(), 1)
+
+    def test_preserve_trace_regression(self, dmclass):
+        dm = dmclass(2)
+        dm.hadamard(0)
+        dm.cphase(0, 1)
         assert np.allclose(dm.trace(), 1)
 
     def test_squares_to_one(self, dm_random):
@@ -534,7 +557,6 @@ class TestDensityProjectMeasurement:
         assert np.allclose(dm.trace(), 1)
         dm.project_measurement(3, 1)
         assert np.allclose(dm.trace(), 0.5)
-
     def test_gs_always_gives_zero(self, dm):
         p0, p1 = dm.partial_trace(4)
 

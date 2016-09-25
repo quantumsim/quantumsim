@@ -332,9 +332,25 @@ class TestTwoBitPTM:
 
         assert np.allclose(dm2, dm)
 
+    def test_identity_very_small(self):
+        ptm = np.eye(16, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((16, 16))
+
+        dm_gpu = drv.to_device(dm)
+
+        two_qubit_ptm(dm_gpu, ptm_gpu, np.int32(1), np.int32(0), np.int32(
+            3), block=(16, 1, 1), grid=(16, 1, 1), shared=8 * (256 + 16))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm2, dm)
+
     def test_single_ptm_as_two_ptm_hadamard_squares(self):
         single_hadamard = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [
-                       0, 1, 0, 0], [0, 0, 0, 1]], np.float64)
+            0, 1, 0, 0], [0, 0, 0, 1]], np.float64)
 
         single_ptm_gpu = drv.to_device(single_hadamard)
 

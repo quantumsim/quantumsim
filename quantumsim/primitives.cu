@@ -162,7 +162,6 @@ __global__ void two_qubit_ptm(double *dm, double *ptm_g, unsigned int bit0, unsi
     const unsigned int high_x = blockIdx.x * blockDim.x;
 
 
-    if (high_x + x >= (1 << (2*no_qubits))) return;
 
     extern __shared__ double ptm[];
     double *data = &ptm[256]; //need blockDim.x double floats
@@ -192,6 +191,7 @@ __global__ void two_qubit_ptm(double *dm, double *ptm_g, unsigned int bit0, unsi
             ptm[i+x] = ptm_g[i+x];
         }
     }
+    if (high_x + x >= (1 << (2*no_qubits))) return;
 
 
     //fetch data block to shared memory
