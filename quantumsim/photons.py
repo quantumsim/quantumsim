@@ -56,8 +56,8 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
     """
 
     times = [g.time for g in c.gates]
-    assert min(times) >= tmin
-    assert max(times) <= tmax
+    # assert min(times) >= tmin
+    # assert max(times) <= tmax
 
     gates_per_qubit = defaultdict(list)
 
@@ -98,6 +98,10 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
 
         for g1, g2 in gate_pairs:
 
+            if isinstance(g1, circuit.IdlingGate) or isinstance(g2, circuit.IdlingGate):
+                # there already is an idling gate, probably butterfly, skip
+                continue
+                
             if g2.time - g1.time > 1:  # skip if too close
                 decay_gate = circuit.AmpPhDamp(
                     bit=qb.name,
