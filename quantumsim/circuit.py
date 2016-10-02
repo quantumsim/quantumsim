@@ -180,7 +180,10 @@ class RotateZ(SinglePTMGate):
             self.label = r"$R_z(%g)$" % angle
 
 
-class AmpPhDamp(SinglePTMGate):
+class IdlingGate:
+    pass
+
+class AmpPhDamp(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
         """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
@@ -219,6 +222,13 @@ class AmpPhDamp(SinglePTMGate):
             self.duration, (self.time, coords[
                 self.involved_qubits[0]]), xytext=(
                 0, 20), textcoords='offset points', ha='center')
+
+class ButterflyGate(SinglePTMGate, IdlingGate):
+    def __init__(self, bit, time, p_exc, p_dec, **kwargs):
+        super().__init__(bit, time, ptm.gen_amp_damping_ptm(gamma_up=p_exc, gamma_down=p_dec), **kwargs)
+
+        self.label=r"$\Gamma_\uparrow / \Gamma_\downarrow$"
+
 
 
 class CPhase(Gate):

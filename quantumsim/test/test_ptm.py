@@ -2,7 +2,10 @@ import quantumsim.ptm as ptm
 import numpy as np
 
 
+# some states in 0xy1 basis
 ground_state = np.array([1, 0, 0, 0])
+excited_state = np.array([0, 0, 0, 1])
+
 rng = np.random.RandomState()
 
 def random_state():
@@ -109,10 +112,19 @@ class TestAmpPhaseDamping:
         assert np.allclose(p.dot(r), ground_state)
 
 
+class TestGenAmpDamping:
+    def test_equal_to_amp_damping(self):
+        p1 = ptm.amp_ph_damping_ptm(gamma=0.42, lamda=0)
+        p2 = ptm.gen_amp_damping_ptm(gamma_down=0.42, gamma_up=0)
         
+        assert np.allclose(p1, p2)
 
-        
 
+    def test_strong_exciting_gives_excited_state(self):
+        r = random_state()
+        p = ptm.gen_amp_damping_ptm(gamma_down=0, gamma_up=1)
+
+        assert np.allclose(p.dot(r), excited_state)
 
 
 
