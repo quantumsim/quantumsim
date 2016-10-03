@@ -69,8 +69,12 @@ class TestDensityInit:
             dmclass(200)
 
     def test_numpy_array(self, dmclass):
-        n = 8
-        a = np.zeros((2**n, 2**n))
+        n = 5
+        a = np.random.random((2**n, 2**n)) * 1j
+        a += np.random.random((2**n, 2**n))
+
+        a += a.transpose().conj()
+        a = a / np.trace(a)
         dm = dmclass(n, a)
         assert dm.no_qubits == n
         assert np.allclose(dm.to_array(), a)
