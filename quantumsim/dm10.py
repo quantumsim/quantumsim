@@ -194,21 +194,21 @@ class Density:
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
 
-        warnings.warn("use apply_two_ptm instead of cphase")
+        warnings.warn("deprecated, use two_ptm instead")
 
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        if "cphase" not in self._ptm_cache:
-            p = ptm.double_kraus_to_ptm(np.diag([1,1,1,-1])).real
-            self._ptm_cache["cphase"] = ga.to_gpu(p.astype(np.float64))
+        # if "cphase" not in self._ptm_cache:
+            # p = ptm.double_kraus_to_ptm(np.diag([1,1,1,-1])).real
+            # self._ptm_cache["cphase"] = ga.to_gpu(p.astype(np.float64))
 
-        _two_qubit_ptm.prepared_call(grid, block, self.data.gpudata, self._ptm_cache["cphase"].gpudata, bit0, bit1, self.no_qubits, shared_size=8*(257+self._blocksize))
+        # _two_qubit_ptm.prepared_call(grid, block, self.data.gpudata, self._ptm_cache["cphase"].gpudata, bit0, bit1, self.no_qubits, shared_size=8*(257+self._blocksize))
 
-        # _cphase.prepared_call(grid, block,
-                              # self.data.gpudata,
-                              # bit0, bit1,
-                              # self.no_qubits)
+        _cphase.prepared_call(grid, block,
+                              self.data.gpudata,
+                              bit0, bit1,
+                              self.no_qubits)
 
     def apply_two_ptm(self, bit0, bit1, ptm):
         assert bit0 < self.no_qubits

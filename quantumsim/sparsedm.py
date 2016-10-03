@@ -183,35 +183,34 @@ class SparseDM:
 
         return cp
 
-    def cphase(self, bit0, bit1):
+    def cphase(self, bit0, bit1, use_two_ptm=True):
         """Apply a cphase gate between bit0 and bit1.
         """
         self.ensure_dense(bit0)
         self.ensure_dense(bit1)
 
-        # try:
-        ptm0 = np.eye(4)
-        if bit0 in self.single_ptms_to_do:
-            for ptm2 in self.single_ptms_to_do[bit0]:
-                ptm0 = ptm2.dot(ptm0)
-            del self.single_ptms_to_do[bit0]
+        if new_kernel:
+            ptm0 = np.eye(4)
+            if bit0 in self.single_ptms_to_do:
+                for ptm2 in self.single_ptms_to_do[bit0]:
+                    ptm0 = ptm2.dot(ptm0)
+                del self.single_ptms_to_do[bit0]
 
-        ptm1 = np.eye(4)
-        if bit1 in self.single_ptms_to_do:
-            for ptm2 in self.single_ptms_to_do[bit1]:
-                ptm1 = ptm2.dot(ptm1)
-            del self.single_ptms_to_do[bit1]
+            ptm1 = np.eye(4)
+            if bit1 in self.single_ptms_to_do:
+                for ptm2 in self.single_ptms_to_do[bit1]:
+                    ptm1 = ptm2.dot(ptm1)
+                del self.single_ptms_to_do[bit1]
 
-        two_ptm = np.dot(self._cphase_ptm, np.kron(ptm1, ptm0))
-        self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
-                self.idx_in_full_dm[bit1], two_ptm)
+            two_ptm = np.dot(self._cphase_ptm, np.kron(ptm1, ptm0))
+            self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
+                    self.idx_in_full_dm[bit1], two_ptm)
 
-        # except AttributeError:
-            # self.combine_and_apply_single_ptm(bit0)
-            # self.combine_and_apply_single_ptm(bit1)
-            # self.full_dm.cphase(self.idx_in_full_dm[bit0], 
-                    # self.idx_in_full_dm[bit1])
-
+        else:
+            self.combine_and_apply_single_ptm(bit0)
+            self.combine_and_apply_single_ptm(bit1)
+            self.full_dm.cphase(self.idx_in_full_dm[bit0], 
+                    self.idx_in_full_dm[bit1])
 
     def apply_all_pending(self):
         """Apply all single qubit gates that are still cached. 
