@@ -111,7 +111,6 @@ class TestAmpPhaseDamping:
 
         assert np.allclose(p.dot(r), ground_state)
 
-
 class TestGenAmpDamping:
     def test_equal_to_amp_damping(self):
         p1 = ptm.amp_ph_damping_ptm(gamma=0.42, lamda=0)
@@ -128,3 +127,23 @@ class TestGenAmpDamping:
 
 
 
+
+class TestKrausToPTM:
+    
+    def test_multiplicative_one_qubit(self):
+        a = np.random.random((2,2))
+        b = np.random.random((2,2))
+
+        ptm_a = ptm.single_kraus_to_ptm(a)
+        ptm_b = ptm.single_kraus_to_ptm(b)
+        ptm_ab = ptm.single_kraus_to_ptm(np.matmul(a, b))
+        assert np.allclose(ptm_ab, np.matmul(ptm_a, ptm_b))
+
+    def test_multiplicative_two_qubit(self):
+        a = np.random.random((4,4))
+        b = np.random.random((4,4))
+
+        ptm_a = ptm.double_kraus_to_ptm(a)
+        ptm_b = ptm.double_kraus_to_ptm(b)
+        ptm_ab = ptm.double_kraus_to_ptm(np.matmul(a, b))
+        assert np.allclose(ptm_ab, np.matmul(ptm_a, ptm_b))

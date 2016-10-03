@@ -144,8 +144,7 @@ def rotate_z_ptm(angle):
 
 def single_kraus_to_ptm(kraus):
     """Given a Kraus operator in z-basis, obtain the corresponding single-qubit ptm in 0xy1 basis"""
-    return np.einsum("yba, xcd, bc, ad -> xy", single_tensor.conj(), single_tensor, kraus, kraus.conj()).real
-
+    return np.einsum("xab, bc, ycd, ad -> xy", single_tensor, kraus, single_tensor, kraus.conj()).real
 
 def double_kraus_to_ptm(kraus):
-    return np.einsum("yba, xcd, bc, ad -> xy", double_tensor.conj(), double_tensor, kraus, kraus.conj()).real
+    return np.einsum("xab, bc, ycd, ad -> xy", double_tensor, kraus, double_tensor, kraus.conj()).real
