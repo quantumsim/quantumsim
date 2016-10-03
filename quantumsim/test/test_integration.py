@@ -246,7 +246,6 @@ def test_free_decay():
 
         assert np.allclose(sdm.trace(), np.exp(-1000/t1))
 
-
 def test_ramsey():
 
     for t1, t2 in [(np.inf, np.inf), (1000, 2000), (np.inf, 1000), (1000, 1000)]:
@@ -262,4 +261,27 @@ def test_ramsey():
         sdm.project_measurement("Q", 0)
 
         assert np.allclose(sdm.trace(), 0.5*(1+np.exp(-1000/t2)))
+
+
+
+def test_two_qubit_tpcp():
+    c = circuit.Circuit("test")
+    c.add_qubit("A", t1=30000, t2=30000)
+    c.add_qubit("B", t1=30000, t2=30000)
+
+    c.add_gate("rotate_y", "A", angle=1.2, time=0)
+    c.add_gate("rotate_y", "B", angle=0.2, time=0)
+    c.add_gate("rotate_z", "A", angle=0.1, time=1)
+    c.add_gate("rotate_x", "B", angle=0.3, time=1)
+    c.add_gate("cphase","A", "B", time=2)
+
+    sdm = sparsedm.SparseDM(c.get_qubit_names())
+    for i in range(100):
+        c.apply_to(sdm)
+        sdm.apply_all_pending()
+        x = sdm.full_dm.get_diag()
+        assert np.allclose(x.sum(), 1) # trace preserved
+        assert np.all(x > 0) # probabilities greater than zero
+
+    assert np.allclose(np.linalg.eigvalsh(sdm.full_dm.to_array()), [0, 0, 0, 1])
 
