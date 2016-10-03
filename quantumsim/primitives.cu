@@ -54,14 +54,23 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
     //do we need imaginary part? That is the case if we have an odd number of bits for y in our adress (bit in y is 1, bit in x is 0)
     unsigned int v = ~x & y;
 
+
+    unsigned int py = 0;
+    while (v) {
+        py += v&1;
+        v >>= 1;
+    }
+
+    py = py & 0x3;
+
     //short version: while (v>1) { v = (v >> 1) ^ v ;}
     //bit bang version
-    v ^= v >> 1;
-    v ^= v >> 2;
-    v = (v & 0x11111111U) * 0x11111111U;
-    v = (v >> 28) & 1;
+    /*v ^= v >> 1;*/
+    /*v ^= v >> 2;*/
+    /*v = (v & 0x11111111U) * 0x11111111U;*/
+    /*v = (v >> 28) & 1;*/
 
-    const unsigned int addr_complex = (((x << no_qubits) | y) << 1) + v;
+    const unsigned int addr_complex = (((x << no_qubits) | y) << 1) + (py&1);
 
 
     //the adress in pauli basis is obtained by interleaving
@@ -72,10 +81,10 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
     
 
     if(direction == 0) {
-        real_dm[addr_real] = complex_dm[addr_complex];
+        real_dm[addr_real] = ((py==3 || py==2)? -1 : 1)*complex_dm[addr_complex];
     }
     else {
-        complex_dm[addr_complex] = real_dm[addr_real];
+        complex_dm[addr_complex] = ((py==3 || py == 2)? -1 : 1)*real_dm[addr_real];
     }
 }
 
