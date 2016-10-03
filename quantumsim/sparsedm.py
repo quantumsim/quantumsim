@@ -198,9 +198,9 @@ class SparseDM:
 
         ptm1 = np.eye(4)
         if bit1 in self.single_ptms_to_do:
-            for ptm2 in self.single_ptms_to_do[bit0]:
+            for ptm2 in self.single_ptms_to_do[bit1]:
                 ptm1 = ptm2.dot(ptm1)
-            del self.single_ptms_to_do[bit0]
+            del self.single_ptms_to_do[bit1]
 
         two_ptm = np.dot(self._cphase_ptm, np.kron(ptm1, ptm0))
         self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
