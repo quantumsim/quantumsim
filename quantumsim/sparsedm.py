@@ -189,7 +189,7 @@ class SparseDM:
         self.ensure_dense(bit0)
         self.ensure_dense(bit1)
 
-        if new_kernel:
+        if use_two_ptm:
             ptm0 = np.eye(4)
             if bit0 in self.single_ptms_to_do:
                 for ptm2 in self.single_ptms_to_do[bit0]:
