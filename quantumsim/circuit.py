@@ -223,6 +223,30 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
                 self.involved_qubits[0]]), xytext=(
                 0, 20), textcoords='offset points', ha='center')
 
+class DepolarizingNoise(SinglePTMGate, IdlingGate):
+
+    def __init__(self, bit, time, duration, t1, **kwargs):
+        """A depolarizing noise gate with damping rate 1/t1, acting for time `duration`.
+
+        kwargs: conditional_bit
+
+        See also: Circuit.add_waiting_gates to add these gates automatically.
+        """
+
+        self.t1 = t1
+
+        self.duration = duration
+
+        if 't2' in kwargs:
+            del kwargs['t2']
+
+        gamma = 1 - np.exp(-duration / t1)
+        super().__init__(bit, time, ptm.dephasing_ptm(gamma, gamma, gamma), **kwargs)
+
+    def plot_gate(self, ax, coords):
+        ax.scatter((self.time),
+                   (coords[self.involved_qubits[-1]]), color='k', marker='o')
+
 class ButterflyGate(SinglePTMGate, IdlingGate):
     def __init__(self, bit, time, p_exc, p_dec, **kwargs):
         super().__init__(bit, time, ptm.gen_amp_damping_ptm(gamma_up=p_exc, gamma_down=p_dec), **kwargs)
@@ -457,7 +481,8 @@ class Circuit:
 
         return super().__getattribute__(name)
 
-    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
+    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None, 
+            idling_gate=AmpPhDamp):
         """Add AmpPhDamping gates to all qubits in the circuit
         (unless their t1=t2=np.inf or only_qubits is specified).
 
@@ -492,29 +517,38 @@ class Circuit:
 
             if not gts:
                 self.add_gate(
-                    AmpPhDamp(
-                        str(b),
-                        (tmax + tmin) / 2,
-                        tmax - tmin, b.t1, b.t2))
+                    idling_gate(
+                        bit=str(b),
+                        time=(tmax + tmin) / 2,
+                        duration=tmax - tmin, 
+                        t1=b.t1, t2=b.t2))
             else:
                 if gts[0].time - tmin > 1e-6:
                     self.add_gate(
-                        AmpPhDamp(
-                            str(b),
-                            (gts[0].time + tmin) / 2,
-                            gts[0].time - tmin, b.t1, b.t2))
+                        idling_gate(
+                            bit=str(b),
+                            time=(gts[0].time + tmin) / 2,
+                            duration=gts[0].time - tmin, 
+                            t1=b.t1, t2=b.t2))
                 if tmax - gts[-1].time > 1e-6:
-                    self.add_gate(AmpPhDamp(
-                        str(b), (gts[-1].time + tmax) / 2, tmax - gts[-1].time,
-                        b.t1, b.t2))
+                    self.add_gate(idling_gate(
+                        bit=str(b), 
+                        time=(gts[-1].time + tmax) / 2,
+                        duration=tmax - gts[-1].time,
+                        t1=b.t1, t2=b.t2))
 
                 for g1, g2 in zip(gts[:-1], gts[1:]):
+                    if (isinstance(g1, IdlingGate) or 
+                            isinstance(g2, IdlingGate)):
+                        # there already is an idling gate, probably butterfly, skip
+                        continue
+
                     self.add_gate(
-                        AmpPhDamp(
-                            str(b),
-                            (g1.time + g2.time) / 2,
-                            g2.time - g1.time,
-                            b.t1, b.t2))
+                        idling_gate(
+                            bit=str(b),
+                            time=(g1.time + g2.time) / 2,
+                            duration=g2.time - g1.time,
+                            t1=b.t1, t2=b.t2))
 
     def order(self):
         """ Reorder the gates in the circuit so that they are applied in temporal order.
