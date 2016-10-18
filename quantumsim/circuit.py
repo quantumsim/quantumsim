@@ -215,13 +215,15 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
         super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
 
     def plot_gate(self, ax, coords):
-        ax.scatter((self.time),
-                   (coords[self.involved_qubits[-1]]), color='k', marker='x')
+        x = self.time 
+        y = coords[self.involved_qubits[0]]
+
+        ax.scatter((x,), (y,), color='k', marker='x')
+
         ax.annotate(
             r"$%g\,\mathrm{ns}$" %
-            self.duration, (self.time, coords[
-                self.involved_qubits[0]]), xytext=(
-                0, 20), textcoords='offset points', ha='center')
+            self.duration, (x, y), xytext=(
+                x, y+0.3), textcoords='data', ha='center')
 
 class DepolarizingNoise(SinglePTMGate, IdlingGate):
 
