@@ -253,8 +253,6 @@ class ButterflyGate(SinglePTMGate, IdlingGate):
 
         self.label=r"$\Gamma_\uparrow / \Gamma_\downarrow$"
 
-
-
 class CPhase(Gate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
@@ -278,7 +276,6 @@ class CPhase(Gate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
-
 
 class Measurement(Gate):
 
@@ -379,6 +376,94 @@ class Measurement(Gate):
         if self.real_output_bit:
             sdm.set_bit(self.real_output_bit, project)
         sdm.classical_probability *= cond_prob
+
+
+class ConditionalGate(Gate):
+    def __init__(self, time, control_bit, zero_gates=[], one_gates=[]):
+        """
+        A container that applies gates depending on the state of a classical control bit. 
+        The gates are applied in the order given.
+
+        The times of the subgates are ignored, the gates are applied at the time of this gate.
+        """
+
+        super().__init__(time)
+
+        self.control_bit = control_bit
+        self.zero_gates = zero_gates
+        self.one_gates = one_gates
+
+        # enforce times (should not do anything, but just be sure)
+        for g in self.zero_gates:
+            g.time = self.time
+        for g in self.one_gates:
+            g.time = self.time
+
+    def involves_qubit(self, bit):
+        if bit == self.control_bit:
+            return True
+
+        return any(g.involves_qubit(bit) for g in self.zero_gates + self.one_gates)
+    
+    def plot_gate(self, ax, coords):
+        for g in self.zero_gates:
+            g.plot_gate(ax, coords)
+            x = self.time
+            y = coords[g.involved_qubits[-1]]
+            y2 = coords[self.control_bit]
+            ax.plot((x, x), (y, y2), ".--", color='b')
+        for g in self.one_gates:
+            g.plot_gate(ax, coords)
+            x = self.time
+            y = coords[g.involved_qubits[-1]]
+            y2 = coords[self.control_bit]
+            ax.plot((x, x), (y, y2), ".--", color='r')
+
+    def apply_to(self, sdm):
+        sdm.ensure_classical(self.control_bit)
+        if sdm.classical[self.control_bit] == 1:
+            for g in self.one_gates:
+                g.apply_to(sdm)
+        else:
+            for g in self.zero_gates:
+                g.apply_to(sdm)
+
+
+
+class ClassicalCNOT(Gate):
+
+    def __init__(self, bit0, bit1, time, **kwargs):
+        """A CNOT gate acting at time `time`, toggling bit1 if bit0 is 1.
+
+        This gate enforces the bits to be classical, if you want a proper CNOT, build it using PTMs. 
+        """
+        super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit0)
+        self.involved_qubits.append(bit1)
+        self.bit0 = bit0
+        self.bit1 = bit1
+
+    def plot_gate(self, ax, coords):
+        ax.scatter((self.time,),
+                   (coords[self.bit0],), color='k')
+        ax.scatter((self.time,),
+                   (coords[self.bit1],), color='k', marker='$\oplus$', s=70)
+
+        xdata = (self.time, self.time)
+        ydata = (coords[self.bit0], coords[self.bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+    def apply_to(self, sdm):
+        sdm.ensure_classical(self.bit0)
+        sdm.ensure_classical(self.bit1)
+
+        if sdm.classical[self.bit0] == 1:
+            sdm.classical[self.bit1] = 1 - sdm.classical[self.bit1]
+
+
+
+
 
 
 class Circuit:
@@ -642,7 +727,6 @@ class Circuit:
                 ha='center',
                 va='center')
 
-
 def selection_sampler(result=0):
     """ A sampler always returning the measurement result `result`, and not making any
     measurement errors. Useful for testing or state preparation.
@@ -651,7 +735,6 @@ def selection_sampler(result=0):
     """
     while True:
         yield result, result, 1
-
 
 def uniform_sampler(seed=42):
     """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
@@ -667,7 +750,6 @@ def uniform_sampler(seed=42):
             p0, p1 = yield 0, 0, 1
         else:
             p0, p1 = yield 1, 1, 1
-
 
 def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
@@ -691,7 +773,6 @@ def uniform_noisy_sampler(readout_error, seed=42):
             decl = proj
             prob = 1 - readout_error
         p0, p1 = yield decl, proj, prob
-
 
 class BiasedSampler:
     '''A sampler that returns a uniform choice but with probabilities weighted as p_twiddle=p^alpha/Z,
