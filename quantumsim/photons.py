@@ -67,6 +67,8 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
             gates_per_qubit[b].append(g)
 
     for qb in gates_per_qubit:
+        if qb.t1 == np.inf and qb.t2 == np.inf:
+            continue
         gs = gates_per_qubit[qb]
         gs.sort(key=lambda g: g.time)
 
