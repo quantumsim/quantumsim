@@ -62,9 +62,9 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
     gates_per_qubit = defaultdict(list)
 
     for g in c.gates:
-        for qb in g.involved_qubits:
-            b = [b for b in c.qubits if b.name == qb][0]
-            gates_per_qubit[b].append(g)
+        for qb in c.qubits:
+            if g.involves_qubit(qb.name):
+                gates_per_qubit[qb].append(g)
 
     for qb in gates_per_qubit:
         if qb.t1 == np.inf and qb.t2 == np.inf:
