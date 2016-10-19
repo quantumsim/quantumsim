@@ -49,3 +49,20 @@ def test_greedy_list_toposort():
     for s, s_set in test_data_dict.items():
         for s2 in s_set:
             assert indices[s2] < indices[s]
+
+
+def test_regression():
+    list = [[1], [0, 1, 2, 3, 5], [4, 5], [2, 3, 4]]
+    target = [2]
+
+
+    item_set = set([x for xs in list for x in xs])
+
+    result = tp.partial_greedy_toposort(list, target)
+
+    assert set(result) == item_set
+
+    assert len(result) == len(item_set)
+
+
+

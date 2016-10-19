@@ -395,6 +395,8 @@ class ConditionalGate(Gate):
         self.zero_gates = zero_gates
         self.one_gates = one_gates
 
+        self.involved_qubits.append(control_bit)
+
         # enforce times (should not do anything, but just be sure)
         for g in self.zero_gates:
             g.time = self.time
@@ -653,7 +655,7 @@ class Circuit:
         targets = []
         for n, b in enumerate(self.qubits):
             gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
-            if any(all_gates[g][1].is_measurement for g in gts):
+            if any(all_gates[g][1].is_measurement and all_gates[g][1].involved_qubits[-1] == b.name for g in gts):
                 targets.append(n)
             gts_list.append(gts)
 

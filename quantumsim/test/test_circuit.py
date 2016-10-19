@@ -23,6 +23,43 @@ class TestCircuit:
 
         assert set(c.get_qubit_names()) == {"A", "B", "C"}
 
+    def test_order_regression_classical(self):
+        c = circuit.Circuit("test")
+
+        c.add_qubit("D", 1000, 1000)
+        c.add_qubit("A", 1000, 1000)
+        c.add_qubit("MA")
+        c.add_qubit("SA")
+
+        c.add_gate(circuit.RotateY("A", time=0, angle=np.pi / 2))
+        c.add_gate(circuit.CPhase("A", "D", time=10))
+
+        rotate_normal = circuit.RotateY("A", time=20, angle=-np.pi / 2)
+        rotate_backwards = circuit.RotateY("A", time=20, angle=np.pi / 2)
+
+        conditional_rotate1 = circuit.ConditionalGate(control_bit="SA", time=20,
+                                                      zero_gates=[rotate_normal],
+                                                      one_gates=[])
+        c.add_gate(conditional_rotate1)
+
+        conditional_rotate2 = circuit.ConditionalGate(control_bit="SA", time=30,
+                                                      zero_gates=[],
+                                                      one_gates=[rotate_backwards])
+        c.add_gate(conditional_rotate2)
+
+        sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, seed=43)
+        measurement = circuit.Measurement(
+            "A", time=40, sampler=sampler, output_bit="MA")
+        c.add_gate(measurement)
+        c.add_gate(circuit.ClassicalCNOT("MA", "SA", time=35))
+
+
+        assert len(c.gates) == 6
+
+        c.order()
+
+        assert len(c.gates) == 6
+
     def test_order_no_meas(self):
         c = circuit.Circuit()
 
@@ -243,7 +280,6 @@ class TestRotateYGate:
 
         assert np.allclose(g.ptm, g2.ptm)
         assert np.allclose(g3.ptm, ptm.dephasing_ptm(1, 0, 1))
-
 
 
 class TestCPhaseGate:

@@ -30,6 +30,7 @@ def partial_greedy_toposort(partial_orders, targets=set()):
 
     targets = set(targets)
 
+
     order_dicts = []
     for n, p in enumerate(partial_orders):
         order_dict = {i: j for i, j in zip(p[1:], p)}
@@ -37,7 +38,6 @@ def partial_greedy_toposort(partial_orders, targets=set()):
 
     trees = []
     for n, p in enumerate(partial_orders):
-        lists_used = set()
         tree = []
         to_do = [(None, p[-1])]
         while to_do:
@@ -68,6 +68,8 @@ def partial_greedy_toposort(partial_orders, targets=set()):
 
         trees = new_trees
 
-        result.extend(smallest)
+        for s in smallest:
+            if s not in result:
+                result.append(s)
 
     return result
