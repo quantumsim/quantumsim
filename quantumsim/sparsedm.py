@@ -190,22 +190,7 @@ class SparseDM:
         self.ensure_dense(bit1)
 
         if use_two_ptm:
-            ptm0 = np.eye(4)
-            if bit0 in self.single_ptms_to_do:
-                for ptm2 in self.single_ptms_to_do[bit0]:
-                    ptm0 = ptm2.dot(ptm0)
-                del self.single_ptms_to_do[bit0]
-
-            ptm1 = np.eye(4)
-            if bit1 in self.single_ptms_to_do:
-                for ptm2 in self.single_ptms_to_do[bit1]:
-                    ptm1 = ptm2.dot(ptm1)
-                del self.single_ptms_to_do[bit1]
-
-            two_ptm = np.dot(self._cphase_ptm, np.kron(ptm1, ptm0))
-            self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
-                    self.idx_in_full_dm[bit1], two_ptm)
-
+            self.apply_two_ptm(bit0, bit1, self._cphase_ptm)
         else:
             self.combine_and_apply_single_ptm(bit0)
             self.combine_and_apply_single_ptm(bit1)
@@ -243,6 +228,30 @@ class SparseDM:
         contains the last classical state of the qubit.
         """
         self.single_ptms_to_do[bit].append(ptm)
+
+    def apply_two_ptm(self, bit0, bit1, two_ptm):
+        """Apply a two_bit_ptm between bit0 and bit1.
+        """
+        self.ensure_dense(bit0)
+        self.ensure_dense(bit1)
+
+        ptm0 = np.eye(4)
+        if bit0 in self.single_ptms_to_do:
+            for ptm2 in self.single_ptms_to_do[bit0]:
+                ptm0 = ptm2.dot(ptm0)
+            del self.single_ptms_to_do[bit0]
+
+        ptm1 = np.eye(4)
+        if bit1 in self.single_ptms_to_do:
+            for ptm2 in self.single_ptms_to_do[bit1]:
+                ptm1 = ptm2.dot(ptm1)
+            del self.single_ptms_to_do[bit1]
+
+        full_two_ptm = np.dot(two_ptm, np.kron(ptm1, ptm0))
+        self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
+                self.idx_in_full_dm[bit1], full_two_ptm)
+
+
 
     def hadamard(self, bit):
         """Apply a hadamard gate to qubit #bit.
