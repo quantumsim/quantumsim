@@ -210,9 +210,11 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
         else:
             t_phi = 1 / (1 / t2 - 1 / (2 * t1)) / 2
 
+
         gamma = 1 - np.exp(-duration / t1)
         lamda = 1 - np.exp(-duration / t_phi)
         super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
+        self.label = r"$%g\,\mathrm{ns}$" % self.duration
 
     def plot_gate(self, ax, coords):
         x = self.time 
@@ -220,9 +222,7 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
 
         ax.scatter((x,), (y,), color='k', marker='x')
 
-        ax.annotate(
-            r"$%g\,\mathrm{ns}$" %
-            self.duration, (x, y), xytext=(
+        ax.annotate(self.label, (x, y), xytext=(
                 x, y+0.3), textcoords='data', ha='center')
 
 class DepolarizingNoise(SinglePTMGate, IdlingGate):
@@ -249,6 +249,30 @@ class DepolarizingNoise(SinglePTMGate, IdlingGate):
         ax.scatter((self.time),
                    (coords[self.involved_qubits[-1]]), color='k', marker='o')
 
+class BitflipNoise(SinglePTMGate, IdlingGate):
+
+    def __init__(self, bit, time, duration, t1, **kwargs):
+        """A depolarizing noise gate with damping rate 1/t1, acting for time `duration`.
+
+        kwargs: conditional_bit
+
+        See also: Circuit.add_waiting_gates to add these gates automatically.
+        """
+
+        self.t1 = t1
+
+        self.duration = duration
+
+        if 't2' in kwargs:
+            del kwargs['t2']
+
+        gamma = 1 - np.exp(-duration / t1)
+        super().__init__(bit, time, ptm.dephasing_ptm(gamma, 0, 0), **kwargs)
+
+    def plot_gate(self, ax, coords):
+        ax.scatter((self.time),
+                   (coords[self.involved_qubits[-1]]), color='k', marker='o')
+
 class ButterflyGate(SinglePTMGate, IdlingGate):
     def __init__(self, bit, time, p_exc, p_dec, **kwargs):
         super().__init__(bit, time, ptm.gen_amp_damping_ptm(gamma_up=p_exc, gamma_down=p_dec), **kwargs)
@@ -256,7 +280,6 @@ class ButterflyGate(SinglePTMGate, IdlingGate):
         self.label=r"$\Gamma_\uparrow / \Gamma_\downarrow$"
 
 class CPhase(Gate):
-
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
 
@@ -278,6 +301,32 @@ class CPhase(Gate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
+def TwoPTMGate(Gate):
+    def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
+        """A Two qubit gate.
+        """
+        super().__init__(time, **kwargs)
+        self.two_ptm = two_ptm
+        self.involved_qubits.append(bit0)
+        self.involved_qubits.append(bit1)
+        self.method_name = "apply_two_ptm"
+        self.method_params = {"ptm": self.two_ptm}
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time), (coords[bit0]), color='r')
+        ax.scatter((self.time), (coords[bit1]), color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+def CPhaseRotation(TwoPTMGate):
+    pass
+
 
 class Measurement(Gate):
 

@@ -110,6 +110,11 @@ def dephasing_ptm(px, py, pz):
     return to_0xy1_basis(ptm)
 
 
+def bitflip_ptm(p):
+    ptm = np.diag([1 - p, 1, 1])
+    return to_0xy1_basis(ptm)
+
+
 def rotate_x_ptm(angle):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the x-axis by angle.
