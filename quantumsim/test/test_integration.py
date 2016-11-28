@@ -52,7 +52,6 @@ def test_three_qbit_clean():
     for i in range(100):
         c.apply_to(sdm)
 
-    sdm.apply_all_pending()
 
     assert len(m1.measurements) == 100
     assert len(m2.measurements) == 100
@@ -123,7 +122,6 @@ def test_measurement_with_output_bit():
 
     c.apply_to(sdm)
 
-    sdm.apply_all_pending()
 
     assert np.allclose(sdm.trace(), 0.25)
 
@@ -278,10 +276,44 @@ def test_two_qubit_tpcp():
     sdm = sparsedm.SparseDM(c.get_qubit_names())
     for i in range(100):
         c.apply_to(sdm)
-        sdm.apply_all_pending()
         x = sdm.full_dm.get_diag()
         assert np.allclose(x.sum(), 1) # trace preserved
         assert np.all(x > 0) # probabilities greater than zero
 
     assert np.allclose(np.linalg.eigvalsh(sdm.full_dm.to_array()), [0, 0, 0, 1])
+
+
+
+def test_cphase_rotation():
+
+    c = circuit.Circuit("test")
+    c.add_qubit("A")
+    c.add_qubit("B")
+
+    c.add_gate("rotate_y", "A", angle=1.2, time=0)
+    c.add_gate("rotate_y", "B", angle=1.2, time=0)
+
+    
+    for t in [1,2,3,4,5]:
+        g = circuit.CPhaseRotation("A", "B", 2*np.pi/5, t)
+        c.add_gate(g)
+
+    c.add_gate("rotate_y", "A", angle=-1.2, time=6)
+    c.add_gate("rotate_y", "B", angle=-1.2, time=6)
+
+    c.order()
+
+    sdm = sparsedm.SparseDM(c.get_qubit_names())
+
+
+
+    c.apply_to(sdm)
+
+
+
+    d = sdm.full_dm.get_diag()
+
+    assert np.allclose(d, [1, 0, 0, 0])
+
+
 

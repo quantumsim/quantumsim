@@ -267,7 +267,7 @@ class BitflipNoise(SinglePTMGate, IdlingGate):
             del kwargs['t2']
 
         gamma = 1 - np.exp(-duration / t1)
-        super().__init__(bit, time, ptm.dephasing_ptm(gamma, 0, 0), **kwargs)
+        super().__init__(bit, time, ptm.dephasing_ptm(0, gamma, gamma), **kwargs)
 
     def plot_gate(self, ax, coords):
         ax.scatter((self.time),
@@ -302,7 +302,7 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
-def TwoPTMGate(Gate):
+class TwoPTMGate(Gate):
     def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
         """A Two qubit gate.
         """
@@ -311,7 +311,7 @@ def TwoPTMGate(Gate):
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
         self.method_name = "apply_two_ptm"
-        self.method_params = {"ptm": self.two_ptm}
+        self.method_params = {"two_ptm": self.two_ptm}
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -324,8 +324,11 @@ def TwoPTMGate(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
-def CPhaseRotation(TwoPTMGate):
-    pass
+class CPhaseRotation(TwoPTMGate):
+    def __init__(self, bit0, bit1, angle, time, **kwargs):
+        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j*angle)]))
+
+        super().__init__(bit0, bit1, p, time, **kwargs)
 
 
 class Measurement(Gate):
@@ -729,6 +732,8 @@ class Circuit:
         """
         for gate in self.gates:
             gate.apply_to(sdm)
+
+        sdm.apply_all_pending()
 
     def plot(self, show_annotations=False):
         """Plot the circuit using matplotlib.
