@@ -722,7 +722,7 @@ class Circuit:
 
         self.gates = new_order
 
-    def apply_to(self, sdm):
+    def apply_to(self, sdm, apply_all_pending=True):
         """Apply the gates in the Circuit to a sparsedm.SparseDM density matrix.
         The gates are applied in the order given in self.gates, which is the order in which they are
         added to the Circuit. To reorder them to reflect the temporal order,
@@ -733,7 +733,8 @@ class Circuit:
         for gate in self.gates:
             gate.apply_to(sdm)
 
-        sdm.apply_all_pending()
+        if apply_all_pending:
+            sdm.apply_all_pending()
 
     def plot(self, show_annotations=False):
         """Plot the circuit using matplotlib.
