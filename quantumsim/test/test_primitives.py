@@ -22,6 +22,7 @@ try:
     trace = mod.get_function("trace")
     swap = mod.get_function("swap")
     two_qubit_ptm = mod.get_function("two_qubit_ptm")
+    general_two_qubit_ptm = mod.get_function("two_qubit_general_ptm")
 except ImportError:
     hascuda = False
 
@@ -121,7 +122,6 @@ class TestToPauli:
         dm2 = drv.from_device_like(dm_gpu2, dm)
 
         assert np.allclose(dm, dm2)
-
 
 class TestTrace:
 
@@ -227,7 +227,6 @@ class TestTrace:
         assert np.allclose(x2[1], np.sum(x[:16]))
         assert np.allclose(x2[0], np.sum(x[16:]))
 
-
 class TestOneBitPTM:
 
     def test_identity(self):
@@ -292,6 +291,24 @@ class TestOneBitPTM:
 
         single_qubit_ptm(dm_gpu, ptm_gpu, np.int32(2), np.int32(
             9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (16 + 512))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm2, dm)
+
+
+class TestGeneralTwoBitPTM:
+    def test_identity_big(self):
+        ptm = np.eye(16, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((512, 512))
+
+        dm_gpu = drv.to_device(dm)
+
+        two_qubit_ptm(dm_gpu, ptm_gpu, np.int32(6), np.int32(2), np.int32(
+            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
 
         dm2 = drv.from_device_like(dm_gpu, dm)
 

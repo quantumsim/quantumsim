@@ -89,30 +89,70 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 }
 
 
-//do the cphase gate. set a bit in mask to 1 if you want the corresponding qubit to 
-//partake in the cphase.
-__global__ void cphase(double *dm, unsigned int bit0, unsigned int bit1, unsigned int no_qubits) {
 
-    const unsigned int addr = blockIdx.x*blockDim.x + threadIdx.x;
-    if (addr >= (1 << (2*no_qubits))) return;
+__global__ void two_qubit_general_ptm(double *dm, double *ptm_g, 
+        unsigned int dim_a, unsigned int stride_a,
+        unsigned int dim_b, unsigned int stribe_b,
+        unsigned int dim_rho) {
 
-    int idx0 = (addr >> (2*bit0)) & 0x3;
+    const unsigned int idx = threadIdx.x + blockIdx.x*blockDim.x;
 
-    int idx1 = (addr >> (2*bit1)) & 0x3;
 
-    if (idx0 == 3 && idx1 != 0) 
-        dm[addr] = -dm[addr];
-    if (idx1 == 3 && idx0 != 0)
-        dm[addr] = -dm[addr];
-    
-    if (idx1 == 1 && (idx0 == 1 || idx0 == 2)) { 
-        unsigned int other_addr = addr ^ ( (0x3 << (2*bit0)) | (0x3 << (2*bit1)));
-        double t, u;
-        t = -dm[addr];
-        u = -dm[other_addr];
-        dm[other_addr] = t;
-        dm[addr] = u;
+
+    if (idx >= dim_rho) return;
+
+
+    //this possibly is quite slow. one might want to do it in float instead
+
+
+    // external memory required: (blockDim.x + dim_a*dim_b) double floats
+    extern __shared__ double ptm[];
+    double *data = &ptm[dim_a*dim_b]; 
+
+    // load ptm to shared memory (ptm should be smaller than block, but in case it is not, loop here)
+    for(int i=0; i < dim_a*dim_b; i+=blockDim.x) {
+        if(i+x < dim_a*dim_b) {
+            ptm[i+x] = ptm_g[i+x];
+        }
     }
+
+    if (idx >= dim_rho) return;
+
+
+    //adress calculation
+    //the index is of the form idx = X Y Z ib ia, 
+    //where the address is of the form addr = X ib Y ia Z
+
+    unsigned int i = idx;
+    unsigned int idx_a = i % dim_a;
+    i = i / dim_a;
+    unsigned int idx_b = i % dim_b;
+    i = i / dim_b;
+    unsigned int     z = i % (stride_a);
+    i = i / stride_a;
+    unsigned int     y = i % (stride_b/(stride_a*dim_a));
+    i = i / stribe_b;
+    unsigned int     x = i;
+
+    unsigned int addr = z + stride_a*idx_a + stride_a*dim_a*y + stride_b*idx_b * stride_b*dim_b*x;
+
+
+    //fetch data to memory
+    data[idx] = dm[addr];
+    __syncthreads();
+
+
+    int row = idx_b*dim_b + idx_a;//000 ib ia;
+    int idx = idx - row;          //x y z00;
+
+    double acc=0;
+    for(int i=0; i<dim_a*dim_b; i++) {
+        acc += ptm[dim_a*dim_b*row + i]*data[idx+i];
+    }
+
+    //upload back to global memory
+    __syncthreads();
+    dm[global_from] = acc;
 }
 
 
