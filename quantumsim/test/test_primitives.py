@@ -13,7 +13,6 @@ try:
     with open(dm10.kernel_file, "r") as f:
         mod = SourceModule(f.read())
 
-    cphase = mod.get_function("cphase")
     get_diag = mod.get_function("get_diag")
 
     bit_to_pauli_basis = mod.get_function("bit_to_pauli_basis")
@@ -43,7 +42,6 @@ pytestmark = pytest.mark.skipif(not hascuda, reason="pycuda not installed")
 def random_dm10():
     "return a random (2**no_qubits, 2**no_qubits) density matrix"
     return x
-
 
 class TestToPauli:
 
@@ -296,7 +294,6 @@ class TestOneBitPTM:
 
         assert np.allclose(dm2, dm)
 
-
 class TestGeneralTwoBitPTM:
     def test_identity_big(self):
         ptm = np.eye(16, dtype=np.float64)
@@ -307,13 +304,15 @@ class TestGeneralTwoBitPTM:
 
         dm_gpu = drv.to_device(dm)
 
-        two_qubit_ptm(dm_gpu, ptm_gpu, np.int32(6), np.int32(2), np.int32(
-            9), block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
+        general_two_qubit_ptm(dm_gpu, ptm_gpu, 
+                np.int32(4), np.int32(2<<6),
+                np.int32(4), np.int32(2<<2),
+                np.int32(2<<9),
+                block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
 
         dm2 = drv.from_device_like(dm_gpu, dm)
 
         assert np.allclose(dm2, dm)
-
 
 class TestTwoBitPTM:
 

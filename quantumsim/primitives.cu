@@ -92,17 +92,10 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 
 __global__ void two_qubit_general_ptm(double *dm, double *ptm_g, 
         unsigned int dim_a, unsigned int stride_a,
-        unsigned int dim_b, unsigned int stribe_b,
+        unsigned int dim_b, unsigned int stride_b,
         unsigned int dim_rho) {
 
     const unsigned int idx = threadIdx.x + blockIdx.x*blockDim.x;
-
-
-
-    if (idx >= dim_rho) return;
-
-
-    //this possibly is quite slow. one might want to do it in float instead
 
 
     // external memory required: (blockDim.x + dim_a*dim_b) double floats
@@ -111,17 +104,17 @@ __global__ void two_qubit_general_ptm(double *dm, double *ptm_g,
 
     // load ptm to shared memory (ptm should be smaller than block, but in case it is not, loop here)
     for(int i=0; i < dim_a*dim_b; i+=blockDim.x) {
-        if(i+x < dim_a*dim_b) {
-            ptm[i+x] = ptm_g[i+x];
+        if(i+threadIdx.x < dim_a*dim_b) {
+            ptm[i+threadIdx.x] = ptm_g[i+threadIdx.x];
         }
     }
 
     if (idx >= dim_rho) return;
 
-
     //adress calculation
     //the index is of the form idx = X Y Z ib ia, 
     //where the address is of the form addr = X ib Y ia Z
+    //this integer arithmetic is possibly is quite slow. one might want to do it in float instead
 
     unsigned int i = idx;
     unsigned int idx_a = i % dim_a;
@@ -131,7 +124,7 @@ __global__ void two_qubit_general_ptm(double *dm, double *ptm_g,
     unsigned int     z = i % (stride_a);
     i = i / stride_a;
     unsigned int     y = i % (stride_b/(stride_a*dim_a));
-    i = i / stribe_b;
+    i = i / stride_b;
     unsigned int     x = i;
 
     unsigned int addr = z + stride_a*idx_a + stride_a*dim_a*y + stride_b*idx_b * stride_b*dim_b*x;
@@ -143,16 +136,16 @@ __global__ void two_qubit_general_ptm(double *dm, double *ptm_g,
 
 
     int row = idx_b*dim_b + idx_a;//000 ib ia;
-    int idx = idx - row;          //x y z00;
+    int offset = idx - row;          //x y z00;
 
     double acc=0;
     for(int i=0; i<dim_a*dim_b; i++) {
-        acc += ptm[dim_a*dim_b*row + i]*data[idx+i];
+        acc += ptm[dim_a*dim_b*row + i]*data[offset+i];
     }
 
     //upload back to global memory
     __syncthreads();
-    dm[global_from] = acc;
+    dm[addr] = acc;
 }
 
 
