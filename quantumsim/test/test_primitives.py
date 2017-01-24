@@ -305,9 +305,9 @@ class TestGeneralTwoBitPTM:
         dm_gpu = drv.to_device(dm)
 
         general_two_qubit_ptm(dm_gpu, ptm_gpu, 
-                np.int32(4), np.int32(2<<6),
-                np.int32(4), np.int32(2<<2),
-                np.int32(2<<9),
+                np.int32(4), np.int32(4<<5),
+                np.int32(4), np.int32(4<<1),
+                np.int32(4<<9),
                 block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
 
         dm2 = drv.from_device_like(dm_gpu, dm)
