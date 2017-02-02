@@ -545,6 +545,9 @@ class Circuit:
         """
         return [qb.name for qb in self.qubits]
 
+    def get_qubit(self, qubit_name):
+        return [qb for qb in self.qubits if qb.name == qubit_name][0]
+
     def add_qubit(self, *args, **kwargs):
         """ Add a qubit. Either instantiate by hand
 
