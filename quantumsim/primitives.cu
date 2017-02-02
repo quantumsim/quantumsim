@@ -117,31 +117,30 @@ __global__ void two_qubit_general_ptm(double *dm, double *ptm_g,
     //this integer arithmetic is possibly is quite slow. one might want to do it in float instead
 
     unsigned int i = idx;
+    unsigned int reduced_stride_of_y = stride_b/(stride_a*dim_a);
     unsigned int idx_a = i % dim_a;
     i = i / dim_a;
     unsigned int idx_b = i % dim_b;
     i = i / dim_b;
     unsigned int     z = i % (stride_a);
     i = i / stride_a;
-    unsigned int     y = i % (stride_b/(stride_a*dim_a));
-    i = i / stride_b;
-    unsigned int     x = i;
+    unsigned int     y = i % reduced_stride_of_y;
+    unsigned int     x = i / reduced_stride_of_y;
 
-    unsigned int addr = z + stride_a*idx_a + stride_a*dim_a*y + stride_b*idx_b * stride_b*dim_b*x;
-
+    unsigned int addr = z + stride_a*idx_a + stride_a*dim_a*y + stride_b*idx_b + stride_b*dim_b*x;
 
     //fetch data to memory
-    data[idx] = dm[addr];
+    //data[threadIdx.x] = dm[addr];
     __syncthreads();
 
 
-    int row = idx_b*dim_b + idx_a;//000 ib ia;
-    int offset = idx - row;          //x y z00;
+    /*int row = idx_b*dim_b + idx_a;//000 ib ia;*/
+    /*int offset = idx - row;          //x y z00;*/
 
-    double acc=0;
-    for(int i=0; i<dim_a*dim_b; i++) {
-        acc += ptm[dim_a*dim_b*row + i]*data[offset+i];
-    }
+    double acc=1;
+    /*for(int i=0; i<dim_a*dim_b; i++) {*/
+        /*acc += ptm[dim_a*dim_b*row + i]*data[offset+i];*/
+    /*}*/
 
     //upload back to global memory
     __syncthreads();
