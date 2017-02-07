@@ -85,7 +85,6 @@ class Gate:
 
 
 class SinglePTMGate(Gate):
-
     def __init__(self, bit, time, ptm, **kwargs):
         """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit `bit` at point `time`.
         """
@@ -93,11 +92,12 @@ class SinglePTMGate(Gate):
         self.involved_qubits.append(bit)
 
         self.label = "G"
-
         self.ptm = ptm
-        self.method_name = "apply_ptm"
-        self.method_params = {'ptm': self.ptm}
 
+    def apply_to(self, sdm):
+        sdm.apply_ptm(*self.involved_qubits, ptm=self.ptm)
+
+    
 
 class RotateY(SinglePTMGate):
 
@@ -118,7 +118,7 @@ class RotateY(SinglePTMGate):
             self.label = r"$R_y(\pi)$"
         elif not np.allclose(angle, 0) and np.allclose(np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
             divisor = 1 / multiple_of_pi
-            self.label = r"$R_y(\pi/%d)$" % divisor
+            self.label = r"$R_y(%s\pi/%d)$" % ("" if divisor > 0 else "-", abs(divisor))
         else:
             self.label = r"$R_y(%g)$" % angle
 
@@ -279,6 +279,30 @@ class ButterflyGate(SinglePTMGate, IdlingGate):
 
         self.label=r"$\Gamma_\uparrow / \Gamma_\downarrow$"
 
+
+class TwoPTMGate(Gate):
+    def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
+        """A Two qubit gate.
+        """
+        super().__init__(time, **kwargs)
+        self.two_ptm = two_ptm
+        self.involved_qubits.append(bit0)
+        self.involved_qubits.append(bit1)
+
+    def apply_to(self, sdm):
+        sdm.apply_two_ptm(*self.involved_qubits, self.two_ptm)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time), (coords[bit0]), color='r')
+        ax.scatter((self.time), (coords[bit1]), color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
 class CPhase(Gate):
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
@@ -302,27 +326,41 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
-class TwoPTMGate(Gate):
-    def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
-        """A Two qubit gate.
+class ISwap(TwoPTMGate):
+    def __init__(self, bit0, bit1, time, **kwargs):
         """
-        super().__init__(time, **kwargs)
-        self.two_ptm = two_ptm
-        self.involved_qubits.append(bit0)
-        self.involved_qubits.append(bit1)
-        self.method_name = "apply_two_ptm"
-        self.method_params = {"two_ptm": self.two_ptm}
+        ISwap gate, described by the two qubit operator
+
+        1  0 0 0
+        0  0 i 0
+        0 -i 0 0
+        0  0 0 1
+        """
+        kraus = np.array([
+                [1, 0, 0, 0],
+                [0, 0, 1j, 0],
+                [0, -1j, 0, 0],
+                [0, 0, 0, 1]
+            ])
+
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
         bit1 = self.involved_qubits[-1]
-        ax.scatter((self.time), (coords[bit0]), color='r')
-        ax.scatter((self.time), (coords[bit1]), color='b')
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]), 
+                   marker="x", s=80, color='k')
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
+
+    
+
 
 class CPhaseRotation(TwoPTMGate):
     def __init__(self, bit0, bit1, angle, time, **kwargs):
@@ -716,8 +754,8 @@ class Circuit:
 
         order = tp.partial_greedy_toposort(gts_list, targets=targets)
 
-        for n, i in enumerate(order):
-            all_gates[i][1].annotation = "%d" % n
+        # for n, i in enumerate(order):
+            # all_gates[i][1].annotation = "%d" % n
 
         new_order = []
         for i in order:
