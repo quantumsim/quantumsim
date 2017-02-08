@@ -81,8 +81,8 @@ class DensityNP:
         in_indices[self.no_qubits - bit0 - 1] = dummy_idx0
         in_indices[self.no_qubits - bit1 - 1] = dummy_idx1
         two_ptm_indices = [
-            dummy_idx0, dummy_idx1,
-            bit0, bit1
+            bit1, bit0,
+            dummy_idx1, dummy_idx0
         ]
         self.dm = np.einsum(
             self.dm, in_indices, two_ptm, two_ptm_indices, out_indices, optimize=True)
@@ -134,6 +134,10 @@ class DensityNP:
         return np.einsum(self.dm, list(range(self.no_qubits)), *trace_argument, optimize=True)
 
     def project_measurement(self, bit, state):
+
+        assert bit < self.no_qubits
+
+        # the behaviour is a bit weird: swap the MSB to bit and then project out the highest one!
         projector = np.zeros(4)
         if state == 1:
             projector[3] = 1
@@ -142,8 +146,10 @@ class DensityNP:
 
         in_indices = list(reversed(range(self.no_qubits)))
         projector_indices = [bit]
-        out_indices = in_indices.copy()
-        out_indices.remove(bit)
+        out_indices = list(reversed(range(self.no_qubits - 1)))
+        if bit != self.no_qubits - 1:
+            out_indices[-bit-1] = self.no_qubits - 1
+
         self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, out_indices, optimize=True)
 
         self.no_qubits = len(self.dm.shape)

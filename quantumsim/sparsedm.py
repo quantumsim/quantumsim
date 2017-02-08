@@ -10,13 +10,15 @@ from . import ptm
 
 try:
     from . import dm10
+    default_density_class = dm10.Density
     using_gpu = True
 except ImportError:
-    from . import dmcpu as dm10
+    from . import dm_np
+    default_density_class = dm_np.DensityNP
     using_gpu = False
 
 class SparseDM:
-    def __init__(self, names=None):
+    def __init__(self, names=None, density_class=default_density_class):
         """A sparse density matrix for a set of qubits with names `names`. 
 
         Each qubit can be in a "classical state", where it is in a basis state 
@@ -34,7 +36,7 @@ class SparseDM:
         self.no_qubits = len(names)
         self.classical = {bit: 0 for bit in names}
         self.idx_in_full_dm = {}
-        self.full_dm = dm10.Density(0)
+        self.full_dm = density_class(0)
         self.max_bits_in_full_dm = 0
 
         self.classical_probability = 1
