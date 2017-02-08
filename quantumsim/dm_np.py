@@ -82,13 +82,14 @@ class DensityNP:
         in_indices[self.no_qubits - bit1 - 1] = dummy_idx1
         two_ptm_indices = [
             dummy_idx0, dummy_idx1,
-            self.no_qubits - bit0 - 1,
-            self.no_qubits - bit1 - 1
+            bit0, bit1
         ]
         self.dm = np.einsum(
             self.dm, in_indices, two_ptm, two_ptm_indices, out_indices, optimize=True)
 
     def apply_ptm(self, bit, one_ptm):
+        assert bit < self.no_qubits
+
         dummy_idx = self.no_qubits
         out_indices = list(reversed(range(self.no_qubits)))
         in_indices = list(reversed(range(self.no_qubits)))
@@ -166,3 +167,11 @@ class DensityNP:
     def rotate_z(self, bit, angle):
         warnings.warn("use apply_ptm")
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
+
+    def cphase(self, bit0, bit1):
+        assert bit0 < self.no_qubits
+        assert bit1 < self.no_qubits
+
+        warnings.warn("deprecated, use two_ptm instead")
+        two_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1]))
+        self.apply_two_ptm(bit0, bit1, two_ptm)
