@@ -1,15 +1,30 @@
 import numpy as np
 import pytools
 
+from . import ptm
+
 
 class DensityNP:
-
     def __init__(self, no_qubits, data=None):
         self.no_qubits = no_qubits
         self.shape = [4] * no_qubits
 
-        if data:
-            raise NotImplementedError
+        if data is not None:
+            single_tensor = ptm.single_tensor
+            assert data.size == 4**self.no_qubits
+
+            data = data.reshape((2, 2) * self.no_qubits)
+
+            idx = [[i, 2*self.no_qubits - i, 3*self.no_qubits - i]
+                   for i in reversed(range(self.no_qubits))]
+            in_indices = [[2*self.no_qubits - i, 3*self.no_qubits - i]
+                          for i in reversed(range(self.no_qubits))]
+            in_indices = pytools.flatten(in_indices)
+
+            transformation_tensors = list(zip([single_tensor]*self.no_qubits, idx))
+            transformation_tensors = pytools.flatten(transformation_tensors)
+
+            self.dm = np.einsum(data, in_indices, *transformation_tensors, optimize=True)
         else:
             self.dm = np.zeros(self.shape)
             self.dm[tuple([0] * self.no_qubits)] = 1
@@ -23,7 +38,19 @@ class DensityNP:
         return cp
 
     def to_array(self):
-        pass
+        single_tensor = ptm.single_tensor
+
+        in_indices = list(reversed(range(self.no_qubits)))
+
+        idx = [[i, 2*self.no_qubits - i, 3*self.no_qubits - i]
+               for i in in_indices]
+
+        transformation_tensors = list(zip([single_tensor]*self.no_qubits, idx))
+        transformation_tensors = pytools.flatten(transformation_tensors)
+
+        density_matrix = np.einsum(self.dm, in_indices, *transformation_tensors, optimize=True)
+        density_matrix = density_matrix.reshape((2**self.no_qubits, 2**self.no_qubits))
+        return density_matrix
 
     def get_diag(self):
         pass
@@ -41,15 +68,15 @@ class DensityNP:
             self.no_qubits - bit1 - 1
         ]
         self.dm = np.einsum(
-            self.dm, in_indices, two_ptm, two_ptm_indices, out_indices)
+            self.dm, in_indices, two_ptm, two_ptm_indices, out_indices, optimize=True)
 
     def apply_ptm(self, bit, one_ptm):
         dummy_idx = self.no_qubits
-        out_indices = list(range(self.no_qubits))
-        in_indices = list(range(self.no_qubits))
+        out_indices = list(reversed(range(self.no_qubits)))
+        in_indices = list(reversed(range(self.no_qubits)))
         in_indices[self.no_qubits - bit - 1] = dummy_idx
         ptm_indices = [self.no_qubits - bit - 1, dummy_idx]
-        self.dm = np.einsum(self.dm, in_indices, one_ptm, ptm_indices, out_indices)
+        self.dm = np.einsum(self.dm, in_indices, one_ptm, ptm_indices, out_indices, optimize=True)
 
     def add_ancilla(self, anc_st):
         anc_dm = np.zeros(4)
@@ -58,7 +85,7 @@ class DensityNP:
         else:
             anc_dm[0] = 1
         self.dm = np.einsum(
-            anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)))
+            anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)), optimize=True)
         self.no_qubits = len(self.dm.shape)
 
     def partial_trace(self, bit):
@@ -79,13 +106,13 @@ class DensityNP:
 
         indices = list(reversed(range(self.no_qubits)))
 
-        return np.einsum(self.dm, indices, *trace_argument)
+        return np.einsum(self.dm, indices, *trace_argument, optimize=True)
 
     def trace(self):
         tensor = np.array([1, 0, 0, 1])
         trace_argument = pytools.flatten(
             [[tensor, [i]] for i in range(self.no_qubits)])
-        return np.einsum(self.dm, list(range(self.no_qubits)), *trace_argument)
+        return np.einsum(self.dm, list(range(self.no_qubits)), *trace_argument, optimize=True)
 
     def project_measurement(self, bit, state):
         projector = np.zeros(4)
@@ -95,8 +122,9 @@ class DensityNP:
             projector[0] = 1
 
         dummy_idx = self.no_qubits
-        out_indices = list(reversed(range(self.no_qubits)))
         in_indices = list(reversed(range(self.no_qubits)))
         in_indices[self.no_qubits - bit - 1] = dummy_idx
         projector_indices = [dummy_idx]
-        self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, out_indices)
+        self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, optimize=True)
+
+        self.no_qubits = len(self.dm.shape)
