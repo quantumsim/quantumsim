@@ -140,11 +140,11 @@ class DensityNP:
         else:
             projector[0] = 1
 
-        dummy_idx = self.no_qubits
         in_indices = list(reversed(range(self.no_qubits)))
-        in_indices[self.no_qubits - bit - 1] = dummy_idx
-        projector_indices = [dummy_idx]
-        self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, optimize=True)
+        projector_indices = [bit]
+        out_indices = in_indices.copy()
+        out_indices.remove(bit)
+        self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, out_indices, optimize=True)
 
         self.no_qubits = len(self.dm.shape)
 
