@@ -2,32 +2,39 @@ import numpy as np
 import pytools
 
 from . import ptm
+import warnings
 
 
 class DensityNP:
     def __init__(self, no_qubits, data=None):
+
+        if no_qubits > 15:
+            raise ValueError(
+                "no_qubits=%d is way too many qubits, are you sure?" %
+                no_qubits)
+
         self.no_qubits = no_qubits
         self.shape = [4] * no_qubits
 
-        if data is not None:
+        if isinstance(data, np.ndarray):
             single_tensor = ptm.single_tensor
             assert data.size == 4**self.no_qubits
 
             data = data.reshape((2, 2) * self.no_qubits)
 
-            idx = [[i, 2*self.no_qubits - i, 3*self.no_qubits - i]
-                   for i in reversed(range(self.no_qubits))]
-            in_indices = [[2*self.no_qubits - i, 3*self.no_qubits - i]
-                          for i in reversed(range(self.no_qubits))]
-            in_indices = pytools.flatten(in_indices)
+            in_indices = list(reversed(range(self.no_qubits, 3*self.no_qubits)))
+            contraction_indices = [(i, i + self.no_qubits, i + 2*self.no_qubits) for i in range(self.no_qubits)]
+            out_indices = list(reversed(range(self.no_qubits)))
 
-            transformation_tensors = list(zip([single_tensor]*self.no_qubits, idx))
+            transformation_tensors = list(zip([single_tensor]*self.no_qubits, contraction_indices))
             transformation_tensors = pytools.flatten(transformation_tensors)
 
-            self.dm = np.einsum(data, in_indices, *transformation_tensors, optimize=True)
-        else:
+            self.dm = np.einsum(data, in_indices, *transformation_tensors, out_indices, optimize=True).real
+        elif data is None:
             self.dm = np.zeros(self.shape)
             self.dm[tuple([0] * self.no_qubits)] = 1
+        else:
+            raise ValueError("type of data not understood")
 
     def renormalize(self):
         self.dm = self.dm / self.trace()
@@ -53,7 +60,18 @@ class DensityNP:
         return density_matrix
 
     def get_diag(self):
-        pass
+
+        no_trace_tensor = np.array([[1, 0, 0, 0], [0, 0, 0, 1]]).T
+
+        trace_argument = []
+        for i in range(self.no_qubits):
+            trace_argument.append(no_trace_tensor)
+            trace_argument.append([i, i + self.no_qubits])
+
+        indices = list(reversed(range(self.no_qubits)))
+        out_indices = list(reversed(range(self.no_qubits, 2*self.no_qubits)))
+
+        return np.einsum(self.dm, indices, *trace_argument, out_indices, optimize=True).reshape(2**self.no_qubits)
 
     def apply_two_ptm(self, bit0, bit1, two_ptm):
         two_ptm = two_ptm.reshape((4, 4, 4, 4))
@@ -75,7 +93,7 @@ class DensityNP:
         out_indices = list(reversed(range(self.no_qubits)))
         in_indices = list(reversed(range(self.no_qubits)))
         in_indices[self.no_qubits - bit - 1] = dummy_idx
-        ptm_indices = [self.no_qubits - bit - 1, dummy_idx]
+        ptm_indices = [bit, dummy_idx]
         self.dm = np.einsum(self.dm, in_indices, one_ptm, ptm_indices, out_indices, optimize=True)
 
     def add_ancilla(self, anc_st):
@@ -128,3 +146,23 @@ class DensityNP:
         self.dm = np.einsum(self.dm, in_indices, projector, projector_indices, optimize=True)
 
         self.no_qubits = len(self.dm.shape)
+
+    def hadamard(self, bit):
+        warnings.warn("use apply_ptm")
+        self.apply_ptm(bit, ptm.hadamard_ptm())
+
+    def amp_ph_damping(self, bit, gamma, lamda):
+        warnings.warn("use apply_ptm")
+        self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
+
+    def rotate_y(self, bit, angle):
+        warnings.warn("use apply_ptm")
+        self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
+
+    def rotate_x(self, bit, angle):
+        warnings.warn("use apply_ptm")
+        self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
+
+    def rotate_z(self, bit, angle):
+        warnings.warn("use apply_ptm")
+        self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
