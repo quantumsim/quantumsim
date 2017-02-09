@@ -459,7 +459,7 @@ class TestDensityAmpPhDamping:
 
 class TestDensityAddAncilla:
 
-    @pytest.mark.skip(reason="slow")
+    # @pytest.mark.skip(reason="slow")
     def test_add_high_ancilla_to_gs_gives_gs(self, dmclass):
         dm = dmclass(9)
         dm.add_ancilla(0)
