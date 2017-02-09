@@ -119,9 +119,11 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
                     if len(pi2s) == 1:
                         # we are in the coherent phase
                         dt = pi2s[0] - last_meas
+                        dstart = g1.time - pi2s[0]
+                        dend = g2.time - pi2s[0]
 
                         photon_lamda = get_dephasing(
-                            g1.time, g2.time, dt, chi, kappa, alpha0)
+                            dstart, dend, dt, chi, kappa, alpha0)
 
                         ptm_patch = circuit.ptm.amp_ph_damping_ptm(
                             0, 1 - photon_lamda)
