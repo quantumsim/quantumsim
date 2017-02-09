@@ -2,12 +2,14 @@ import numpy as np
 import pytest
 
 import quantumsim.dmcpu as dmcpu
+import quantumsim.dm_np as dm_np
 
 # There are two implementations for the backend (on CPU and on GPU)
 # here we collect the classes we want to test
-implementations_to_test = []
 
-implementations_to_test.append(dmcpu.Density)
+implementations_to_test = []
+#implementations_to_test.append(dmcpu.Density)
+implementations_to_test.append(dm_np.DensityNP)
 
 hascuda = False
 try:
@@ -457,7 +459,7 @@ class TestDensityAmpPhDamping:
 
 class TestDensityAddAncilla:
 
-    @pytest.mark.skip(reason="slow")
+    # @pytest.mark.skip(reason="slow")
     def test_add_high_ancilla_to_gs_gives_gs(self, dmclass):
         dm = dmclass(9)
         dm.add_ancilla(0)
