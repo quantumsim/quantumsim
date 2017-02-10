@@ -85,6 +85,7 @@ class Gate:
 
 
 class SinglePTMGate(Gate):
+
     def __init__(self, bit, time, ptm, **kwargs):
         """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit `bit` at point `time`.
         """
@@ -97,16 +98,27 @@ class SinglePTMGate(Gate):
     def apply_to(self, sdm):
         sdm.apply_ptm(*self.involved_qubits, ptm=self.ptm)
 
-    
 
 class RotateY(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, dephasing_angle=None, dephasing_axis=None, **kwargs):
+    def __init__(
+            self,
+            bit,
+            time,
+            angle,
+            dephasing_angle=None,
+            dephasing_axis=None,
+            **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
         p = ptm.rotate_y_ptm(angle)
         if dephasing_angle:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing_angle, 0, dephasing_angle))
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    dephasing_angle,
+                    0,
+                    dephasing_angle))
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
 
@@ -118,7 +130,8 @@ class RotateY(SinglePTMGate):
             self.label = r"$R_y(\pi)$"
         elif not np.allclose(angle, 0) and np.allclose(np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
             divisor = 1 / multiple_of_pi
-            self.label = r"$R_y(%s\pi/%d)$" % ("" if divisor > 0 else "-", abs(divisor))
+            self.label = r"$R_y(%s\pi/%d)$" % ("" if divisor >
+                                               0 else "-", abs(divisor))
         else:
             self.label = r"$R_y(%g)$" % angle
 
@@ -134,16 +147,27 @@ class Hadamard(SinglePTMGate):
 
 class RotateX(SinglePTMGate):
 
-    def __init__(self, bit, time, angle, dephasing_angle=None, dephasing_axis=None, **kwargs):
+    def __init__(
+            self,
+            bit,
+            time,
+            angle,
+            dephasing_angle=None,
+            dephasing_axis=None,
+            **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
 
         p = ptm.rotate_x_ptm(angle)
         if dephasing_angle:
-            p = np.dot(p, ptm.dephasing_ptm(0, dephasing_angle, dephasing_angle))
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    0,
+                    dephasing_angle,
+                    dephasing_angle))
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
-
 
         super().__init__(bit, time, p, **kwargs)
 
@@ -183,6 +207,7 @@ class RotateZ(SinglePTMGate):
 class IdlingGate:
     pass
 
+
 class AmpPhDamp(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
@@ -210,20 +235,21 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
         else:
             t_phi = 1 / (1 / t2 - 1 / (2 * t1)) / 2
 
-
         gamma = 1 - np.exp(-duration / t1)
         lamda = 1 - np.exp(-duration / t_phi)
         super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
         self.label = r"$%g\,\mathrm{ns}$" % self.duration
 
     def plot_gate(self, ax, coords):
-        x = self.time 
+        x = self.time
         y = coords[self.involved_qubits[0]]
 
         ax.scatter((x,), (y,), color='k', marker='x')
 
-        ax.annotate(self.label, (x, y), xytext=(
-                x, y+0.3), textcoords='data', ha='center')
+        ax.annotate(
+            self.label, (x, y), xytext=(
+                x, y + 0.3), textcoords='data', ha='center')
+
 
 class DepolarizingNoise(SinglePTMGate, IdlingGate):
 
@@ -249,6 +275,7 @@ class DepolarizingNoise(SinglePTMGate, IdlingGate):
         ax.scatter((self.time),
                    (coords[self.involved_qubits[-1]]), color='k', marker='o')
 
+
 class BitflipNoise(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, **kwargs):
@@ -273,14 +300,23 @@ class BitflipNoise(SinglePTMGate, IdlingGate):
         ax.scatter((self.time),
                    (coords[self.involved_qubits[-1]]), color='k', marker='o')
 
-class ButterflyGate(SinglePTMGate, IdlingGate):
-    def __init__(self, bit, time, p_exc, p_dec, **kwargs):
-        super().__init__(bit, time, ptm.gen_amp_damping_ptm(gamma_up=p_exc, gamma_down=p_dec), **kwargs)
 
-        self.label=r"$\Gamma_\uparrow / \Gamma_\downarrow$"
+class ButterflyGate(SinglePTMGate, IdlingGate):
+
+    def __init__(self, bit, time, p_exc, p_dec, **kwargs):
+        super().__init__(
+            bit,
+            time,
+            ptm.gen_amp_damping_ptm(
+                gamma_up=p_exc,
+                gamma_down=p_dec),
+            **kwargs)
+
+        self.label = r"$\Gamma_\uparrow / \Gamma_\downarrow$"
 
 
 class TwoPTMGate(Gate):
+
     def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
         """A Two qubit gate.
         """
@@ -303,7 +339,9 @@ class TwoPTMGate(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class CPhase(Gate):
+
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
 
@@ -326,7 +364,9 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class ISwap(TwoPTMGate):
+
     def __init__(self, bit0, bit1, time, **kwargs):
         """
         ISwap gate, described by the two qubit operator
@@ -337,11 +377,11 @@ class ISwap(TwoPTMGate):
         0  0 0 1
         """
         kraus = np.array([
-                [1, 0, 0, 0],
-                [0, 0, 1j, 0],
-                [0, -1j, 0, 0],
-                [0, 0, 0, 1]
-            ])
+            [1, 0, 0, 0],
+            [0, 0, 1j, 0],
+            [0, -1j, 0, 0],
+            [0, 0, 0, 1]
+        ])
 
         p = ptm.double_kraus_to_ptm(kraus)
         super().__init__(bit0, bit1, p, time, **kwargs)
@@ -350,7 +390,7 @@ class ISwap(TwoPTMGate):
         bit0 = self.involved_qubits[-2]
         bit1 = self.involved_qubits[-1]
         ax.scatter((self.time, self.time),
-                   (coords[bit0], coords[bit1]), 
+                   (coords[bit0], coords[bit1]),
                    marker="x", s=80, color='k')
 
         xdata = (self.time, self.time)
@@ -359,12 +399,10 @@ class ISwap(TwoPTMGate):
         ax.add_line(line)
 
 
-    
-
-
 class CPhaseRotation(TwoPTMGate):
+
     def __init__(self, bit0, bit1, angle, time, **kwargs):
-        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j*angle)]))
+        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)]))
 
         super().__init__(bit0, bit1, p, time, **kwargs)
 
@@ -470,10 +508,28 @@ class Measurement(Gate):
         sdm.classical_probability *= cond_prob
 
 
+class ResetGate(SinglePTMGate):
+    def __init__(self, bit, time, state=0, **kwargs):
+        if state == 0:
+            p = ptm.gen_amp_damping_ptm(gamma_down=1, gamma_up=0)
+        if state == 1:
+            p = ptm.gen_amp_damping_ptm(gamma_down=0, gamma_up=1)
+
+        super().__init__(bit, time, p, **kwargs)
+        self.state = state
+        self.label = "-> {}".format(state)
+        self.is_measurement = True
+
+    def apply_to(self, sdm):
+        super().apply_to(sdm)
+        sdm.project_measurement(self.involved_qubits[-1], self.state)
+
+
 class ConditionalGate(Gate):
+
     def __init__(self, time, control_bit, zero_gates=[], one_gates=[]):
         """
-        A container that applies gates depending on the state of a classical control bit. 
+        A container that applies gates depending on the state of a classical control bit.
         The gates are applied in the order given.
 
         The times of the subgates are ignored, the gates are applied at the time of this gate.
@@ -497,8 +553,9 @@ class ConditionalGate(Gate):
         if bit == self.control_bit:
             return True
 
-        return any(g.involves_qubit(bit) for g in self.zero_gates + self.one_gates)
-    
+        return any(g.involves_qubit(bit)
+                   for g in self.zero_gates + self.one_gates)
+
     def plot_gate(self, ax, coords):
         for g in self.zero_gates:
             g.plot_gate(ax, coords)
@@ -523,13 +580,12 @@ class ConditionalGate(Gate):
                 g.apply_to(sdm)
 
 
-
 class ClassicalCNOT(Gate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CNOT gate acting at time `time`, toggling bit1 if bit0 is 1.
 
-        This gate enforces the bits to be classical, if you want a proper CNOT, build it using PTMs. 
+        This gate enforces the bits to be classical, if you want a proper CNOT, build it using PTMs.
         """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit0)
@@ -554,10 +610,6 @@ class ClassicalCNOT(Gate):
 
         if sdm.classical[self.bit0] == 1:
             sdm.classical[self.bit1] = 1 - sdm.classical[self.bit1]
-
-
-
-
 
 
 class Circuit:
@@ -639,7 +691,11 @@ class Circuit:
 
         if not isinstance(name_map, dict):
             if isinstance(name_map, list):
-                name_map = {sg: g for sg, g in zip(subcircuit.get_qubit_names(), name_map)}
+                name_map = {
+                    sg: g for sg,
+                    g in zip(
+                        subcircuit.get_qubit_names(),
+                        name_map)}
             elif name_map is None:
                 name_map = {g: g for g in subcircuit.get_qubit_names()}
             else:
@@ -663,8 +719,8 @@ class Circuit:
 
         return super().__getattribute__(name)
 
-    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None, 
-            idling_gate=AmpPhDamp):
+    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None,
+                          idling_gate=AmpPhDamp):
         """Add AmpPhDamping gates to all qubits in the circuit
         (unless their t1=t2=np.inf or only_qubits is specified).
 
@@ -702,7 +758,7 @@ class Circuit:
                     idling_gate(
                         bit=str(b),
                         time=(tmax + tmin) / 2,
-                        duration=tmax - tmin, 
+                        duration=tmax - tmin,
                         t1=b.t1, t2=b.t2))
             else:
                 if gts[0].time - tmin > 1e-6:
@@ -710,19 +766,20 @@ class Circuit:
                         idling_gate(
                             bit=str(b),
                             time=(gts[0].time + tmin) / 2,
-                            duration=gts[0].time - tmin, 
+                            duration=gts[0].time - tmin,
                             t1=b.t1, t2=b.t2))
                 if tmax - gts[-1].time > 1e-6:
                     self.add_gate(idling_gate(
-                        bit=str(b), 
+                        bit=str(b),
                         time=(gts[-1].time + tmax) / 2,
                         duration=tmax - gts[-1].time,
                         t1=b.t1, t2=b.t2))
 
                 for g1, g2 in zip(gts[:-1], gts[1:]):
-                    if (isinstance(g1, IdlingGate) or 
+                    if (isinstance(g1, IdlingGate) or
                             isinstance(g2, IdlingGate)):
-                        # there already is an idling gate, probably butterfly, skip
+                        # there already is an idling gate, probably butterfly,
+                        # skip
                         continue
 
                     self.add_gate(
@@ -748,14 +805,15 @@ class Circuit:
         targets = []
         for n, b in enumerate(self.qubits):
             gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
-            if any(all_gates[g][1].is_measurement and all_gates[g][1].involved_qubits[-1] == b.name for g in gts):
+            if any(all_gates[g][1].is_measurement and all_gates[g][
+                   1].involved_qubits[-1] == b.name for g in gts):
                 targets.append(n)
             gts_list.append(gts)
 
         order = tp.partial_greedy_toposort(gts_list, targets=targets)
 
-        # for n, i in enumerate(order):
-            # all_gates[i][1].annotation = "%d" % n
+        for n, i in enumerate(order):
+            all_gates[i][1].annotation = "%d" % n
 
         new_order = []
         for i in order:
@@ -827,6 +885,7 @@ class Circuit:
                 ha='center',
                 va='center')
 
+
 def selection_sampler(result=0):
     """ A sampler always returning the measurement result `result`, and not making any
     measurement errors. Useful for testing or state preparation.
@@ -835,6 +894,7 @@ def selection_sampler(result=0):
     """
     while True:
         yield result, result, 1
+
 
 def uniform_sampler(seed=42):
     """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
@@ -850,6 +910,7 @@ def uniform_sampler(seed=42):
             p0, p1 = yield 0, 0, 1
         else:
             p0, p1 = yield 1, 1, 1
+
 
 def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
@@ -873,6 +934,7 @@ def uniform_noisy_sampler(readout_error, seed=42):
             decl = proj
             prob = 1 - readout_error
         p0, p1 = yield decl, proj, prob
+
 
 class BiasedSampler:
     '''A sampler that returns a uniform choice but with probabilities weighted as p_twiddle=p^alpha/Z,
