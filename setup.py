@@ -10,5 +10,6 @@ setup(name='quantumsim',
       author_email='brianzi@physik.fu-berlin.de',
       packages=['quantumsim'],
       ext_package='quantumsim',
-      data_files=[('pycudakernels', ['quantumsim/primitives.cu'])]
+      data_files=[('pycudakernels', ['quantumsim/primitives.cu'])],
+      requires=["pytools", "numpy"]
       )
