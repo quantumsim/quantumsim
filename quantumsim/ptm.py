@@ -53,10 +53,16 @@ def to_0xyz_basis(ptm):
     """
 
     ptm = np.array(ptm)
-    assert ptm.shape == (4, 4)
-    return np.dot(
-        basis_transformation_matrix, np.dot(
-            ptm, basis_transformation_matrix))
+    if ptm.shape == (4, 4):
+        trans_mat = basis_transformation_matrix
+        return np.dot(trans_mat, np.dot(ptm, trans_mat))
+    elif ptm.shape == (16, 16):
+        trans_mat = np.kron(basis_transformation_matrix, basis_transformation_matrix)
+        return np.dot(trans_mat, np.dot(ptm, trans_mat))
+    else:
+        raise ValueError("Dimensions wrong, must be one- or two Pauli transfer matrix ")
+
+
 
 
 def hadamard_ptm():
