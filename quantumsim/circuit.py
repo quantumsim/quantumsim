@@ -836,7 +836,12 @@ class Circuit:
             sdm.apply_all_pending()
 
     def plot(self, show_annotations=False):
-        """Plot the circuit using matplotlib.
+        """
+        Plot the circuit using matplotlib.
+
+        returns
+            figure : matplotlib figure object
+            ax     : matplotlib axis object
         """
         times = [g.time for g in self.gates]
 
@@ -869,6 +874,7 @@ class Circuit:
             gate.plot_gate(ax, coords)
             if show_annotations:
                 gate.annotate_gate(ax, coords)
+        return figure, ax
 
     def _plot_qubit_lines(self, ax, coords, tmin, tmax):
         buffer = (tmax - tmin) * 0.05
