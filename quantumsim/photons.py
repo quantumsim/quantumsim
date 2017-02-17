@@ -44,28 +44,7 @@ def get_dephasing(tstart, tend, Dt, chi, kappa, alpha0):
     return lamda
 
 
-def get_dephasing_gambetta(tstart, tend, Dt, chi, kappa, n0):
-    """
-    Get decay of coherence of qubit while experiencing a decaying photon in the cavity.
-    Assuming modes indistinguishible at t=0.
-    n0: number of photons at t=0
-    chi: coupling to qubit
-    kappa: decay constant to
-    """
-    n = np.exp(-Dt*kappa)*n0
-
-    dephasing_at_tstart = np.absolute(np.exp(
-        2j * chi * n * (1 - np.exp(-kappa * tstart + 2j * chi * tstart)) / (kappa - 2j * chi) + n * np.exp(-kappa * tstart) * (1 - np.exp(-2j * chi * tstart))
-    ))
-
-    dephasing_at_tend = np.absolute(np.exp(
-        2j * chi * n * (1 - np.exp(-kappa * tend + 2j * chi * tend)) / (kappa - 2j * chi) + n * np.exp(-kappa * tend) * (1 - np.exp(-2j * chi * tend))
-    ))
-
-    return dephasing_at_tend/dephasing_at_tstart
-
-
-def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0, use_gambetta=False):
+def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
     """Add AmpPhDamping gates to all qubits that involve
     a measurement in the Circuit c.
 
@@ -143,12 +122,8 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0, use_gambetta=Fa
                         # we are in the coherent phase
                         dt = pi2s[0] - last_meas
 
-                        if use_gambetta:
-                            photon_lamda = get_dephasing_gambetta(
-                                g1.time, g2.time, dt, chi, kappa, alpha0)
-                        else:
-                            photon_lamda = get_dephasing(
-                                g1.time, g2.time, dt, chi, kappa, alpha0)
+                        photon_lamda = get_dephasing(
+                            g1.time, g2.time, dt, chi, kappa, alpha0)
 
                         ptm_patch = circuit.ptm.amp_ph_damping_ptm(
                             0, 1 - photon_lamda)
