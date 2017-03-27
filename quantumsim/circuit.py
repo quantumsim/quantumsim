@@ -364,6 +364,32 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+class CNOT(TwoPTMGate):
+    def __init__(self, bit0, bit1, time, **kwargs):
+        """A CNOT gate acting at time `time` between bit0 and bit1 (bit1 is the control bit).
+        """
+        kraus = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+            [0, 0, 1, 0]
+        ])
+
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time,),
+                   (coords[bit1],), color='k')
+        ax.scatter((self.time,),
+                   (coords[bit0],), color='k', marker='$\oplus$', s=200)
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
 
 class ISwap(TwoPTMGate):
 
