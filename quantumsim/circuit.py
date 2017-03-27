@@ -70,12 +70,12 @@ class VariableDecoherenceQubit(Qubit):
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
-            decay_rate += (s - e)/t1/duration
+            decay_rate += (e - s)/t1/duration
 
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
-            deph_rate += (s - e)/t2/duration
+            deph_rate += (e - s)/t2/duration
             
 
         return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
@@ -792,7 +792,7 @@ class Circuit:
         return super().__getattribute__(name)
 
     def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None,
-                          idling_gate=AmpPhDamp):
+                          idling_gate=None):
         """Add AmpPhDamping gates to all qubits in the circuit
         (unless their t1=t2=np.inf or only_qubits is specified).
 
@@ -826,26 +826,19 @@ class Circuit:
                     str(b)) and tmin <= gate.time <= tmax]
 
             if not gts:
-                self.add_gate(
-                    idling_gate(
-                        bit=str(b),
-                        time=(tmax + tmin) / 2,
-                        duration=tmax - tmin,
-                        t1=b.t1, t2=b.t2))
+                # self.add_gate(
+                    # idling_gate(
+                        # bit=str(b),
+                        # time=(tmax + tmin) / 2,
+                        # duration=tmax - tmin,
+                        # t1=b.t1, t2=b.t2))
+                self.add_gate(b.make_idling_gate(tmin, tmax))
+
             else:
                 if gts[0].time - tmin > 1e-6:
-                    self.add_gate(
-                        idling_gate(
-                            bit=str(b),
-                            time=(gts[0].time + tmin) / 2,
-                            duration=gts[0].time - tmin,
-                            t1=b.t1, t2=b.t2))
+                    self.add_gate(b.make_idling_gate(tmin, gts[0].time))
                 if tmax - gts[-1].time > 1e-6:
-                    self.add_gate(idling_gate(
-                        bit=str(b),
-                        time=(gts[-1].time + tmax) / 2,
-                        duration=tmax - gts[-1].time,
-                        t1=b.t1, t2=b.t2))
+                    self.add_gate(b.make_idling_gate(gts[-1].time, tmax))
 
                 for g1, g2 in zip(gts[:-1], gts[1:]):
                     if (isinstance(g1, IdlingGate) or
@@ -854,12 +847,7 @@ class Circuit:
                         # skip
                         continue
 
-                    self.add_gate(
-                        idling_gate(
-                            bit=str(b),
-                            time=(g1.time + g2.time) / 2,
-                            duration=g2.time - g1.time,
-                            t1=b.t1, t2=b.t2))
+                    self.add_gate(b.make_idling_gate(g1.time, g2.time))
 
     def order(self):
         """ Reorder the gates in the circuit so that they are applied in temporal order.

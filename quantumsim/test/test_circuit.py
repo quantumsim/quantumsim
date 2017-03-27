@@ -228,6 +228,46 @@ class TestCircuit:
         assert {g.involved_qubits[0] for g in c.gates} == {'Q', 'A'}
 
 
+class TestVariableQubits:
+    def test_add_gates(self):
+        c = circuit.Circuit()
+
+        qb = circuit.VariableDecoherenceQubit("A", base_t1=10, base_t2=10, 
+                t1s=[(10, 20, 10)], t2s=[(10, 20, 10)])
+        c.add_qubit(qb)
+
+        c.add_gate(circuit.Hadamard("A", time=10))
+        c.add_gate(circuit.Hadamard("A", time=0))
+        c.add_gate(circuit.Hadamard("A", time=20))
+
+
+        c.add_waiting_gates()
+        c.order()
+
+        assert c.gates[1].time == 5
+        assert c.gates[1].duration == 10
+
+        assert c.gates[1].t1 == 10
+        assert c.gates[3].t1 == 5
+
+
+    def test_averaging(self):
+        c = circuit.Circuit()
+
+        qb = circuit.VariableDecoherenceQubit("A", base_t1=10, base_t2=10, 
+                t1s=[(10, 20, 10)], t2s=[(10, 20, 10)])
+        c.add_qubit(qb)
+
+        c.add_waiting_gates(tmin=0, tmax=100)
+        c.order()
+
+        assert c.gates[0].time == 50
+        assert c.gates[0].duration == 100
+
+        assert np.allclose(c.gates[0].t1, 10/(9/10+1/5))
+
+
+
 class TestHadamardGate:
 
     def test_init(self):
