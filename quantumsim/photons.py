@@ -107,12 +107,15 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
                 continue
 
             if g2.time - g1.time > 1:  # skip if too close
-                decay_gate = circuit.AmpPhDamp(
-                    bit=qb.name,
-                    time=(g2.time + g1.time) / 2,
-                    duration=g2.time - g1.time,
-                    t1=qb.t1,
-                    t2=qb.t2)
+                # decay_gate = circuit.AmpPhDamp(
+                    # bit=qb.name,
+                    # time=(g2.time + g1.time) / 2,
+                    # duration=g2.time - g1.time,
+                    # t1=qb.t1,
+                    # t2=qb.t2)
+
+                decay_gate = qb.get_dephasing_gate()
+
 
                 if meas_times and pi2_times:
                     last_meas = max(t for t in meas_times if t <= g1.time)

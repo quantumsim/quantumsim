@@ -33,6 +33,52 @@ class Qubit:
     def __str__(self):
         return self.name
 
+    def make_idling_gate(self, start_time, end_time):
+        assert start_time < end_time
+        time = (start_time + end_time)/2
+        duration = end_time - start_time
+
+        return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
+
+
+class VariableDecoherenceQubit(Qubit):
+    def __init__(self, name, base_t1, base_t2, t1s, t2s):
+        """A Qubit with a name and variable t1 and t2.
+
+        t1s and t2s must be given as a list [(start, end, t)]
+
+        t1 is defined as measured in a free decay experiment,
+        t2 is defined as measured in a ramsey/hahn echo experiment
+
+        Note especially that you must have t2 <= 2*t1
+        """
+        self.t1s = t1s
+        self.t2s = t2s
+        super().__init__(name, base_t1, base_t2)
+
+    def __str__(self):
+        return self.name
+
+    def make_idling_gate(self, start_time, end_time):
+        assert start_time < end_time
+        time = (start_time + end_time)/2
+        duration = end_time - start_time
+
+        decay_rate = 1/self.t1
+        deph_rate = 1/self.t2
+
+        for s, e, t1 in self.t1s:
+            s = max(s, start_time)
+            e = min(e, end_time)
+            decay_rate += (s - e)/t1/duration
+
+        for s, e, t2 in self.t2s:
+            s = max(s, start_time)
+            e = min(e, end_time)
+            deph_rate += (s - e)/t2/duration
+            
+
+        return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
 
 class Gate:
 
