@@ -114,7 +114,7 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
                     # t1=qb.t1,
                     # t2=qb.t2)
 
-                decay_gate = qb.get_dephasing_gate()
+                decay_gate = qb.make_idling_gate(g1.time, g2.time)
 
 
                 if meas_times and pi2_times:
