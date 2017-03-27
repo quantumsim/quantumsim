@@ -294,25 +294,6 @@ class TestOneBitPTM:
 
         assert np.allclose(dm2, dm)
 
-class TestGeneralTwoBitPTM:
-    def test_identity_big(self):
-        ptm = np.eye(16, dtype=np.float64)
-
-        ptm_gpu = drv.to_device(ptm)
-
-        dm = np.random.random((512, 512))
-
-        dm_gpu = drv.to_device(dm)
-
-        general_two_qubit_ptm(dm_gpu, ptm_gpu, 
-                np.uint32(4), np.uint32(4**5),
-                np.uint32(4), np.uint32(4**1),
-                np.uint32(4**9),
-                block=(512, 1, 1), grid=(512, 1, 1), shared=8 * (256 + 512))
-
-        dm2 = drv.from_device_like(dm_gpu, dm)
-
-        assert np.allclose(dm2, dm)
 
 class TestTwoBitPTM:
 
