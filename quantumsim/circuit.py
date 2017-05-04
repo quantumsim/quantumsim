@@ -70,12 +70,14 @@ class VariableDecoherenceQubit(Qubit):
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
-            decay_rate += (e - s)/t1/duration
+            if (s < e): 
+                decay_rate += (e - s)/t1/duration
 
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
-            deph_rate += (e - s)/t2/duration
+            if (s < e): 
+                deph_rate += (e - s)/t2/duration
             
 
         return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
