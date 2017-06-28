@@ -984,7 +984,7 @@ def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
     declaring the wrong measurement result with probability `readout_error` (symmetric for both outcomes).
 
-    See also: Measuremen
+    See also: Measurement
     """
     rng = np.random.RandomState(seed)
     p0, p1 = yield

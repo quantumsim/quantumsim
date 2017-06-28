@@ -12,7 +12,7 @@ try:
     from . import dm10
     default_density_class = dm10.Density
     using_gpu = True
-except ImportError:
+except:
     from . import dm_np
     default_density_class = dm_np.DensityNP
     using_gpu = False
