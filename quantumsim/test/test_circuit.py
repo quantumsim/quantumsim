@@ -75,6 +75,14 @@ class TestCircuit:
         assert len(c.gates) == 2
         assert c.gates[0].time == 0
 
+    def test_order_no_gates(self):
+        c = circuit.Circuit()
+        c.add_qubit("A")
+        c.add_qubit("B")
+
+        c.order()
+
+
     def test_add_waiting_full(self):
         c = circuit.Circuit()
 
