@@ -46,20 +46,19 @@ def dropnil(lst):
 
 class QASMParser(parsimonious.NodeVisitor):
 
-    def __init__(self, dt=(20, 40), t1=30000, t2=30000):
+    def __init__(self, qubit_parameters, dt=(20, 40)):
+
         self.grammar = qasm_grammar
         self.lines = []
         self.qubit_names = []
 
-        self.t1, self.t2 = t1, t2
-
         self.timestep = 0
-
         self.circuits = []
         self.gates = []
+        self.qubit_parameters = qubit_parameters
         self.timestep_increment_sgl = dt[0]
         self.timestep_increment_dbl = dt[1]
-        self.timestep_increment = min(dt[0], dt[1])
+        self.timestep_increment = min(self.timestep_increment_dbl, self.timestep_increment_sgl)
 
     def visit_qubit_spec(self, node, children):
         self.qubit_names.append(children[1])
@@ -68,7 +67,9 @@ class QASMParser(parsimonious.NodeVisitor):
         self.timestep = 0
         self.current_circuit = ct.Circuit("Circuit # " + str(len(self.circuits)))
         for qb in self.qubit_names:
-            self.current_circuit.add_qubit(qb, t1=self.t1, t2=self.t2)
+            t1 = self.qubit_parameters[qb]['T1']
+            t2 = self.qubit_parameters[qb]['T2']
+            self.current_circuit.add_qubit(qb, t1=t1, t2=t2)
 
     def visit_gatelist(self, node, children):
         self.timestep += self.timestep_increment
@@ -104,11 +105,16 @@ class QASMParser(parsimonious.NodeVisitor):
         return node.text
 
     def visit_meas(self, node, children):
-        self.current_circuit.add_waiting_gates(tmin=0, tmax=self.timestep+self.timestep_increment_sgl)
+        for b in self.qubit_names:
+            p_exc = self.qubit_parameters[b]['frac1_0']
+            p_dec = 1-self.qubit_parameters[b]['frac1_1']
+            ro_gate = ct.ButterflyGate(b, p_exc=p_exc, p_dec=p_dec,
+                                       time=self.timestep)
+            self.current_circuit.add_gate(ro_gate)
+        self.current_circuit.add_waiting_gates(tmin=0, tmax=self.timestep)
         self.current_circuit.order()
 
         self.circuits.append(self.current_circuit)
 
     def generic_visit(self, node, children):
         pass
-
