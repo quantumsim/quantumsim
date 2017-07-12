@@ -4,7 +4,7 @@ import numpy as np
 import functools
 
 qasm_grammar = parsimonious.Grammar(r"""
-        program = (qubit_spec)* nl (circuit_spec)+
+        program = nl* (qubit_spec)* nl (circuit_spec)+
         qubit_spec = "qubit " id nl
         circuit_spec = initall nl (gatelist)* meas
         initall = "init_all" nl
@@ -20,7 +20,8 @@ qasm_grammar = parsimonious.Grammar(r"""
 
         meas = "RO " arg nl
         ws = " "+
-        nl = (" " / "\n" / "\r")*
+        nl = (comment / " " / "\n" / "\r")*
+        comment = "#" ~".*"
         text = (id / "|" / " " / "\t")*
         id = ~"[A-Za-z0-9]+"
         """)
@@ -45,6 +46,19 @@ def dropnil(lst):
     return [a for a in lst if a is not None]
 
 class QASMParser(parsimonious.NodeVisitor):
+    """
+    Class to generate circuits from a qasm file
+
+    qubit_parameters is a dictionary defining the qubit properties:
+        qubit_parameters = {qubit_name: qubit_pars, ...}
+
+    where
+
+        qubit_pars.keys() == ['t1', 't2', 'frac_1_0', 'frac_1_1']
+
+    dt gives gate timings:
+        dt = (single_qubit_gate_time, two_qubit_gate_time)
+    """
 
     def __init__(self, qubit_parameters, dt=(20, 40)):
 
