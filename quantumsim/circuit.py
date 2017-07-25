@@ -70,15 +70,14 @@ class VariableDecoherenceQubit(Qubit):
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
-            if (s < e): 
+            if (s < e):
                 decay_rate += (e - s)/t1/duration
 
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
-            if (s < e): 
+            if (s < e):
                 deph_rate += (e - s)/t2/duration
-            
 
         return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
 
@@ -250,6 +249,26 @@ class RotateZ(SinglePTMGate):
             self.label = r"$R_z(\pi/%d)$" % divisor
         else:
             self.label = r"$R_z(%g)$" % angle
+
+class RotateEuler(SinglePTMGate):
+
+    def __init__(self, bit, time, theta, phi, lamda, **kwargs):
+        """ A single qubit rotation described by three Euler angles (theta, phi, lambda)
+         U = R_Z(phi).R_X(theta).R_Z(lamda)
+        """
+        unitary = np.array(
+            [[np.cos(theta/2),
+                -1j*np.exp(1j*lamda)*np.sin(theta/2)],
+             [-1j*np.exp(1j*phi)*np.sin(theta/2),
+                    np.exp(1j*(lamda+phi))*np.cos(theta/2)]
+            ])
+
+        p = ptm.single_kraus_to_ptm(unitary)
+
+
+        super().__init__(bit, time, p, **kwargs)
+
+        self.label = r"$R(\theta, \phi, \lambda)$"
 
 
 class IdlingGate:
