@@ -497,6 +497,8 @@ class CPhaseRotation(TwoPTMGate):
     def __init__(self, bit0, bit1, angle, time, **kwargs):
         p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)]))
 
+        self.angle = angle
+
         super().__init__(bit0, bit1, p, time, **kwargs)
 
 
