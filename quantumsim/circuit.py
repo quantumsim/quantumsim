@@ -491,6 +491,39 @@ class ISwap(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+class ISwapRotation(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, angle, time, **kwargs):
+        """
+        ISwap rotation gate, described by the two qubit operator
+
+        1  0                0               0
+        0  cos(theta)       i*sin(theta)    0
+        0  i*sin(theta)     cos(theta)      0
+        0  0                0               1
+        """
+        kraus = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(angle), 1j*np.sin(angle), 0],
+            [0, 1j*np.sin(angle), np.cos(angle), 0],
+            [0, 0, 0, 1]
+        ])
+
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]),
+                   marker="x", s=80, color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
 class Swap(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
