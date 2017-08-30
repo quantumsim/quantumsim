@@ -35,17 +35,27 @@ class Qubit:
 
     def make_idling_gate(self, start_time, end_time):
         assert start_time < end_time
-        time = (start_time + end_time)/2
+        time = (start_time + end_time) / 2
         duration = end_time - start_time
 
         return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
 
+class ClassicalBit(Qubit):
+    def __init__(self, name):
+        self.name = name
+
+    def make_idling_gate(self, start_time, end_time):
+        pass
+
 
 class VariableDecoherenceQubit(Qubit):
+
     def __init__(self, name, base_t1, base_t2, t1s, t2s):
         """A Qubit with a name and variable t1 and t2.
 
-        t1s and t2s must be given as a list [(start, end, t)]
+        t1s and t2s are  given as a list of intervals [(start_time, end_time, t1/t2)]
+
+        base_t1 and base_t2 are used when time is not inside any of those intervals.
 
         t1 is defined as measured in a free decay experiment,
         t2 is defined as measured in a ramsey/hahn echo experiment
@@ -61,25 +71,31 @@ class VariableDecoherenceQubit(Qubit):
 
     def make_idling_gate(self, start_time, end_time):
         assert start_time < end_time
-        time = (start_time + end_time)/2
+        time = (start_time + end_time) / 2
         duration = end_time - start_time
 
-        decay_rate = 1/self.t1
-        deph_rate = 1/self.t2
+        decay_rate = 1 / self.t1
+        deph_rate = 1 / self.t2
 
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
             if (s < e):
-                decay_rate += (e - s)/t1/duration
+                decay_rate += (e - s) / t1 / duration
 
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
             if (s < e):
-                deph_rate += (e - s)/t2/duration
+                deph_rate += (e - s) / t2 / duration
 
-        return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
+        return AmpPhDamp(
+            self.name,
+            time,
+            duration,
+            1 / decay_rate,
+            1 / deph_rate)
+
 
 class Gate:
 
@@ -250,6 +266,7 @@ class RotateZ(SinglePTMGate):
         else:
             self.label = r"$R_z(%g)$" % angle
 
+
 class RotateEuler(SinglePTMGate):
 
     def __init__(self, bit, time, theta, phi, lamda, **kwargs):
@@ -257,14 +274,13 @@ class RotateEuler(SinglePTMGate):
          U = R_Z(phi).R_X(theta).R_Z(lamda)
         """
         unitary = np.array(
-            [[np.cos(theta/2),
-                -1j*np.exp(1j*lamda)*np.sin(theta/2)],
-             [-1j*np.exp(1j*phi)*np.sin(theta/2),
-                    np.exp(1j*(lamda+phi))*np.cos(theta/2)]
-            ])
+            [[np.cos(theta / 2),
+                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+             ])
 
         p = ptm.single_kraus_to_ptm(unitary)
-
 
         super().__init__(bit, time, p, **kwargs)
 
@@ -431,7 +447,9 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class CNOT(TwoPTMGate):
+
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CNOT gate acting at time `time` between bit0 and bit1 (bit1 is the control bit).
         """
@@ -457,6 +475,7 @@ class CNOT(TwoPTMGate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
 
 class ISwap(TwoPTMGate):
 
@@ -602,6 +621,7 @@ class Measurement(Gate):
 
 
 class ResetGate(SinglePTMGate):
+
     def __init__(self, bit, time, state=0, **kwargs):
         if state == 0:
             p = ptm.gen_amp_damping_ptm(gamma_down=1, gamma_up=0)
@@ -812,10 +832,10 @@ class Circuit:
 
         return super().__getattribute__(name)
 
-    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None,
-                          idling_gate=None):
-        """Add AmpPhDamping gates to all qubits in the circuit
-        (unless their t1=t2=np.inf or only_qubits is specified).
+    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
+        """Add waiting gates to all qubits in the circuit.
+
+        The waiting gates are determined by calling Qubit.make_idling_gate (AmpPhDamping by default).
 
         If only_qubits is an iterable containing qubit names, gates are only added to those qubits.
 
@@ -834,12 +854,9 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
-        qubits_to_do = [qb for qb in self.qubits
-                        if qb.t1 < np.inf or qb.t2 < np.inf]
-
+        qubits_to_do = self.qubits
         if only_qubits:
-            qubits_to_do = [
-                qb for qb in qubits_to_do if qb.name in only_qubits]
+            qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
 
         for b in qubits_to_do:
             gts = [
@@ -847,12 +864,6 @@ class Circuit:
                     str(b)) and tmin <= gate.time <= tmax]
 
             if not gts:
-                # self.add_gate(
-                    # idling_gate(
-                        # bit=str(b),
-                        # time=(tmax + tmin) / 2,
-                        # duration=tmax - tmin,
-                        # t1=b.t1, t2=b.t2))
                 self.add_gate(b.make_idling_gate(tmin, tmax))
 
             else:
@@ -864,11 +875,12 @@ class Circuit:
                 for g1, g2 in zip(gts[:-1], gts[1:]):
                     if (isinstance(g1, IdlingGate) or
                             isinstance(g2, IdlingGate)):
-                        # there already is an idling gate, probably butterfly,
-                        # skip
-                        continue
-
-                    self.add_gate(b.make_idling_gate(g1.time, g2.time))
+                        # there already is an idling gate,
+                        # maybe added by hand, maybe from previous
+                        # calls of this function, skip
+                        pass
+                    else:
+                        self.add_gate(b.make_idling_gate(g1.time, g2.time))
 
     def order(self):
         """ Reorder the gates in the circuit so that they are applied in temporal order.
