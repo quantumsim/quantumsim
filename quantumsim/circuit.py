@@ -792,6 +792,20 @@ class ClassicalCNOT(Gate):
         if sdm.classical[self.bit0] == 1:
             sdm.classical[self.bit1] = 1 - sdm.classical[self.bit1]
 
+class ClassicalNOT(Gate):
+
+    def __init__(self, bit, time, **kwargs):
+        super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.bit = bit
+        self.label = "NOT"
+
+    def apply_to(self, sdm):
+        sdm.ensure_classical(self.bit)
+        sdm.classical[self.bit] = 1 - sdm.classical[self.bit]
+
+        
+
 
 class Circuit:
 
