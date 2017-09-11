@@ -7,8 +7,8 @@ qasm_grammar = parsimonious.Grammar(r"""
         program = (qubit_spec)* nl (circuit_spec)+
         qubit_spec = "qubits " id nl
         circuit_spec = initall nl (gatelist)* meas
-        init_all = circuit nl
-        initall = "init_all" nl
+        # init_all = circuit
+        initall = circuit nl
         gatelist = gate (more_gates)* nl
         more_gates = ("|" gate)
 
