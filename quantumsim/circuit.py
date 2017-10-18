@@ -66,9 +66,6 @@ class VariableDecoherenceQubit(Qubit):
         self.t2s = t2s
         super().__init__(name, base_t1, base_t2)
 
-    def __str__(self):
-        return self.name
-
     def make_idling_gate(self, start_time, end_time):
         assert start_time < end_time
         time = (start_time + end_time) / 2
@@ -289,7 +286,6 @@ class RotateEuler(SinglePTMGate):
 
 class IdlingGate:
     pass
-
 
 class AmpPhDamp(SinglePTMGate, IdlingGate):
 
@@ -803,9 +799,6 @@ class ClassicalNOT(Gate):
     def apply_to(self, sdm):
         sdm.ensure_classical(self.bit)
         sdm.classical[self.bit] = 1 - sdm.classical[self.bit]
-
-        
-
 
 class Circuit:
 
