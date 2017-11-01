@@ -4,12 +4,13 @@ import numpy as np
 import functools
 
 qasm_grammar = parsimonious.Grammar(r"""
-        program = (qubit_spec)* nl (circuit_spec)+
+        program = nl* (qubit_spec)* nl (circuit_spec)+
         qubit_spec = "qubits " id nl
-        circuit_spec = initall nl (gatelist)* meas
-        # init_all = circuit
+
         initall = circuit nl
         gatelist = gate (more_gates)* nl
+        circuit_spec = initall nl (gatelist)* meas
+        # init_all = circuit
         more_gates = ("|" gate)
 
         gate = !meas ws* (two_qubit_gate / single_qubit_gate) ws*
@@ -25,7 +26,7 @@ qasm_grammar = parsimonious.Grammar(r"""
         comment = "#" ~".*"
         text = (id / "|" / " " / "\t")*
         id = ~"[A-Za-z0-9]+"
-        circuit = ~".[A-Za-z0-9_-]+" nl
+        circuit = nl* ~".[A-Za-z0-9_-]+" nl
         """)
 
 
