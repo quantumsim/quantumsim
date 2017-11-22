@@ -37,8 +37,10 @@ class Qubit:
         assert start_time < end_time
         time = (start_time + end_time) / 2
         duration = end_time - start_time
-
-        return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
+        if self.t1 is np.inf and self.t2 is np.inf:
+            return None
+        else:
+            return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
 
 class ClassicalBit(Qubit):
     def __init__(self, name):
@@ -839,10 +841,18 @@ class Circuit:
 
         if isinstance(args[0], Qubit):
             qubit = args[0]
-            self.qubits.append(qubit)
         else:
-            qb = Qubit(*args, **kwargs)
-            self.qubits.append(qb)
+            qubit = Qubit(*args, **kwargs)
+
+
+        qubit_names = [qb.name for qb in self.qubits]
+
+        if qubit.name in qubit_names:
+            raise ValueError("Trying to add qubit with name {}: a qubit with this name already exists!".format(qubit.name))
+
+        self.qubits.append(qubit)
+
+
 
         return self.qubits[-1]
 
@@ -862,6 +872,10 @@ class Circuit:
             self.gates.append(gate)
         elif isinstance(gate_type, Gate):
             self.gates.append(gate_type)
+        elif gate_type is None:
+            return
+        else:
+            raise(ValueError("Could not add gate: Gate not understood!"))
 
         return self.gates[-1]
 
@@ -939,13 +953,19 @@ class Circuit:
                     str(b)) and tmin <= gate.time <= tmax]
 
             if not gts:
-                self.add_gate(b.make_idling_gate(tmin, tmax))
+                gate = b.make_idling_gate(tmin, tmax)
+                if gate is not None:
+                    self.add_gate(gate)
 
             else:
                 if gts[0].time - tmin > 1e-6:
-                    self.add_gate(b.make_idling_gate(tmin, gts[0].time))
+                    gate = b.make_idling_gate(tmin, gts[0].time)
+                    if gate is not None:
+                        self.add_gate(gate)
                 if tmax - gts[-1].time > 1e-6:
-                    self.add_gate(b.make_idling_gate(gts[-1].time, tmax))
+                    gate = b.make_idling_gate(gts[-1].time, tmax)
+                    if gate is not None:
+                        self.add_gate(gate)
 
                 for g1, g2 in zip(gts[:-1], gts[1:]):
                     if (isinstance(g1, IdlingGate) or
@@ -955,7 +975,9 @@ class Circuit:
                         # calls of this function, skip
                         pass
                     else:
-                        self.add_gate(b.make_idling_gate(g1.time, g2.time))
+                        gate = b.make_idling_gate(g1.time, g2.time)
+                        if gate is not None:
+                            self.add_gate(gate)
 
     def order(self):
         """ Reorder the gates in the circuit so that they are applied in temporal order.
@@ -1077,14 +1099,16 @@ def uniform_sampler(seed=42):
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
-    p0, p1 = yield
+    primers_nones = yield
+    while not primers_nones:
+        primers_nones = yield
+    p0, p1 = primers_nones
     while True:
         r = rng.random_sample()
         if r < p0 / (p0 + p1):
             p0, p1 = yield 0, 0, 1
         else:
             p0, p1 = yield 1, 1, 1
-
 
 def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
@@ -1093,7 +1117,10 @@ def uniform_noisy_sampler(readout_error, seed=42):
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
-    p0, p1 = yield
+    primers_nones = yield
+    while not primers_nones:
+        primers_nones = yield
+    p0, p1 = primers_nones
     while True:
         r = rng.random_sample()
         if r < p0 / (p0 + p1):
@@ -1138,6 +1165,10 @@ class BiasedSampler:
         @readout_error: probability of the state update and classical output disagreeing
         @seed: seed for rng
         '''
+
+        if ps is None:
+            return None
+
 
         p0, p1 = ps
 
