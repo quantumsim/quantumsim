@@ -4,7 +4,7 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 
-def partial_greedy_toposort(partial_orders, targets=set()):
+def partial_greedy_toposort(partial_orders, targets=set(), num_fixed=0):
     """Given a list of partial orders [p1, p2, ...] of hashable items pi = [a_i0, a_i1, ...],
     representing the constraints
 
@@ -31,7 +31,11 @@ def partial_greedy_toposort(partial_orders, targets=set()):
     targets = set(targets)
 
     # drop out empty lists
-    partial_orders = [po for po in partial_orders if po]
+    for j in range(len(partial_orders)-1, -1, -1):
+        if not partial_orders[j]:
+            if len(partial_orders)-j >= num_fixed:
+                num_fixed -= 1
+            del partial_orders[j]
 
     order_dicts = []
     for n, p in enumerate(partial_orders):
@@ -55,20 +59,26 @@ def partial_greedy_toposort(partial_orders, targets=set()):
 
     result = []
     all_used = set()
+    count = 0
     while trees != []:
-        trees.sort(key=lambda xy: len(all_used | xy[1]), reverse=True)
-        smallest = trees.pop()
-        all_used |= smallest[1]
-        smallest = smallest[0]
-        smallest.reverse()
-        smallest = [x for n, x in smallest]
 
-        new_trees = []
-        for l, i in trees:
-            l2 = [(n, x) for n, x in l if x not in smallest]
-            new_trees.append((l2, i))
+        if count <= num_fixed:
+            trees.sort(key=lambda xy: len(all_used | xy[1]), reverse=True)
+            smallest = trees.pop()
+            all_used |= smallest[1]
+            smallest = smallest[0]
+            smallest.reverse()
+            smallest = [x for n, x in smallest]
 
-        trees = new_trees
+            new_trees = []
+            for l, i in trees:
+                l2 = [(n, x) for n, x in l if x not in smallest]
+                new_trees.append((l2, i))
+
+            trees = new_trees
+        else:
+            smallest = trees.pop()
+            count += 1
 
         for s in smallest:
             if s not in result:

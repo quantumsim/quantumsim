@@ -870,7 +870,7 @@ class Circuit:
 
                     self.add_gate(b.make_idling_gate(g1.time, g2.time))
 
-    def order(self):
+    def order(self, qubit_list=[]):
         """ Reorder the gates in the circuit so that they are applied in temporal order.
         If any freedom exists when choosing the order of commuting gates, the order is chosen so that
         measurement gates are applied "as soon as possible"; this means that when applying to a
@@ -882,16 +882,23 @@ class Circuit:
         """
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
 
+        num_fixed_qubits = len(qubit_list)
+        for b in self.qubits:
+            if b not in qubit_list:
+                qubit_list.append(b)
+        qubit_list.reverse()
+
         gts_list = []
         targets = []
-        for n, b in enumerate(self.qubits):
+        for n, b in enumerate(qubit_list):
             gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
             if any(all_gates[g][1].is_measurement and all_gates[g][
                    1].involved_qubits[-1] == b.name for g in gts):
                 targets.append(n)
             gts_list.append(gts)
 
-        order = tp.partial_greedy_toposort(gts_list, targets=targets)
+        order = tp.partial_greedy_toposort(gts_list, targets=targets,
+                                           num_fixed=num_fixed_qubits)
 
         for n, i in enumerate(order):
             all_gates[i][1].annotation = "%d" % n
