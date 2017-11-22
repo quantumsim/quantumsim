@@ -527,6 +527,7 @@ class ISwapRotation(TwoPTMGate):
             [0, 1j*np.sin(angle), np.cos(angle), 0],
             [0, 0, 0, 1]
         ])
+        self.angle = angle
 
         p = ptm.double_kraus_to_ptm(kraus)
         super().__init__(bit0, bit1, p, time, **kwargs)
@@ -936,7 +937,8 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
-        qubits_to_do = self.qubits
+        qubits_to_do = [qb for qb in self.qubits
+                        if qb.t1 < np.inf or qb.t2 < np.inf]
         if only_qubits:
             qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
 
