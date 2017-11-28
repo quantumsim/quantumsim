@@ -5,10 +5,12 @@ import functools
 
 qasm_grammar = parsimonious.Grammar(r"""
         program = nl* (qubit_spec)* nl (circuit_spec)+
-        qubit_spec = "qubit " id nl
-        circuit_spec = initall nl (gatelist)* meas
-        initall = "init_all" nl
+        qubit_spec = "qubits " id nl
+
+        initall = circuit nl
         gatelist = gate (more_gates)* nl
+        circuit_spec = initall nl (gatelist)* meas
+        # init_all = circuit
         more_gates = ("|" gate)
 
         gate = !meas ws* (two_qubit_gate / single_qubit_gate) ws*
@@ -18,23 +20,34 @@ qasm_grammar = parsimonious.Grammar(r"""
         arg = ~"[A-Za-z0-9]+"
         gate_name = id
 
-        meas = "RO " arg nl
+        meas = "measure " arg nl
         ws = " "+
         nl = (comment / " " / "\n" / "\r")*
         comment = "#" ~".*"
         text = (id / "|" / " " / "\t")*
         id = ~"[A-Za-z0-9]+"
+        circuit = nl* ~".[A-Za-z0-9_-]+" nl
         """)
 
 
 sgl_qubit_gate_map = {
     "i": None,
+    "mry90": functools.partial(ct.RotateY, angle=-np.pi / 2),
     "my90": functools.partial(ct.RotateY, angle=-np.pi / 2),
+    "mY90": functools.partial(ct.RotateY, angle=-np.pi / 2),
+    "ry90": functools.partial(ct.RotateY, angle=np.pi / 2),
     "y90": functools.partial(ct.RotateY, angle=np.pi / 2),
+    "ry180": functools.partial(ct.RotateY, angle=np.pi),
     "y180": functools.partial(ct.RotateY, angle=np.pi),
+    "y": functools.partial(ct.RotateY, angle=np.pi),
+    "mrx90": functools.partial(ct.RotateX, angle=-np.pi / 2),
     "mx90": functools.partial(ct.RotateX, angle=-np.pi / 2),
+    "rx90": functools.partial(ct.RotateX, angle=np.pi / 2),
     "x90": functools.partial(ct.RotateX, angle=np.pi / 2),
+    "rx180": functools.partial(ct.RotateX, angle=np.pi),
     "x180": functools.partial(ct.RotateX, angle=np.pi),
+    "x": functools.partial(ct.RotateX, angle=np.pi),
+    "prepz": None
 }
 
 dbl_qubit_gate_map = {
@@ -75,7 +88,12 @@ class QASMParser(parsimonious.NodeVisitor):
         self.timestep_increment = min(self.timestep_increment_dbl, self.timestep_increment_sgl)
 
     def visit_qubit_spec(self, node, children):
-        self.qubit_names.append(children[1])
+        try:
+            num_qubits = int(children[1])
+            for i in range(num_qubits):
+                self.qubit_names.append("q"+str(i))
+        except ValueError as e:
+            raise Exception("Argument must be a number at 'qubits '"+children[1])
 
     def visit_initall(self, node, children):
         self.timestep = 0
