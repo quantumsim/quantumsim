@@ -155,29 +155,29 @@ class DensityNP:
         self.no_qubits = len(self.dm.shape)
 
     def hadamard(self, bit):
-        warnings.warn("use apply_ptm")
+        warnings.warn("hadamard deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        warnings.warn("use apply_ptm")
+        warnings.warn("amp_ph_damping deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_y deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_x deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
     def rotate_z(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_z deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
 
-        warnings.warn("deprecated, use two_ptm instead")
+        warnings.warn("cphase deprecated, use apply_ptm", DeprecationWarning)
         two_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1]))
         self.apply_two_ptm(bit0, bit1, two_ptm)

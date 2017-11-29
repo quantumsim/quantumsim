@@ -89,64 +89,84 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 }
 
 
-//two_qubit_general_ptm
-//apply a two_qubit pauli transfer matrix to a density matrix that has 
-//a general layout
-__global__ void two_qubit_general_ptm(double *dm, double *ptm_g, 
-        unsigned int dim_a, unsigned int stride_a,
-        unsigned int dim_b, unsigned int stride_b,
+
+//Apply a general pauli transfer matrix, to (up to) two subsystems (arbitrary dimension)
+//a is the msb, b is the lsb.
+//If the PTM is diagonal, this works in-place, i.e. with dm_in == dm_out. Otherwise NOT!
+//You need to give the dimensions of two of the intermediate bystander spaces. 
+
+//it is also important that a must be the msb in the ptm, but also the msb in the density matrix.
+//if not, you must reshape the ptm (switch a and b) before calling the kernel.
+__global__ void two_qubit_general_ptm(
+        double *dm_in, double *dm_out,
+        double *ptm_g, 
+        unsigned int dim_a_in, 
+        unsigned int dim_b_in, 
+        unsigned int dim_z, unsigned int dim_y,
         unsigned int dim_rho) {
 
-    const unsigned int idx = threadIdx.x + blockIdx.x*blockDim.x;
+    /*const unsigned int idx = threadIdx.x + blockIdx.x*blockDim.x;*/
+    /*if (idx >= dim_rho) return;*/
 
 
-    // external memory required: (blockDim.x + dim_a*dim_b) double floats
+    //(structure worked out in Notebook II, p. 203 ff)
+        
+    //blockDim.x = dim_a_out
+    //blockDim.y = dim_b_out
+    //blockDim.z = d_internal (arbitrary, to make blocksize and shared memory reasonable)
+
+    const unsigned int dim_a_out = blockDim.x;
+    const unsigned int dim_b_out = blockDim.y;
+    const unsigned int d_internal = blockDim.z;
+
+    const unsigned int ax = threadIdx.x;
+    const unsigned int bx = threadIdx.y;
+    const unsigned int zx = threadIdx.z;
+    const unsigned int ix = blockIdx.x;
+
+    unsigned int xyz, x, y, z;
+    xyz = ix*d_internal + zx;
+    z = xyz % dim_z;
+    xyz /= dim_z;
+    y = xyz % dim_y;
+    xyz /= dim_y;
+    x = xyz;
+    // can do/need termination statement here?
+
+    // external memory required: (blockDim.x + dim_a*dim_b**2) double floats
     extern __shared__ double ptm[];
-    double *data = &ptm[dim_a*dim_b]; 
+    double *data = &ptm[dim_a_in*dim_b_in*dim_a_out*dim_b_out]; 
 
-    // load ptm to shared memory (ptm should be smaller than block, but in case it is not, loop)
-    for(int i=0; i < dim_a*dim_b; i+=blockDim.x) {
-        if(i+threadIdx.x < dim_a*dim_b) {
-            ptm[i+threadIdx.x] = ptm_g[i+threadIdx.x];
+    // load ptm to shared memory 
+
+    const int row = (ax*dim_b_out + bx)*dim_b_in*dim_a_in;
+    for(int g = zx; g < dim_a_in*dim_b_in; g += d_internal) {
+        ptm[row + g] = ptm_g[row + g];
+    }
+
+    // load data to memory
+    const int column = zx*dim_a_in*dim_b_in;
+    unsigned int addr_in;
+    for(int ai = ax; ai < dim_a_in; ai += dim_a_out) {
+        for(int bi = bx; bi < dim_b_in; bi += dim_b_out) {
+            addr_in = (((x*dim_a_in + ai)*dim_y + y)*dim_b_in + bi)*dim_z + z;
+            data[column + ai*dim_b_in + bi] = dm_in[addr_in];
         }
     }
 
-    if (idx >= dim_rho) return;
-
-    //adress calculation
-    //the index is of the form idx = X Y Z ib ia, 
-    //where the address is of the form addr = X ib Y ia Z
-    //this integer arithmetic is possibly is quite slow. one might want to do it in float instead
-
-    unsigned int i = idx;
-    unsigned int reduced_stride_of_y = stride_b/(stride_a*dim_a);
-    unsigned int idx_a = i % dim_a;
-    i = i / dim_a;
-    unsigned int idx_b = i % dim_b;
-    i = i / dim_b;
-    unsigned int     z = i % (stride_a);
-    i = i / stride_a;
-    unsigned int     y = i % reduced_stride_of_y;
-    unsigned int     x = i / reduced_stride_of_y;
-
-    unsigned int addr = z + stride_a*idx_a + stride_a*dim_a*y + stride_b*idx_b + stride_b*dim_b*x;
-
-    //fetch data to memory
-    //data[threadIdx.x] = dm[addr];
+    //done loading
     __syncthreads();
 
-
-    /*int row = idx_b*dim_b + idx_a;//000 ib ia;*/
-    /*int offset = idx - row;          //x y z00;*/
-
-    double acc=1;
-    /*for(int i=0; i<dim_a*dim_b; i++) {*/
-        /*acc += ptm[dim_a*dim_b*row + i]*data[offset+i];*/
-    /*}*/
+    //calculate the vector product
+    double acc=0.0;
+    for(int delta=0; delta < dim_a_in*dim_b_in; delta++) {
+        acc += ptm[row + delta]*data[column + delta];
+    }
 
     //upload back to global memory
     __syncthreads();
-    dm[addr] = acc;
+    const int addr_out = (((x*dim_a_out + ax)*dim_y + y)*dim_b_out + bx)*dim_z + z;
+    dm_out[addr_out] = acc;
 }
 
 
@@ -200,11 +220,10 @@ __global__ void single_qubit_ptm(double *dm, double *ptm_g,  unsigned int bit, u
 }
 
 
+//apply a two-qubit (16x16) ptm to two qubits. This can be done in-place and with fast memory calculation.
 __global__ void two_qubit_ptm(double *dm, double *ptm_g, unsigned int bit0, unsigned int bit1, unsigned int no_qubits) {
     const unsigned int x = threadIdx.x;
     const unsigned int high_x = blockIdx.x * blockDim.x;
-
-
 
     extern __shared__ double ptm[];
     double *data = &ptm[256]; //need blockDim.x double floats
@@ -334,7 +353,7 @@ __global__ void trace(double *diag, int bit) {
 
 //swap kernel
 //exchange two qubits. The only purpose of this kernel is to arrange a certain qubit as to be the most significant so that
-//projection is trivial. Actual swap gates should be implemented by relabeling!
+//projection is trivial. Actual swap gates should be implemented by a two-qubit ptm, (or by relabeling if perfect)!
 __global__ void swap(double *dm, unsigned int bit1, unsigned int bit2, unsigned int no_qubits) {
     unsigned int addr = threadIdx.x + blockDim.x*blockIdx.x;
 

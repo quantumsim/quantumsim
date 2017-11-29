@@ -278,23 +278,23 @@ class Density:
                                         shared_size=8 * (17 + self._blocksize))
 
     def hadamard(self, bit):
-        warnings.warn("use apply_ptm")
+        warnings.warn("hadamard deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        warnings.warn("use apply_ptm")
+        warnings.warn("amp_ph_damping deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_y deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_x deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
     def rotate_z(self, bit, angle):
-        warnings.warn("use apply_ptm")
+        warnings.warn("rotate_z deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def add_ancilla(self, anc_st):

@@ -21,7 +21,7 @@ try:
     trace = mod.get_function("trace")
     swap = mod.get_function("swap")
     two_qubit_ptm = mod.get_function("two_qubit_ptm")
-    general_two_qubit_ptm = mod.get_function("two_qubit_general_ptm")
+    two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
 except ImportError:
     hascuda = False
 
@@ -293,6 +293,74 @@ class TestOneBitPTM:
         dm2 = drv.from_device_like(dm_gpu, dm)
 
         assert np.allclose(dm2, dm)
+
+class TestGeneralTwoBitPTM:
+    def test_identity_big(self):
+        ptm = np.eye(16, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((512, 512))
+
+        dm_gpu = drv.to_device(dm)
+
+        # blocksize for general_two_qubit_ptm must be (dim_internal, dim_a, dim_b)
+        two_qubit_general_ptm(dm_gpu, dm_gpu, ptm_gpu, 
+                np.uint32(4), np.uint32(4),
+                np.uint32(4**2), np.uint32(4**3),
+                np.uint32(4**9),
+                block=(4, 4, 16), grid=(512**2//256, 1, 1), shared=8 * (256 + 256))
+
+        dm2 = drv.from_device_like(dm_gpu, dm)
+
+        assert np.allclose(dm2, dm)
+
+    def test_identity_small_odd_dimensions(self):
+        ptm = np.eye(3*5, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((3, 5))
+        dm2 = np.zeros_like(dm)
+
+        dm_gpu = drv.to_device(dm)
+        dm2_gpu = drv.to_device(dm2)
+
+        # blocksize for general_two_qubit_ptm must be (dim_internal, dim_a, dim_b)
+        two_qubit_general_ptm(dm_gpu, dm2_gpu, ptm_gpu, 
+                np.uint32(3), np.uint32(5),
+                np.uint32(1), np.uint32(1),
+                np.uint32(3*5),
+                block=(3, 5, 1), grid=(1, 1, 1), shared=8 * ((3*5)**2 + (3*5)**2))
+
+        dm2 = drv.from_device_like(dm2_gpu, dm2)
+
+        assert np.allclose(dm2, dm)
+
+    def test_sum_by_two_ptm(self):
+        ptm = np.ones(3*5, dtype=np.float64)
+
+        ptm_gpu = drv.to_device(ptm)
+
+        dm = np.random.random((3, 5))
+        dm2 = np.zeros(1)
+
+        dm_gpu = drv.to_device(dm)
+        dm2_gpu = drv.to_device(dm2)
+
+        # blocksize for general_two_qubit_ptm must be (dim_internal, dim_a, dim_b)
+        two_qubit_general_ptm(dm_gpu, dm2_gpu, ptm_gpu, 
+                np.uint32(3), np.uint32(5),
+                np.uint32(1), np.uint32(1),
+                np.uint32(3*5),
+                block=(1, 1, 1), grid=(1, 1, 1), shared=8 * ((3*5)**2 + (3*5)**2))
+
+        dm2 = drv.from_device_like(dm2_gpu, dm2)
+
+        assert np.allclose(dm2, dm.sum())
+
+
+
 
 
 class TestTwoBitPTM:
