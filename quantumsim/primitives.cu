@@ -89,7 +89,9 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 }
 
 
-
+//two_qubit_general_ptm
+//apply a two_qubit pauli transfer matrix to a density matrix that has 
+//a general layout
 __global__ void two_qubit_general_ptm(double *dm, double *ptm_g, 
         unsigned int dim_a, unsigned int stride_a,
         unsigned int dim_b, unsigned int stride_b,
@@ -102,7 +104,7 @@ __global__ void two_qubit_general_ptm(double *dm, double *ptm_g,
     extern __shared__ double ptm[];
     double *data = &ptm[dim_a*dim_b]; 
 
-    // load ptm to shared memory (ptm should be smaller than block, but in case it is not, loop here)
+    // load ptm to shared memory (ptm should be smaller than block, but in case it is not, loop)
     for(int i=0; i < dim_a*dim_b; i+=blockDim.x) {
         if(i+threadIdx.x < dim_a*dim_b) {
             ptm[i+threadIdx.x] = ptm_g[i+threadIdx.x];

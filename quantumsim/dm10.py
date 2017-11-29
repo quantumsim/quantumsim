@@ -101,7 +101,12 @@ class Density:
 
             self.data = ga.empty(self._size, np.float64)
             _pauli_reshuffle.prepared_call(
-                grid, block, complex_dm.gpudata, self.data.gpudata, self.no_qubits, 0)
+                grid,
+                block,
+                complex_dm.gpudata,
+                self.data.gpudata,
+                self.no_qubits,
+                0)
         elif isinstance(data, ga.GPUArray):
             assert data.size == self._size
             assert data.dtype == np.float64
@@ -139,12 +144,12 @@ class Density:
             self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
-        _trace.prepared_call(grid, block,
-                             self.diag_work.gpudata, -1, shared_size=8 * block[0])
+        _trace.prepared_call(
+            grid, block, self.diag_work.gpudata, -1, shared_size=8 * block[0])
 
         tr0 = self.diag_work[0].get()
 
-        return tr0 
+        return tr0
 
     def renormalize(self):
         """Renormalize to trace one."""
@@ -166,7 +171,12 @@ class Density:
         grid = (grid_size, grid_size, 1)
         block = (block_size, block_size, 1)
         _pauli_reshuffle.prepared_call(
-            grid, block, complex_dm.gpudata, self.data.gpudata, self.no_qubits, 1)
+            grid,
+            block,
+            complex_dm.gpudata,
+            self.data.gpudata,
+            self.no_qubits,
+            1)
         for i in range(self.no_qubits):
             _bit_to_pauli_basis.prepared_call(
                 grid, block, complex_dm.gpudata, 1 << i, self.no_qubits)
@@ -194,21 +204,30 @@ class Density:
         assert bit0 < self.no_qubits
         assert bit1 < self.no_qubits
 
-        warnings.warn("deprecated, use two_ptm instead")
+        warnings.warn(
+            "cphase deprecated, use two_ptm instead",
+            DeprecationWarning)
 
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
         if "cphase" not in self._ptm_cache:
-            p = ptm.double_kraus_to_ptm(np.diag([1,1,1,-1])).real
+            p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
             self._ptm_cache["cphase"] = ga.to_gpu(p.astype(np.float64))
 
-        _two_qubit_ptm.prepared_call(grid, block, self.data.gpudata, self._ptm_cache["cphase"].gpudata, bit0, bit1, self.no_qubits, shared_size=8*(257+self._blocksize))
+        _two_qubit_ptm.prepared_call(grid,
+                                     block,
+                                     self.data.gpudata,
+                                     self._ptm_cache["cphase"].gpudata,
+                                     bit0,
+                                     bit1,
+                                     self.no_qubits,
+                                     shared_size=8 * (257 + self._blocksize))
 
         # _cphase.prepared_call(grid, block,
-                              # self.data.gpudata,
-                              # bit0, bit1,
-                              # self.no_qubits)
+        # self.data.gpudata,
+        # bit0, bit1,
+        # self.no_qubits)
 
     def apply_two_ptm(self, bit0, bit1, ptm):
         assert bit0 < self.no_qubits
@@ -226,9 +245,14 @@ class Density:
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        _two_qubit_ptm.prepared_call(grid, block,
-                                        self.data.gpudata, ptm_gpu.gpudata, bit0, bit1, self.no_qubits,
-                                        shared_size=8 * (256 + self._blocksize))
+        _two_qubit_ptm.prepared_call(grid,
+                                     block,
+                                     self.data.gpudata,
+                                     ptm_gpu.gpudata,
+                                     bit0,
+                                     bit1,
+                                     self.no_qubits,
+                                     shared_size=8 * (256 + self._blocksize))
 
     def apply_ptm(self, bit, ptm):
         assert bit < self.no_qubits
@@ -245,8 +269,12 @@ class Density:
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
 
-        _single_qubit_ptm.prepared_call(grid, block,
-                                        self.data.gpudata, ptm_gpu.gpudata, bit, self.no_qubits,
+        _single_qubit_ptm.prepared_call(grid,
+                                        block,
+                                        self.data.gpudata,
+                                        ptm_gpu.gpudata,
+                                        bit,
+                                        self.no_qubits,
                                         shared_size=8 * (17 + self._blocksize))
 
     def hadamard(self, bit):
@@ -280,7 +308,7 @@ class Density:
             new_dm = ga.zeros(self._size * 4, np.float64)
             offset = anc_st * 3 * byte_size_of_smaller_dm
             drv.memcpy_dtod(int(new_dm.gpudata) + offset,
-                                  self.data.gpudata, byte_size_of_smaller_dm)
+                            self.data.gpudata, byte_size_of_smaller_dm)
 
             self.data = new_dm
         else:
@@ -290,7 +318,7 @@ class Density:
                               0, 3 * byte_size_of_smaller_dm)
             if anc_st == 1:
                 drv.memcpy_dtod(int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
-                                      self.data.gpudata, byte_size_of_smaller_dm)
+                                self.data.gpudata, byte_size_of_smaller_dm)
                 drv.memset_d8(self.data.gpudata, 0, 3 *
                               byte_size_of_smaller_dm)
 
@@ -314,8 +342,13 @@ class Density:
             self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
-        _trace.prepared_call(grid, block,
-                             self.diag_work.gpudata, bit, shared_size=8 * block[0])
+        _trace.prepared_call(
+            grid,
+            block,
+            self.diag_work.gpudata,
+            bit,
+            shared_size=8 *
+            block[0])
 
         tr1, tr0 = self.diag_work[:2].get()
         return tr0, tr1
@@ -336,9 +369,9 @@ class Density:
         if state == 1:
             byte_size_of_smaller_dm = 2**(2 * self.no_qubits - 2) * 8
             drv.memcpy_dtod(self.data.gpudata,
-                                  int(self.data.gpudata) + 3 *
-                                  byte_size_of_smaller_dm,
-                                  byte_size_of_smaller_dm)
+                            int(self.data.gpudata) + 3 *
+                            byte_size_of_smaller_dm,
+                            byte_size_of_smaller_dm)
 
         self._set_no_qubits(self.no_qubits - 1)
 
