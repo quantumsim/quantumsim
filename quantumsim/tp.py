@@ -30,6 +30,8 @@ def partial_greedy_toposort(partial_orders, targets=set()):
 
     targets = set(targets)
 
+    # drop out empty lists
+    partial_orders = [po for po in partial_orders if po]
 
     order_dicts = []
     for n, p in enumerate(partial_orders):
