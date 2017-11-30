@@ -14,10 +14,53 @@ single_tensor = np.array([[[1, 0], [0, 0]],
 
 double_tensor = np.kron(single_tensor, single_tensor)
 
+_ptm_basis_vectors_cache = {}
 
-def to_0xy1_basis(ptm):
+def general_ptm_basis_vector(n):
+    """
+    The vector of 'Pauli matrices' in dimension n.
+    First the n diagonal matrices, then 
+    the off-diagonals in x-like, y-like pairs
+    """
+
+    if n in _ptm_basis_vectors_cache:
+        return _ptm_basis_vectors_cache[n]
+    else:
+
+        basis_vector = []
+
+        for i in range(n):
+            v = np.zeros((n, n))
+            v[i, i] = 1
+            basis_vector.append(v)
+
+        for i in range(n):
+            for j in range(i):
+                #x-like
+                v = np.zeros((n, n))
+                v[i, j] = np.sqrt(0.5) 
+                v[j, i] = np.sqrt(0.5) 
+                basis_vector.append(v)
+
+                #y-like
+                v = np.zeros((n, n))
+                v[i, j] = 1j*np.sqrt(0.5) 
+                v[j, i] = -1j*np.sqrt(0.5) 
+                basis_vector.append(v)
+
+        basis_vector = np.array(basis_vector)
+
+        _ptm_basis_vectors_cache[n] = basis_vector
+
+    return basis_vector
+
+
+def to_0xy1_basis(ptm, general_basis=False):
     """Transform a Pauli transfer in the "usual" basis (0xyz) [1],
     to the 0xy1 basis which is required by sparsesdm.apply_ptm.
+
+    If general_basis is True, transform to the 01xy basis, which is the 
+    two-qubit version of the general basis defined by ptm.general_ptm_basis_vector().
 
     ptm: The input transfer matrix in 0xyz basis. Can be 4x4, 4x3 or 3x3 matrix of real numbers.
 
@@ -38,9 +81,15 @@ def to_0xy1_basis(ptm):
 
     assert ptm.shape == (4, 4)
     assert np.allclose(ptm[0, :], [1, 0, 0, 0])
-    return np.dot(
+    result = np.dot(
         basis_transformation_matrix, np.dot(
             ptm, basis_transformation_matrix))
+
+    if general_basis:
+        result = result[[0, 3, 1, 2], [0, 3, 1, 2]]
+
+    return result
+
 
 
 def to_0xyz_basis(ptm):
