@@ -3,6 +3,8 @@ import pytest
 
 import quantumsim.dm_np as dm_np
 
+import quantumsim.ptm as ptm
+
 # There are two implementations for the backend (on CPU and on GPU)
 # here we collect the classes we want to test
 
@@ -14,6 +16,7 @@ try:
     import pycuda.gpuarray as ga
     import quantumsim.dm10 as dm10
     implementations_to_test.append(dm10.Density)
+    implementations_to_test.append(dm10.DensityGeneral)
     hascuda = True
 except ImportError:
     pass
@@ -194,6 +197,14 @@ class TestDensityCPhase:
         assert np.allclose(np.trace(a0), np.trace(a1))
         assert not np.allclose(a0, a1)
 
+    def test_does_something_to_small_random_state(self, dm_random):
+        dm = dm_random
+        a0 = dm.to_array()
+        dm.cphase(0, 4)
+        a1 = dm.to_array()
+        assert np.allclose(np.trace(a0), np.trace(a1))
+        assert not np.allclose(a0, a1)
+
     def test_preserve_trace_empty(self, dm_random):
         dm = dm_random
         dm.cphase(2, 1)
@@ -270,13 +281,37 @@ class TestDensityHadamard:
         assert dm.to_array()[0, 0] == 1
 
 class TestCnot:
-    def test_cnot(self, dmclass):
+    def test_cnot_groundstate(self, dmclass):
         dm = dmclass(2)
         a = dm.to_array()
         dm.hadamard(1)
         dm.cphase(0, 1)
         dm.hadamard(1)
         assert np.allclose(dm.to_array(), a)
+
+    def test_cnot_10_to_11(self, dmclass):
+        dm = dmclass(2)
+        dm.rotate_x(0, np.pi)
+        a = dm.to_array()
+        assert np.allclose(np.diagonal(a), [0, 1, 0, 0])
+        dm.hadamard(1)
+        dm.cphase(0, 1)
+        dm.hadamard(1)
+        a = dm.to_array()
+        assert np.allclose(np.diagonal(a), [0, 0, 0, 1])
+
+
+    def test_cnot_direct_10_to_11(self, dmclass):
+        u = [[1, 0, 0, 0],
+             [0, 1, 0, 0],
+             [0, 0, 0, 1],
+             [0, 0, 1, 0]]
+        cnot_ptm = ptm.double_kraus_to_ptm(np.array(u))
+        dm = dmclass(2)
+        dm.rotate_x(0, np.pi)
+        dm.apply_two_ptm(1, 0, cnot_ptm)
+        a = dm.to_array()
+        assert np.allclose(np.diagonal(a), [0, 0, 0, 1])
 
 class TestDensityRotateX:
 

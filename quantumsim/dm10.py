@@ -60,6 +60,8 @@ _trace = mod.get_function("trace")
 _trace.prepare("Pi")
 _swap = mod.get_function("swap")
 _swap.prepare("PIII")
+_two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
+_two_qubit_general_ptm.prepare("PPPIIIII")
 
 
 class Density:
@@ -201,28 +203,13 @@ class Density:
         return self.diag_work.get()
 
     def cphase(self, bit0, bit1):
-        assert bit0 < self.no_qubits
-        assert bit1 < self.no_qubits
-
         warnings.warn(
             "cphase deprecated, use two_ptm instead",
             DeprecationWarning)
 
-        block = (self._blocksize, 1, 1)
-        grid = (self._gridsize, 1, 1)
+        cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
 
-        if "cphase" not in self._ptm_cache:
-            p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
-            self._ptm_cache["cphase"] = ga.to_gpu(p.astype(np.float64))
-
-        _two_qubit_ptm.prepared_call(grid,
-                                     block,
-                                     self.data.gpudata,
-                                     self._ptm_cache["cphase"].gpudata,
-                                     bit0,
-                                     bit1,
-                                     self.no_qubits,
-                                     shared_size=8 * (257 + self._blocksize))
+        self.apply_two_ptm(bit0, bit1, cphase_ptm)
 
         # _cphase.prepared_call(grid, block,
         # self.data.gpudata,
@@ -376,3 +363,44 @@ class Density:
         self._set_no_qubits(self.no_qubits - 1)
 
         return self
+
+class DensityGeneral(Density):
+    """A subclass of Density that uses general_two_qubit_ptm as a backend,
+    for testing purposes"""
+
+
+    def apply_two_ptm(self, bit0, bit1, ptm):
+        assert bit0 < self.no_qubits
+        assert bit1 < self.no_qubits
+
+        # bit0 must be the smaller one.
+        if bit1 < bit0:
+            bit1, bit0 = bit0, bit1
+            ptm = np.einsum("abcd -> badc", ptm.reshape((4,4,4,4))).reshape((16,16))
+
+        key = hash(ptm.tobytes())
+        try:
+            ptm_gpu = self._ptm_cache[key]
+        except KeyError:
+            assert ptm.shape == (16, 16)
+            assert ptm.dtype == np.float64
+            self._ptm_cache[key] = ga.to_gpu(ptm)
+            ptm_gpu = self._ptm_cache[key]
+
+        # dim_a_out, dim_b_out, d_internal (arbitrary)
+        block = (4, 4, 16)
+        blocksize = 4*4*16
+        gridsize = max(1, (4**self.no_qubits)//blocksize)
+        grid = (gridsize, 1, 1)
+
+
+        _two_qubit_general_ptm.prepared_call(grid,
+                                     block,
+                                     self.data.gpudata,
+                                     self.data.gpudata,
+                                     ptm_gpu.gpudata,
+                                     4, 4,
+                                     4**bit0,
+                                     4**(bit1-bit0-1),
+                                     4**self.no_qubits,
+                                     shared_size=8 * (256 + blocksize))
