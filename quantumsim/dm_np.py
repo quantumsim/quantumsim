@@ -109,7 +109,7 @@ class DensityNP:
 
     def partial_trace(self, bit):
         if bit >= self.no_qubits:
-            raise ValueError("bit does not exist")
+            raise ValueError("Bit '{}' does not exist".format(bit))
 
         trace_tensor = np.array([1, 0, 0, 1])
         no_trace_tensor = np.array([[1, 0, 0, 0], [0, 0, 0, 1]])
