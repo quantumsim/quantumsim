@@ -356,7 +356,6 @@ class TestCPhaseGate:
 
         sdm.cphase.assert_called_once_with("A", "B")
 
-
 class TestAmpPhDamping:
 
     def test_init(self):

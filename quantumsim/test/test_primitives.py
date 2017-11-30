@@ -304,7 +304,8 @@ class TestGeneralTwoBitPTM:
 
         dm_gpu = drv.to_device(dm)
 
-        # blocksize for general_two_qubit_ptm must be (dim_internal, dim_a, dim_b)
+        # blocksize for general_two_qubit_ptm must be 
+        # (dim_a, dim_b, dim_internal)
         two_qubit_general_ptm(dm_gpu, dm_gpu, ptm_gpu, 
                 np.uint32(4), np.uint32(4),
                 np.uint32(4**2), np.uint32(4**3),
@@ -358,10 +359,6 @@ class TestGeneralTwoBitPTM:
         dm2 = drv.from_device_like(dm2_gpu, dm2)
 
         assert np.allclose(dm2, dm.sum())
-
-
-
-
 
 class TestTwoBitPTM:
 

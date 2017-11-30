@@ -349,7 +349,6 @@ def test_euler_rotation():
     assert np.allclose(d, [1, 0])
 
 
-
 def test_classical_not():
     sdm = sparsedm.SparseDM("A")
     c = circuit.Circuit()
