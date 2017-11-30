@@ -30,20 +30,20 @@ def general_ptm_basis_vector(n):
         basis_vector = []
 
         for i in range(n):
-            v = np.zeros((n, n))
+            v = np.zeros((n, n), np.complex)
             v[i, i] = 1
             basis_vector.append(v)
 
         for i in range(n):
             for j in range(i):
                 #x-like
-                v = np.zeros((n, n))
+                v = np.zeros((n, n), np.complex)
                 v[i, j] = np.sqrt(0.5) 
                 v[j, i] = np.sqrt(0.5) 
                 basis_vector.append(v)
 
                 #y-like
-                v = np.zeros((n, n))
+                v = np.zeros((n, n), np.complex)
                 v[i, j] = 1j*np.sqrt(0.5) 
                 v[j, i] = -1j*np.sqrt(0.5) 
                 basis_vector.append(v)
@@ -86,7 +86,7 @@ def to_0xy1_basis(ptm, general_basis=False):
             ptm, basis_transformation_matrix))
 
     if general_basis:
-        result = result[[0, 3, 1, 2], [0, 3, 1, 2]]
+        result = result[[0, 3, 1, 2], :][:, [0, 3, 1, 2]]
 
     return result
 
@@ -111,9 +111,6 @@ def to_0xyz_basis(ptm):
     else:
         raise ValueError("Dimensions wrong, must be one- or two Pauli transfer matrix ")
 
-
-
-
 def hadamard_ptm():
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary Hadamard (Rotation around the (x+z)/sqrt(2) axis by π).
@@ -123,8 +120,7 @@ def hadamard_ptm():
                      [0, 0, -1, 0],
                      [0.5, -np.sqrt(0.5), 0, 0.5]], np.float64)
 
-
-def amp_ph_damping_ptm(gamma, lamda):
+def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing amplitude and phase damping with parameters gamma and lambda.
     (See Nielsen & Chuang for definition.)
@@ -135,7 +131,7 @@ def amp_ph_damping_ptm(gamma, lamda):
         [0, 0, np.sqrt((1 - gamma) * (1 - lamda)), 0],
         [gamma, 0, 0, 1 - gamma]]
     )
-    return to_0xy1_basis(ptm)
+    return to_0xy1_basis(ptm, general_basis)
 
 def gen_amp_damping_ptm(gamma_down, gamma_up):
     """Return a 4x4 Pauli transfer matrix  representing amplitude damping including an excitation rate gamma_up.
@@ -170,7 +166,7 @@ def bitflip_ptm(p):
     return to_0xy1_basis(ptm)
 
 
-def rotate_x_ptm(angle):
+def rotate_x_ptm(angle, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the x-axis by angle.
     """
@@ -178,10 +174,10 @@ def rotate_x_ptm(angle):
                     [0, np.cos(angle), -np.sin(angle)],
                     [0, np.sin(angle), np.cos(angle)]])
 
-    return to_0xy1_basis(ptm)
+    return to_0xy1_basis(ptm, general_basis)
 
 
-def rotate_y_ptm(angle):
+def rotate_y_ptm(angle, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the y-axis by angle.
     """
@@ -189,22 +185,33 @@ def rotate_y_ptm(angle):
                     [0, 1, 0],
                     [-np.sin(angle), 0, np.cos(angle)]])
 
-    return to_0xy1_basis(ptm)
+    return to_0xy1_basis(ptm, general_basis)
 
 
-def rotate_z_ptm(angle):
+def rotate_z_ptm(angle, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the z-axis by angle.
     """
     ptm = np.array([[np.cos(angle), -np.sin(angle), 0],
                     [np.sin(angle), np.cos(angle), 0],
                     [0, 0, 1]])
-    return to_0xy1_basis(ptm)
+    return to_0xy1_basis(ptm, general_basis)
 
 
-def single_kraus_to_ptm(kraus):
+def single_kraus_to_ptm(kraus, general_basis=False):
     """Given a Kraus operator in z-basis, obtain the corresponding single-qubit ptm in 0xy1 basis"""
-    return np.einsum("xab, bc, ycd, ad -> xy", single_tensor, kraus, single_tensor, kraus.conj()).real
+    if general_basis:
+        st = general_ptm_basis_vector(2)
+    else:
+        st = single_tensor
+    return np.einsum("xab, bc, ycd, ad -> xy", st, kraus, st, kraus.conj()).real
 
-def double_kraus_to_ptm(kraus):
-    return np.einsum("xab, bc, ycd, ad -> xy", double_tensor, kraus, double_tensor, kraus.conj()).real
+def double_kraus_to_ptm(kraus, general_basis=False):
+    if general_basis:
+        st = general_ptm_basis_vector(2)
+    else:
+        st = single_tensor
+
+    dt = np.kron(st, st)
+
+    return np.einsum("xab, bc, ycd, ad -> xy", dt, kraus, dt, kraus.conj()).real

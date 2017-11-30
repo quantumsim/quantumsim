@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import quantumsim.dm_np as dm_np
+import quantumsim.dm_general_np as dm_g_np
 
 import quantumsim.ptm as ptm
 
@@ -10,6 +11,7 @@ import quantumsim.ptm as ptm
 
 implementations_to_test = []
 implementations_to_test.append(dm_np.DensityNP)
+implementations_to_test.append(dm_g_np.DensityNP)
 
 hascuda = False
 try:
@@ -278,7 +280,7 @@ class TestDensityHadamard:
 
         print(dm.to_array())
 
-        assert dm.to_array()[0, 0] == 1
+        assert np.allclose(dm.to_array()[0, 0], 1)
 
 class TestCnot:
     def test_cnot_groundstate(self, dmclass):
@@ -306,8 +308,12 @@ class TestCnot:
              [0, 1, 0, 0],
              [0, 0, 0, 1],
              [0, 0, 1, 0]]
-        cnot_ptm = ptm.double_kraus_to_ptm(np.array(u))
         dm = dmclass(2)
+        if hasattr(dm, "dimensions"):
+            cnot_ptm = ptm.double_kraus_to_ptm(np.array(u),
+                    general_basis=True)
+        else:
+            cnot_ptm = ptm.double_kraus_to_ptm(np.array(u))
         dm.rotate_x(0, np.pi)
         dm.apply_two_ptm(1, 0, cnot_ptm)
         a = dm.to_array()
