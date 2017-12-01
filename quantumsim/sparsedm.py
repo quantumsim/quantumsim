@@ -20,7 +20,7 @@ except BaseException:
 
 
 class SparseDM:
-    def __init__(self, names=None, density_class=default_density_class):
+    def __init__(self, names=None, density_class=None):
         """A sparse density matrix for a set of qubits with names `names`.
 
         Each qubit can be in a "classical state", where it is in a basis state
@@ -31,6 +31,10 @@ class SparseDM:
         If a qubit is not classical, it is quantum, which means that it is part of the
         full dense density matrix `self.full_dm`.
         """
+
+        if density_class is None:
+            density_class = default_density_class
+
         if isinstance(names, int):
             names = list(range(names))
 

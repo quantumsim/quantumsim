@@ -1,13 +1,26 @@
 from quantumsim.sparsedm import SparseDM
+import quantumsim.sparsedm
 
 import quantumsim.ptm as ptm
 
 import numpy as np
 import pytest
 
+import quantumsim.dm_np as dm_np
+import quantumsim.dm_general_np as dm_g_np
 
-class TestSparseDMInit:
+backends_to_test = []
+backends_to_test.append(dm_np.DensityNP)
+backends_to_test.append(dm_g_np.DensityNP)
 
+@pytest.fixture(params=backends_to_test)
+def select_sparsedm_backend(request):
+    quantumsim.sparsedm.default_density_class = request.param
+
+pytestmark = pytest.mark.usefixtures("select_sparsedm_backend")
+
+
+class TestSparseDM:
     def test_init(self):
         sdm = SparseDM(10)
         assert sdm.no_qubits == 10
@@ -61,9 +74,6 @@ def test_set_bit():
 
     assert sdm.classical[0] == 1
 
-    sdm.hadamard(0)
-    sdm.hadamard(0)
-
 
 def test_cphase_simple():
     sdm = SparseDM(2)
@@ -83,7 +93,11 @@ def test_peak_on_ground_state():
 def test_peak_on_hadamard():
     sdm = SparseDM(1)
 
-    hadamard = ptm.hadamard_ptm()
+    # fixme different bases
+    if hasattr(sdm.full_dm, "dimensions"):
+        hadamard = ptm.hadamard_ptm(general_basis=True)
+    else:
+        hadamard = ptm.hadamard_ptm(general_basis=False)
     sdm.apply_ptm(0, hadamard)
 
     p0, p1 = sdm.peak_measurement(0)
@@ -158,8 +172,8 @@ def test_meas_on_hadamard():
 
     p0, p1 = sdm.peak_measurement(0)
 
-    assert p0 == 0.5
-    assert p1 == 0.5
+    assert np.allclose(p0, 0.5)
+    assert np.allclose(p1, 0.5)
 
     sdm.project_measurement(0, 1)
 
@@ -272,7 +286,7 @@ class TestMultipleMeasurement:
         meas = sdm.peak_multiple_measurements([0, 1])
 
         assert len(meas) == 2
-        assert meas == [({0: 0, 1: 0}, 0.5), ({0: 1, 1: 0}, 0.5)]
+        assert meas == [({0: 0, 1: 0}, pytest.approx(0.5)), ({0: 1, 1: 0}, pytest.approx(0.5))]
 
     def test_multiple_measurement_only_classical(self):
         sdm = SparseDM(2)
