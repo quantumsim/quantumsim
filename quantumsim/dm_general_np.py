@@ -133,7 +133,6 @@ class DensityGeneralNP:
         anc_dm[anc_st] = 1
         self.dm = np.einsum(
             anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)), optimize=True)
-        print(self.dm.shape)
         self.dimensions.insert(0, anc_dim)
         self.shape = [d**2 for d in self.dimensions]
         self.no_qubits = len(self.dimensions)

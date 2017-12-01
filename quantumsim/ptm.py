@@ -111,14 +111,13 @@ def to_0xyz_basis(ptm):
     else:
         raise ValueError("Dimensions wrong, must be one- or two Pauli transfer matrix ")
 
-def hadamard_ptm():
+def hadamard_ptm(general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary Hadamard (Rotation around the (x+z)/sqrt(2) axis by π).
     """
-    return np.array([[0.5, np.sqrt(0.5), 0, 0.5],
-                     [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)],
-                     [0, 0, -1, 0],
-                     [0.5, -np.sqrt(0.5), 0, 0.5]], np.float64)
+    u = np.array([[1, 1], [1, -1]])*np.sqrt(0.5)
+    return single_kraus_to_ptm(u, general_basis)
+
 
 def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
@@ -197,6 +196,14 @@ def rotate_z_ptm(angle, general_basis=False):
                     [0, 0, 1]])
     return to_0xy1_basis(ptm, general_basis)
 
+
+def single_kraus_to_ptm_general(kraus):
+    d = kraus.shape[0]
+    assert kraus.shape == (d, d)
+
+    st = general_ptm_basis_vector(d)
+
+    return np.einsum("xab, bc, ycd, ad -> xy", st, kraus, st, kraus.conj()).real
 
 def single_kraus_to_ptm(kraus, general_basis=False):
     """Given a Kraus operator in z-basis, obtain the corresponding single-qubit ptm in 0xy1 basis"""
