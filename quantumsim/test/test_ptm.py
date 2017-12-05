@@ -260,7 +260,36 @@ some_2d_pauli_bases = [
 ]
 
 
+class TestAmpPhaseDampingPTM:
+    @pytest.mark.parametrize("pb", some_2d_pauli_bases)
+    def test_does_nothing_to_ground_state(self, pb):
+        ground_state = pb.computational_basis_vectors[0]
+        p = ptm.AmplitudePhaseDampingPTM(0.23, 0.42).get_matrix(pb)
+
+        assert np.allclose(p @ ground_state, ground_state)
+
+    def test_strong_damping_gives_ground_state(self):
+        r = random_state()  # is in 0xy1 basis
+        pb = ptm.PauliBasis_0xy1()
+        p = ptm.AmplitudePhaseDampingPTM(1.0, 0.42).get_matrix(pb)
+
+        assert np.allclose(p.dot(r), ground_state)
+
+
 class TestRotationsPTM:
+    @pytest.mark.parametrize("pb", some_2d_pauli_bases)
+    def test_product_of_one(self, pb):
+        for Rot in [ptm.RotateXPTM, ptm.RotateYPTM, ptm.RotateZPTM]:
+            ptm_x = Rot(np.pi / 2)
+
+            # explicit construction
+            ptm_x2 = ptm.ProductPTM([ptm_x])
+
+            mat_x2 = ptm_x2.get_matrix(pb)
+            mat_x = ptm_x.get_matrix(pb)
+
+            assert np.allclose(mat_x2, mat_x)
+
     @pytest.mark.parametrize("pb", some_2d_pauli_bases)
     def test_xyz(self, pb):
         ptm_x = ptm.RotateXPTM(np.pi / 2)
@@ -277,16 +306,26 @@ class TestRotationsPTM:
 
         mat_xyz = ptm_xyz.get_matrix(pb)
         mat_xyz2 = ptm_xyz2.get_matrix(pb)
-        mat_z = ptm_xyz.get_matrix(pb)
+        mat_z = ptm_z.get_matrix(pb)
 
         assert np.allclose(mat_xyz, mat_z)
         assert np.allclose(mat_xyz2, mat_z)
 
     @pytest.mark.parametrize("pb", some_2d_pauli_bases)
+    @pytest.mark.skip()
+    def test_xyz2(self, pb):
+        # test handedness
+        ptm_x = ptm.RotateXPTM(np.pi / 2)
+        ptm_z = ptm.RotateZPTM(np.pi / 2)
+        ptm_y = ptm.RotateYPTM(-np.pi / 2)
+
+        #TODO
+
+    @pytest.mark.parametrize("pb", some_2d_pauli_bases)
     def test_power(self, pb):
         for Rot in [ptm.RotateXPTM, ptm.RotateYPTM, ptm.RotateZPTM]:
             ptm_x = Rot(2 * np.pi / 7)
-            ptm_x7 = ptm.ProductPTM([ptm_x]*7)
+            ptm_x7 = ptm.ProductPTM([ptm_x] * 7)
             mat_x7 = ptm_x7.get_matrix(pb)
             assert np.allclose(mat_x7, np.eye(4))
 
@@ -314,8 +353,8 @@ class TestRotationsPTM:
         ground_state = pb.computational_basis_vectors[0]
         state = ground_state
 
-        state = ptm.RotateXPTM(np.pi/2).get_matrix(pb) @ state
-        state = ptm.RotateYPTM(np.pi/2).get_matrix(pb) @ state
-        state = ptm.RotateXPTM(-np.pi/2).get_matrix(pb) @ state
+        state = ptm.RotateXPTM(np.pi / 2).get_matrix(pb) @ state
+        state = ptm.RotateYPTM(np.pi / 2).get_matrix(pb) @ state
+        state = ptm.RotateXPTM(-np.pi / 2).get_matrix(pb) @ state
 
         assert np.allclose(state, ground_state)

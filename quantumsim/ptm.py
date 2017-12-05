@@ -267,12 +267,10 @@ class PauliBasis:
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.basisvectors, rho)
 
-
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
         self.basisvectors = general_ptm_basis_vector(dim)
         super().__init__()
-
 
 class PauliBasis_0xy1(PauliBasis):
     "the pauli basis used by older versions of quantumsim"
@@ -280,7 +278,6 @@ class PauliBasis_0xy1(PauliBasis):
                              np.sqrt(0.5) * np.array([[0, 1], [1, 0]]),
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
                              [[0, 0], [0, 1]]])
-
 
 class PauliBasis_exyz(PauliBasis):
     "standard Pauli basis for a qubit"
@@ -415,8 +412,8 @@ class ProductPTM(PTM):
             pi_mat = pi.get_matrix(complete_basis)
             result = result @ pi_mat
 
-        trans_mat_in = np.einsum("xab, yba", complete_basis.basisvectors, basis_in.basisvectors.conj())
-        trans_mat_out = np.einsum("xab, yba", basis_out.basisvectors, complete_basis.basisvectors.conj())
+        trans_mat_in = np.einsum("xab, yba", complete_basis.basisvectors, basis_in.basisvectors)
+        trans_mat_out = np.einsum("xab, yba", basis_out.basisvectors, complete_basis.basisvectors)
 
         return trans_mat_out @ result @ trans_mat_in
 
@@ -460,6 +457,29 @@ class ConjunctionPTM(PTM):
         return result.real
 
 
+class IntegratedPLM(PTM):
+    def __init__(self, plm):
+        """
+        The PTM that arises for applying the Pauli Liouvillian `plm`
+        for one unit of time.
+        """
+        self.plm = plm
+        self.dim_hilbert = plm.dim_hilbert
+
+    def get_matrix(self, basis_in, basis_out=None):
+        if basis_out is None:
+            basis_out = basis_in
+
+        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
+
+        # we need to get a square representation!
+        plm_matrix = self.plm.get_matrix(basis_in, basis_in)
+
+        ptm_matrix = scipy.linalg.matfuncs.expm(plm_matrix)
+
+        # then basis-transform to out basis
+        return PTM(ptm_matrix).get_matrix()
+
 class AdjunctionPLM(PTM):
     def __init__(self, op):
         """
@@ -487,30 +507,6 @@ class AdjunctionPLM(PTM):
 
         # taking the real part implements the two parts of the commutator
         return result.real
-
-
-class IntegratedPLM(PTM):
-    def __init__(self, plm):
-        """
-        The PTM that arises for applying the Pauli Liouvillian `plm`
-        for one unit of time.
-        """
-        self.plm = plm
-        self.dim_hilbert = plm.dim_hilbert
-
-    def get_matrix(self, basis_in, basis_out=None):
-        if basis_out is None:
-            basis_out = basis_in
-
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
-
-        # we need to get a square representation!
-        plm_matrix = self.plm.get_matrix(basis_in, basis_in)
-
-        ptm_matrix = scipy.linalg.matfuncs.expm(plm_matrix)
-
-        # then basis-transform to out basis
-        return PTM(ptm_matrix).get_matrix()
 
 class LindbladPLM(PTM):
     def __init__(self, op):
@@ -559,3 +555,15 @@ class RotateZPTM(ConjunctionPTM):
     def __init__(self, angle):
         z = np.exp(-.5j*angle)
         super().__init__([[z, 0], [0, z.conj()]])
+
+class AmplitudePhaseDampingPTM(ProductPTM):
+    def __init__(self, gamma, lamda):
+        e0 = [[1, 0], [0, np.sqrt(1 - gamma)]]
+        e1 = [[0, np.sqrt(gamma)], [0, 0]]
+        amp_damp = ConjunctionPTM(e0) + ConjunctionPTM(e1)
+
+        e0 = [[1, 0], [0, np.sqrt(1 - lamda)]]
+        e1 = [[0, 0], [0, np.sqrt(lamda)]]
+        ph_damp = ConjunctionPTM(e0) + ConjunctionPTM(e1)
+
+        super().__init__([amp_damp, ph_damp])
