@@ -19,6 +19,7 @@ double_tensor = np.kron(single_tensor, single_tensor)
 
 _ptm_basis_vectors_cache = {}
 
+
 def general_ptm_basis_vector(n):
     """
     The vector of 'Pauli matrices' in dimension n.
@@ -84,12 +85,19 @@ def to_0xy1_basis(ptm, general_basis=False):
 
     assert ptm.shape == (4, 4)
     assert np.allclose(ptm[0, :], [1, 0, 0, 0])
-    result = np.dot(
-        basis_transformation_matrix, np.dot(
-            ptm, basis_transformation_matrix))
+
+    # result = np.dot(
+    # basis_transformation_matrix, np.dot(
+    # ptm, basis_transformation_matrix))
 
     if general_basis:
-        result = result[[0, 3, 1, 2], :][:, [0, 3, 1, 2]]
+        result = ExplicitBasisPTM(
+            ptm, PauliBasis_exyz()).get_matrix(
+            GeneralBasis(2))
+    else:
+        result = ExplicitBasisPTM(
+            ptm, PauliBasis_exyz()).get_matrix(
+            PauliBasis_0xy1())
 
     return result
 
@@ -122,7 +130,11 @@ def hadamard_ptm(general_basis=False):
     representing perfect unitary Hadamard (Rotation around the (x+z)/sqrt(2) axis by π).
     """
     u = np.array([[1, 1], [1, -1]]) * np.sqrt(0.5)
-    return single_kraus_to_ptm(u, general_basis)
+    if general_basis:
+        pb = GeneralBasis(2)
+    else:
+        pb = PauliBasis_0xy1()
+    return ConjunctionPTM(u).get_matrix(pb)
 
 
 def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
@@ -130,14 +142,13 @@ def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
     representing amplitude and phase damping with parameters gamma and lambda.
     (See Nielsen & Chuang for definition.)
     """
-    ptm = np.array([
-        [1, 0, 0, 0],
-        [0, np.sqrt((1 - gamma) * (1 - lamda)), 0, 0],
-        [0, 0, np.sqrt((1 - gamma) * (1 - lamda)), 0],
-        [gamma, 0, 0, 1 - gamma]]
-    )
-    return to_0xy1_basis(ptm, general_basis)
 
+    if general_basis:
+        pb = GeneralBasis(2)
+    else:
+        pb = PauliBasis_0xy1()
+
+    return AmplitudePhaseDampingPTM(gamma, lamda).get_matrix(pb)
 
 def gen_amp_damping_ptm(gamma_down, gamma_up):
     """Return a 4x4 Pauli transfer matrix  representing amplitude damping including an excitation rate gamma_up.
@@ -176,11 +187,11 @@ def rotate_x_ptm(angle, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the x-axis by angle.
     """
-    ptm = np.array([[1, 0, 0],
-                    [0, np.cos(angle), -np.sin(angle)],
-                    [0, np.sin(angle), np.cos(angle)]])
-
-    return to_0xy1_basis(ptm, general_basis)
+    if general_basis:
+        pb = GeneralBasis(2)
+    else:
+        pb = PauliBasis_0xy1()
+    return RotateXPTM(angle).get_matrix(pb)
 
 
 def rotate_y_ptm(angle, general_basis=False):
@@ -262,15 +273,18 @@ class PauliBasis:
         self.dim_hilbert = shape[1]
         self.dim_pauli = shape[0]
 
-        self.computational_basis_vectors = np.einsum("xii -> ix", self.basisvectors)
+        self.computational_basis_vectors = np.einsum(
+            "xii -> ix", self.basisvectors)
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.basisvectors, rho)
+
 
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
         self.basisvectors = general_ptm_basis_vector(dim)
         super().__init__()
+
 
 class PauliBasis_0xy1(PauliBasis):
     "the pauli basis used by older versions of quantumsim"
@@ -278,6 +292,7 @@ class PauliBasis_0xy1(PauliBasis):
                              np.sqrt(0.5) * np.array([[0, 1], [1, 0]]),
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
                              [[0, 0], [0, 1]]])
+
 
 class PauliBasis_exyz(PauliBasis):
     "standard Pauli basis for a qubit"
@@ -341,6 +356,27 @@ class PTM:
         return ProductPTM([self, other])
 
 
+class ExplicitBasisPTM(PTM):
+    def __init__(self, ptm, basis):
+        self.ptm = ptm
+        self.basis = basis
+
+        assert self.ptm.shape == (self.basis.dim_pauli, self.basis.dim_pauli)
+
+    def get_matrix(self, basis_in, basis_out=None):
+        if basis_out is None:
+            basis_out = basis_in
+
+        result = np.einsum("xab, yba, yz, zcd, wdc -> xw",
+                           basis_out.basisvectors,
+                           self.basis.basisvectors,
+                           self.ptm,
+                           self.basis.basisvectors,
+                           basis_in.basisvectors)
+
+        return result
+
+
 class LinearCombPTM(PTM):
     def __init__(self, elements):
         """
@@ -372,6 +408,7 @@ class LinearCombPTM(PTM):
             return LinearCombPTM(self.elements + other.elements)
         else:
             return LinearCombPTM(self.elements + collections.Counter([other]))
+
 
 class ProductPTM(PTM):
     def __init__(self, elements):
@@ -412,8 +449,14 @@ class ProductPTM(PTM):
             pi_mat = pi.get_matrix(complete_basis)
             result = result @ pi_mat
 
-        trans_mat_in = np.einsum("xab, yba", complete_basis.basisvectors, basis_in.basisvectors)
-        trans_mat_out = np.einsum("xab, yba", basis_out.basisvectors, complete_basis.basisvectors)
+        trans_mat_in = np.einsum(
+            "xab, yba",
+            complete_basis.basisvectors,
+            basis_in.basisvectors)
+        trans_mat_out = np.einsum(
+            "xab, yba",
+            basis_out.basisvectors,
+            complete_basis.basisvectors)
 
         return trans_mat_out @ result @ trans_mat_in
 
@@ -425,6 +468,7 @@ class ProductPTM(PTM):
 
     def __rmatmul__(self, other):
         return other.__matmul__(self)
+
 
 class ConjunctionPTM(PTM):
     def __init__(self, op):
@@ -480,6 +524,7 @@ class IntegratedPLM(PTM):
         # then basis-transform to out basis
         return PTM(ptm_matrix).get_matrix()
 
+
 class AdjunctionPLM(PTM):
     def __init__(self, op):
         """
@@ -507,6 +552,7 @@ class AdjunctionPLM(PTM):
 
         # taking the real part implements the two parts of the commutator
         return result.real
+
 
 class LindbladPLM(PTM):
     def __init__(self, op):
@@ -543,18 +589,21 @@ class LindbladPLM(PTM):
 
 class RotateXPTM(ConjunctionPTM):
     def __init__(self, angle):
-        s, c = np.sin(angle/2), np.cos(angle/2)
-        super().__init__([[c, 1j*s], [1j*s, c]])
+        s, c = np.sin(angle / 2), np.cos(angle / 2)
+        super().__init__([[c, -1j * s], [-1j * s, c]])
+
 
 class RotateYPTM(ConjunctionPTM):
     def __init__(self, angle):
-        s, c = np.sin(angle/2), np.cos(angle/2)
+        s, c = np.sin(angle / 2), np.cos(angle / 2)
         super().__init__([[c, s], [-s, c]])
+
 
 class RotateZPTM(ConjunctionPTM):
     def __init__(self, angle):
-        z = np.exp(-.5j*angle)
+        z = np.exp(-.5j * angle)
         super().__init__([[z, 0], [0, z.conj()]])
+
 
 class AmplitudePhaseDampingPTM(ProductPTM):
     def __init__(self, gamma, lamda):
@@ -567,3 +616,18 @@ class AmplitudePhaseDampingPTM(ProductPTM):
         ph_damp = ConjunctionPTM(e0) + ConjunctionPTM(e1)
 
         super().__init__([amp_damp, ph_damp])
+
+
+# TODO:
+# * thought + test on how to handle multi-qubit ptms
+# * more explicit support for PTMs that are dimension-agnostic
+# * more reasonable names (SuperOperator, Process, DiffProcess or so)
+# * Singletons/caches to prevent recalculation
+# * smarter handling of product intermediate basis
+#   * domain and image hints
+#   * automatic sparsification
+# * qutip interfacing for me_solve
+# * using auto-forward-differentiation to integrate processes?
+# * return matric reps in other forms (process matrix, chi matrix?)
+# * PTM compilation using circuit interface?
+# * Basis vector names
