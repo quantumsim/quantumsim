@@ -190,6 +190,11 @@ some_pauli_bases = [
     ptm.GeneralBasis(3)
 ]
 
+class TestBasis:
+    @pytest.mark.parametrize("pb", some_pauli_bases)
+    def test_orthonormal(self, pb):
+        pb.check_orthonormality()
+
 
 class TestPTMs:
 

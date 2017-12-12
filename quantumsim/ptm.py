@@ -257,7 +257,7 @@ class PauliBasis:
         with dimension d**2 = 4, or, if one wants do describe a classical state (mixture of |0> and |1>),
         use a smaller basis with only d_pauli = 2.
 
-        [1] A Pauli basis is an orthonormal basis (w.r.t <A, B> = Tr(A.B+)) for a space of Hermitian matrices.
+        [1] A "Pauli basis" is an orthonormal basis (w.r.t <A, B> = Tr(A.B^\dag)) for a space of Hermitian matrices.
         """
 
         "a tensor B of shape (dim_pauli, dim_hilbert, dim_hilbert)"
@@ -278,6 +278,10 @@ class PauliBasis:
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.basisvectors, rho)
+
+    def check_orthonormality(self):
+        i = np.einsum("xab, yba -> xy", self.basisvectors, self.basisvectors)
+        assert np.allclose(i, np.eye(self.dim_pauli))
 
 
 class GeneralBasis(PauliBasis):
