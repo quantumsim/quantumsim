@@ -19,6 +19,12 @@ except BaseException:
     using_gpu = False
 
 
+class SubsystemDescription:
+    def __init__(self, name, pb):
+        self.name = name
+        self.basis = pb
+
+
 class SparseDM:
     def __init__(self, names=None, density_class=None):
         """A sparse density matrix for a set of qubits with names `names`.

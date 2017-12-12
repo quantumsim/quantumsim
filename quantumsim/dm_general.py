@@ -7,8 +7,6 @@ import numpy as np
 import pycuda.driver as drv
 import pycuda.gpuarray as ga
 
-from . import ptm
-
 import pycuda.autoinit
 
 # load the kernels
@@ -17,7 +15,7 @@ from pycuda.compiler import SourceModule
 import sys
 import os
 
-import warnings
+from pytools import product
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -69,7 +67,7 @@ class Density:
     _ptm_cache = {}
 
     def __init__(self, dimensions, data=None):
-        """create a new density matrix for several subsystems, where the dimension of each subsystem can be chosen.
+        """A density matrix for several subsystems, where the dimension of each subsystem can be chosen.
 
         dimensions = list of ints, dimension. len(dimensions) is the number of qubits.
 
@@ -79,83 +77,35 @@ class Density:
               If data is None, create a new density matrix with all qubits in ground state.
         """
 
-        self.allocated_size = 0
-        self.allocated_diag = -1
+        # two gpuarrays to allocate regions on the GPU
+        # data holds the current data, _next_data is used as
+        # working buffer and is not guaranteed to be anything
 
+        self.data = None
+        self._next_data = None
+
+        # current dimensions (of data)
         self.dimensions = dimensions
 
-        self._set_no_qubits(no_qubits)
+        # for now, we choose a tight layout
+        self._size = product(self.dimensions)
 
-        self.diag_work = None
-
-        if no_qubits > 15:
+        if len(self.dimensions) > 15:
             raise ValueError(
                 "no_qubits=%d is way too many qubits, are you sure?" %
-                no_qubits)
+                self.no_qubits)
 
-        if isinstance(data, np.ndarray):
-            assert data.shape == (1 << no_qubits, 1 << no_qubits)
-            data = data.astype(np.complex128)
-            complex_dm = ga.to_gpu(data)
-            block_size = 2**4
-            grid_size = 2**max(no_qubits - 4, 0)
-            grid = (grid_size, grid_size, 1)
-            block = (block_size, block_size, 1)
-            for i in range(self.no_qubits):
-                _bit_to_pauli_basis.prepared_call(
-                    grid, block, complex_dm.gpudata, 1 << i, self.no_qubits)
-
-            self.data = ga.empty(self._size, np.float64)
-            _pauli_reshuffle.prepared_call(
-                grid,
-                block,
-                complex_dm.gpudata,
-                self.data.gpudata,
-                self.no_qubits,
-                0)
-        elif isinstance(data, ga.GPUArray):
-            assert data.size == self._size
-            assert data.dtype == np.float64
-            self.data = data
-        elif data is None:
-            d = np.zeros(self._size, np.float64)
+        if data is None:
+            # think about whether this is the gs in general...
+            d = np.zeros(self._size, np.float64).reshape(self.dimensions)
             d[0] = 1
             self.data = ga.to_gpu(d)
         else:
             raise ValueError("type of data not understood")
 
-    def _set_no_qubits(self, no_qubits):
-        self.allocated_qubits = max(self.allocated_qubits, no_qubits)
-        self.no_qubits = no_qubits
-
-        self._size = 1 << (2 * no_qubits)
-        self._blocksize = 2**8
-        self._gridsize = 2**max(0, 2 * no_qubits - 8)
-
     def trace(self):
-
-        if self.no_qubits > 10:
-            raise NotImplementedError(
-                "Trace not implemented for more than 10 qubits yet")
-        if self.allocated_diag < self.no_qubits:
-            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
-            self.allocated_qubits = self.no_qubits
-        block = (2**self.no_qubits, 1, 1)
-        grid = (1, 1, 1)
-
-        _get_diag.prepared_call(
-            grid,
-            block,
-            self.data.gpudata,
-            self.diag_work.gpudata,
-            np.uint32(self.no_qubits))
-
-        _trace.prepared_call(
-            grid, block, self.diag_work.gpudata, -1, shared_size=8 * block[0])
-
-        tr0 = self.diag_work[0].get()
-
-        return tr0
+        # wow I need to think
+        raise NotImplementedError()
 
     def renormalize(self):
         """Renormalize to trace one."""
@@ -165,29 +115,13 @@ class Density:
     def copy(self):
         "Return a deep copy of this Density."
         data_cp = self.data.copy()
-        cp = Density(self.no_qubits, data=data_cp)
+        cp = Density(self.dimensions, data=data_cp)
         return cp
 
     def to_array(self):
         "Return the entries of the density matrix as a dense numpy ndarray."
-        complex_dm = ga.zeros(
-            (1 << self.no_qubits, 1 << self.no_qubits), np.complex128)
-        block_size = 2**4
-        grid_size = 2**max(self.no_qubits - 4, 0)
-        grid = (grid_size, grid_size, 1)
-        block = (block_size, block_size, 1)
-        _pauli_reshuffle.prepared_call(
-            grid,
-            block,
-            complex_dm.gpudata,
-            self.data.gpudata,
-            self.no_qubits,
-            1)
-        for i in range(self.no_qubits):
-            _bit_to_pauli_basis.prepared_call(
-                grid, block, complex_dm.gpudata, 1 << i, self.no_qubits)
 
-        return complex_dm.get()
+        return self.data.get()
 
     def get_diag(self):
         if self.allocated_diag < self.no_qubits:
@@ -205,6 +139,18 @@ class Density:
             np.uint32(self.no_qubits))
 
         return self.diag_work.get()
+
+
+    def multi_basis_project(self, selector):
+        """
+        Perform a projection to a cartesian subbasis on many 
+        axes at the same time. (Essentially slicing).
+
+        Generalization of the get_diag method.
+        """
+
+        
+
 
     def apply_two_ptm(self, bit0, bit1, ptm):
         assert bit0 < self.no_qubits
@@ -310,4 +256,3 @@ class Density:
         self._set_no_qubits(self.no_qubits - 1)
 
         return self
-

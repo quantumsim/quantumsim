@@ -1,0 +1,59 @@
+
+As is the case for numpy arrays, a the density matrix dm has 
+
+a stride vector dm.strides
+a shape vector dm.shape
+
+These two allow for the calculation of the address of dm[x0, x1, x2...]
+
+as 
+
+addr([xi...], strides) = sum_i x[i]*dm.strides[i]
+
+and we have to have 0 <= x[i] < dm.shape[i].
+
+The inverse calculation is annoying to do. Giving address a,
+we have 
+
+x[i] = (a//stride[i]) % dim[i] = invaddr(a, dim, stride)
+
+We often have densely packed arrays, where stride[i] = prod j<i dim[j].
+
+Then, we can extract all x slightly more efficiently:
+
+acc = a
+for i in range(len(dm.shape)):
+  x[i], acc = divmod(acc, dim[i])
+
+
+----
+
+Now consider the slicing operation, i.e.
+
+y = x[[i01, i02,...], [i11, i12, ...]]
+
+where i_ab are integers with 0 <= i_ab < x.dim[a]. 
+The dims of y are given by y.dim[a] = len(i[a])
+
+Pycuda does not allow it in general ("more than two non-contigous dimensions not allowed").
+
+We need it though, because that is the basic operation of the trace reduction.
+
+We thus build a kernel where each thread
+
+a) sets addr_y = threadidx
+b) finds i = invaddr(addr_y, y.dim)
+c) sets j[a] = idx[a][i[a]]
+d) finds addr_x = addr(j, x.dim)
+e) copies x[addr_x] to y[addr_y]
+
+b - d) can be performed in one loop:
+
+acc = addr_y
+addr_x = 0
+s = 1
+for dy, dx in zip(y.dim, x.dim):
+  ia, acc = divmod(acc, d)
+  ja = idx[a][ia]
+  addr_x += ja*s
+  s *= dx

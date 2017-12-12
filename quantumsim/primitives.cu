@@ -293,6 +293,35 @@ __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned in
 }
 
 
+//multitake
+//given a list of index lists `idx` in sparse format
+//idx_j = flatten(idx), idx_i = cumsum(len(idx))
+//and in and out array with shapes
+//as well as dim = len(inshape) = len(outshape)
+//set out = in[np.ix_(idx)]
+__global__ void multitake(double *in, double *out, 
+        unsigned int *idx_i, unsigned int *idx_j, 
+        unsigned int *inshape, unsigned int *outshape, 
+        unsigned int dim) {
+
+    unsigned int acc, addr_out, addr_in, s;
+    unsigned int i, ia, ja;
+
+    acc = addr_out = blockDim.in*blockIdx.in + threadIdx.in;
+    addr_in = 0;
+    s = 1;
+
+    for(int i=0; i < dim, i++) {
+        ia = rint(remquo(acc, outshape[i], *acc));
+        ja = idx_j[idx_i[i] + ia];
+        addr_in += ja*s;
+        s *= inshape[i];
+    }
+
+    out[addr_out] = in[addr_in];
+}
+
+
 
 //get_diagonal kernel
 //copy the diagonal elements to out, in order to do effective 
