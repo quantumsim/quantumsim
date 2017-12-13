@@ -77,6 +77,18 @@ class Density:
               If data is None, create a new density matrix with all qubits in ground state.
         """
 
+        self.allocated_qubits = 0
+        self.allocated_diag = -1
+
+        self._set_no_qubits(no_qubits)
+
+        self.diag_work = None
+
+        if no_qubits > 15:
+            raise ValueError(
+                "no_qubits=%d is way too many qubits, are you sure?" %
+                no_qubits)
+
         if isinstance(data, np.ndarray):
             assert data.shape == (1 << no_qubits, 1 << no_qubits)
             data = data.astype(np.complex128)
@@ -257,9 +269,7 @@ class Density:
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        warnings.warn(
-            "amp_ph_damping deprecated, use apply_ptm",
-            DeprecationWarning)
+        warnings.warn("amp_ph_damping deprecated, use apply_ptm", DeprecationWarning)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
@@ -354,10 +364,10 @@ class Density:
 
         return self
 
-
 class DensityGeneral(Density):
     """A subclass of Density that uses general_two_qubit_ptm as a backend,
     for testing purposes"""
+
 
     def apply_two_ptm(self, bit0, bit1, ptm):
         assert bit0 < self.no_qubits
@@ -366,15 +376,7 @@ class DensityGeneral(Density):
         # bit0 must be the smaller one.
         if bit1 < bit0:
             bit1, bit0 = bit0, bit1
-            ptm = np.einsum(
-                "abcd -> badc",
-                ptm.reshape(
-                    (4,
-                     4,
-                     4,
-                     4))).reshape(
-                (16,
-                 16))
+            ptm = np.einsum("abcd -> badc", ptm.reshape((4,4,4,4))).reshape((16,16))
 
         key = hash(ptm.tobytes())
         try:
@@ -387,17 +389,18 @@ class DensityGeneral(Density):
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
         block = (4, 4, 16)
-        blocksize = 4 * 4 * 16
-        gridsize = max(1, (4**self.no_qubits) // blocksize)
+        blocksize = 4*4*16
+        gridsize = max(1, (4**self.no_qubits)//blocksize)
         grid = (gridsize, 1, 1)
 
+
         _two_qubit_general_ptm.prepared_call(grid,
-                                             block,
-                                             self.data.gpudata,
-                                             self.data.gpudata,
-                                             ptm_gpu.gpudata,
-                                             4, 4,
-                                             4**bit0,
-                                             4**(bit1 - bit0 - 1),
-                                             4**self.no_qubits,
-                                             shared_size=8 * (256 + blocksize))
+                                     block,
+                                     self.data.gpudata,
+                                     self.data.gpudata,
+                                     ptm_gpu.gpudata,
+                                     4, 4,
+                                     4**bit0,
+                                     4**(bit1-bit0-1),
+                                     4**self.no_qubits,
+                                     shared_size=8 * (256 + blocksize))
