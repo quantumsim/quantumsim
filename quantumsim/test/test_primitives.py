@@ -1,6 +1,8 @@
 import pytest
 import numpy as np
 
+import pytools
+
 hascuda = True
 try:
     import pycuda.autoinit
@@ -20,6 +22,7 @@ try:
     single_qubit_ptm = mod.get_function("single_qubit_ptm")
     trace = mod.get_function("trace")
     swap = mod.get_function("swap")
+    multitake = mod.get_function("multitake")
     two_qubit_ptm = mod.get_function("two_qubit_ptm")
     two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
 except ImportError:
@@ -224,6 +227,76 @@ class TestTrace:
 
         assert np.allclose(x2[1], np.sum(x[:16]))
         assert np.allclose(x2[0], np.sum(x[16:]))
+
+class TestMultitake:
+    def test_trivial(self):
+        idx = [[0, 1]]
+
+        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
+
+        n = 2
+        x = np.random.random(n)
+        y = np.random.random(n)
+
+        x_gpu = drv.to_device(x)
+        y_gpu = drv.to_device(y)
+
+        idx_i_gpu = drv.to_device(idx_i)
+        idx_j_gpu = drv.to_device(idx_j)
+
+        multitake(x_gpu, y_gpu, idx_i_gpu, idx_j_gpu,
+                drv.to_device(np.array(x.shape, int)), 
+                drv.to_device(np.array(y.shape, int)), np.int32(1),
+                block=(n, 1, 1), grid=(1, 1, 1))
+
+        y2 = drv.from_device_like(y_gpu, y)
+        
+        print(idx_i, idx_j)
+
+        assert np.allclose(x, y2)
+
+    def test_large_random(self):
+        n = tuple(range(2, 10))
+
+        idx = []
+        for ni in n:
+            random_numbers = np.random.random(ni)
+            random_numbers[0] = 1
+            idx.append(list(np.where(random_numbers > 0.5)[0]))
+        print(idx)
+        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
+
+        x = np.random.random(n)
+        y = x[np.ix_(*idx)] + 2
+
+        x_gpu = drv.to_device(x)
+        y_gpu = drv.to_device(y)
+
+        idx_i_gpu = drv.to_device(idx_i)
+        idx_j_gpu = drv.to_device(idx_j)
+
+        blocklength = y.size
+
+        xshape = drv.to_device(np.array(list((x.shape)),
+            np.uint32))
+        yshape = drv.to_device(np.array(list((y.shape)),
+            np.uint32))
+
+        blocklength = 256
+        gridlength = y.size//blocklength + 1
+
+        multitake(x_gpu, y_gpu, idx_i_gpu, idx_j_gpu,
+                xshape, yshape, np.uint32(len(n)),
+                block=(blocklength, 1, 1), grid=(gridlength, 1, 1))
+
+        y2 = drv.from_device_like(y_gpu, y)
+        
+        print(y2.ravel())
+        print((y-2).ravel())
+
+        assert np.allclose(y - 2, y2)
 
 class TestOneBitPTM:
 

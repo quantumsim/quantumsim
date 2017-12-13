@@ -304,21 +304,28 @@ __global__ void multitake(double *in, double *out,
         unsigned int *inshape, unsigned int *outshape, 
         unsigned int dim) {
 
-    unsigned int acc, addr_out, addr_in, s;
+    unsigned int addr_out, addr_in, s;
     unsigned int i, ia, ja;
 
-    acc = addr_out = blockDim.in*blockIdx.in + threadIdx.in;
+    int acc;
+
+    acc = addr_out = blockDim.x*blockIdx.x + threadIdx.x;
     addr_in = 0;
     s = 1;
 
-    for(int i=0; i < dim, i++) {
-        ia = rint(remquo(acc, outshape[i], *acc));
+    for(i=dim; i > 0;) {
+        i--;
+        /*ia = rint(remquo((double)acc, (double)outshape[i], &acc));*/
+        ia = acc % outshape[i];
+        acc = acc / outshape[i];
         ja = idx_j[idx_i[i] + ia];
         addr_in += ja*s;
         s *= inshape[i];
     }
 
-    out[addr_out] = in[addr_in];
+    // guard 
+    if(acc == 0) 
+        out[addr_out] = in[addr_in];
 }
 
 

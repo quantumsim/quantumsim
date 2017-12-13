@@ -77,10 +77,6 @@ class Density:
               If data is None, create a new density matrix with all qubits in ground state.
         """
 
-
-                "no_qubits=%d is way too many qubits, are you sure?" %
-                no_qubits)
-
         if isinstance(data, np.ndarray):
             assert data.shape == (1 << no_qubits, 1 << no_qubits)
             data = data.astype(np.complex128)
