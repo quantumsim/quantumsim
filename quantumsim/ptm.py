@@ -92,11 +92,11 @@ def to_0xy1_basis(ptm, general_basis=False):
 
     if general_basis:
         result = ExplicitBasisPTM(
-            ptm, PauliBasis_exyz()).get_matrix(
+            ptm, PauliBasis_ixyz()).get_matrix(
             GeneralBasis(2))
     else:
         result = ExplicitBasisPTM(
-            ptm, PauliBasis_exyz()).get_matrix(
+            ptm, PauliBasis_ixyz()).get_matrix(
             PauliBasis_0xy1())
 
     return result
@@ -245,10 +245,28 @@ def double_kraus_to_ptm(kraus, general_basis=False):
 
     return np.einsum("xab, bc, ycd, ad -> xy", dt,
                      kraus, dt, kraus.conj()).real
+    
+def _to_unit_vector(v):
+    if np.allclose(np.sum(v), 1):
+        rounded = np.round(v, 8)
+        nz, = np.nonzero(rounded)
+        if len(nz) == 1:
+            return nz[0]
+    return None
+
+
+
+class SingleTone(object):
+    __instance = None
+    def __new__(cls, val):
+        if SingleTone.__instance is None:
+            SingleTone.__instance = object.__new__(cls)
+        SingleTone.__instance.val = val
+        return SingleTone.__instance
 
 
 class PauliBasis:
-    def __init__(self, basisvectors=None):
+    def __init__(self, basisvectors=None, basisvector_names=None):
         """
         Defines a Pauli basis [1]. The number of element vectors is given by `dim_pauli`,
         while the dimension of the hilbert space is given by dim_hilbert.
@@ -266,6 +284,8 @@ class PauliBasis:
         if basisvectors is not None:
             self.basisvectors = basisvectors
 
+        if basisvector_names is not None:
+            self.basisvector_names = basisvector_names
         shape = self.basisvectors.shape
 
         assert shape[1] == shape[2]
@@ -273,8 +293,28 @@ class PauliBasis:
         self.dim_hilbert = shape[1]
         self.dim_pauli = shape[0]
 
+        self.superbasis = None
+
         self.computational_basis_vectors = np.einsum(
             "xii -> ix", self.basisvectors)
+
+        # make instructions on how to 
+        # extract the diagonal
+
+        cbi = {i: _to_unit_vector(cb) 
+                for i, cb in enumerate(self.computational_basis_vectors)}
+
+        self.comp_basis_indices = cbi
+
+    def get_subbasis(self, idxes):
+        subbasis = PauliBasis(self.basisvectors[idxes])
+        if self.basisvector_names:
+            subbasis.basisvector_names = [
+                    self.basisvector_names[i] for i in idxes
+                    ]
+
+        subbasis.superbasis = self
+        return subbasis
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.basisvectors, rho)
@@ -284,9 +324,30 @@ class PauliBasis:
         assert np.allclose(i, np.eye(self.dim_pauli))
 
 
+    def __repr__(self):
+        s = "<PauliBasis d_hilbert={}, d_pauli={}, {}>"
+
+        if self.basisvector_names:
+            bvn_string = " ".join(self.basisvector_names)
+        else:
+            bvn_string = "unnamed basis"
+
+        return s.format(self.dim_hilbert, self.dim_pauli, bvn_string)
+
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
         self.basisvectors = general_ptm_basis_vector(dim)
+
+        self.basisvector_names = []
+
+        for i in range(dim):
+            self.basisvector_names.append(str(i))
+
+        for j in range(dim):
+            for i in range(i):
+                self.basisvector_names.append("X{}{}".format(i, j))
+                self.basisvector_names.append("Y{}{}".format(i, j))
+
         super().__init__()
 
 
@@ -296,14 +357,17 @@ class PauliBasis_0xy1(PauliBasis):
                              np.sqrt(0.5) * np.array([[0, 1], [1, 0]]),
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
                              [[0, 0], [0, 1]]])
+    basisvector_names = ["0", "X", "Y", "1"]
 
 
-class PauliBasis_exyz(PauliBasis):
+class PauliBasis_ixyz(PauliBasis):
     "standard Pauli basis for a qubit"
     basisvectors = np.sqrt(0.5) * np.array([[[1, 0], [0, 1]],
                                             [[0, 1], [1, 0]],
                                             [[0, -1j], [1j, 0]],
                                             [[1, 0], [0, -1]]])
+
+    basisvector_names = ["I", "X", "Y", "Z"]
 
 
 class PTM:

@@ -161,31 +161,35 @@ class TestPauliBasis:
         pb = ptm.PauliBasis_0xy1()
 
         assert len(pb.computational_basis_vectors) == 2
+        assert pb.comp_basis_indices == dict(enumerate([0, 3]))
         assert pb.dim_hilbert == 2
         assert pb.dim_pauli == 4
 
-        pb = ptm.PauliBasis_exyz()
+        pb = ptm.PauliBasis_ixyz()
 
         assert len(pb.computational_basis_vectors) == 2
+        assert pb.comp_basis_indices == dict(enumerate([None, None]))
         assert pb.dim_hilbert == 2
         assert pb.dim_pauli == 4
 
         pb = ptm.GeneralBasis(2)
 
         assert len(pb.computational_basis_vectors) == 2
+        assert pb.comp_basis_indices == dict(enumerate([0, 1]))
         assert pb.dim_hilbert == 2
         assert pb.dim_pauli == 4
 
         pb = ptm.GeneralBasis(3)
 
         assert len(pb.computational_basis_vectors) == 3
+        assert pb.comp_basis_indices == dict(enumerate([0, 1, 2]))
         assert pb.dim_hilbert == 3
         assert pb.dim_pauli == 9
 
 
 some_pauli_bases = [
     ptm.PauliBasis_0xy1(),
-    ptm.PauliBasis_exyz(),
+    ptm.PauliBasis_ixyz(),
     ptm.GeneralBasis(2),
     ptm.GeneralBasis(3)
 ]
@@ -194,6 +198,12 @@ class TestBasis:
     @pytest.mark.parametrize("pb", some_pauli_bases)
     def test_orthonormal(self, pb):
         pb.check_orthonormality()
+
+    @pytest.mark.skip(reason="not implemented yet")
+    def test_singleton(self):
+        pb = ptm.GeneralBasis(3)
+        pb2 = ptm.GeneralBasis(3)
+        assert pb is pb2
 
 
 class TestPTMs:
@@ -260,7 +270,7 @@ class TestPTMs:
 
 some_2d_pauli_bases = [
     ptm.PauliBasis_0xy1(),
-    ptm.PauliBasis_exyz(),
+    ptm.PauliBasis_ixyz(),
     ptm.GeneralBasis(2),
 ]
 
