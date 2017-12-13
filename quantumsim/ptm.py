@@ -372,7 +372,7 @@ class ExplicitBasisPTM(PTM):
                            self.basis.basisvectors,
                            self.ptm,
                            self.basis.basisvectors,
-                           basis_in.basisvectors)
+                           basis_in.basisvectors).real
 
         return result
 
@@ -458,7 +458,7 @@ class ProductPTM(PTM):
             basis_out.basisvectors,
             complete_basis.basisvectors)
 
-        return trans_mat_out @ result @ trans_mat_in
+        return (trans_mat_out @ result @ trans_mat_in).real
 
     def __matmul__(self, other):
         if isinstance(other, ProductPTM):
