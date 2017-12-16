@@ -307,6 +307,9 @@ class PauliBasis:
         self.comp_basis_indices = cbi
 
     def get_subbasis(self, idxes):
+        """
+        return a subbasis of this basis
+        """
         subbasis = PauliBasis(self.basisvectors[idxes])
         if self.basisvector_names:
             subbasis.basisvector_names = [
@@ -315,6 +318,12 @@ class PauliBasis:
 
         subbasis.superbasis = self
         return subbasis
+
+    def get_classical_subbasis(self):
+        idxes = [idx 
+                for st, idx in self.comp_basis_indices.items()
+                if idx is not None]
+        return self.get_subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.basisvectors, rho)
