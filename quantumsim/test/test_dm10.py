@@ -10,15 +10,16 @@ import quantumsim.ptm as ptm
 # here we collect the classes we want to test
 
 implementations_to_test = []
-implementations_to_test.append(dm_np.DensityNP)
-implementations_to_test.append(dm_g_np.DensityNP)
+# implementations_to_test.append(dm_np.DensityNP)
+# implementations_to_test.append(dm_g_np.DensityNP)
 
 hascuda = False
 try:
     import pycuda.gpuarray as ga
     import quantumsim.dm10 as dm10
+    import quantumsim.dm10_general as dm10g
     implementations_to_test.append(dm10.Density)
-    implementations_to_test.append(dm10.DensityGeneral)
+    implementations_to_test.append(dm10g.DensityGeneralShim)
     hascuda = True
 except ImportError:
     pass

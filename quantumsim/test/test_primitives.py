@@ -298,6 +298,43 @@ class TestMultitake:
 
         assert np.allclose(y - 2, y2)
 
+    def test_small(self):
+        n = (4, 4)
+
+        idx = [[0, 3], [0, 2]]
+
+        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
+
+        x = np.random.random(n)
+        y = x[np.ix_(*idx)] + 2
+
+        x_gpu = drv.to_device(x)
+        y_gpu = drv.to_device(y)
+
+        idx_i_gpu = drv.to_device(idx_i)
+        idx_j_gpu = drv.to_device(idx_j)
+
+        xshape = drv.to_device(np.array(list((x.shape)),
+            np.uint32))
+        yshape = drv.to_device(np.array(list((y.shape)),
+            np.uint32))
+
+        blocklength = 256
+        # gridlength = y.size//blocklength + 1
+        gridlength = 1
+
+        multitake(x_gpu, y_gpu, idx_i_gpu, idx_j_gpu,
+                xshape, yshape, np.uint32(len(n)),
+                block=(blocklength, 1, 1), grid=(gridlength, 1, 1))
+
+        y2 = drv.from_device_like(y_gpu, y)
+        
+        print(y2.ravel())
+        print((y-2).ravel())
+
+        assert np.allclose(y - 2, y2)
+
     def test_reeuse_indj(self):
         n = (4,)*5
 
