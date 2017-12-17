@@ -78,10 +78,10 @@ class DensityGeneral:
             ground_state_index = [pb.comp_basis_indices[0] for pb in self.bases]
             self.data[tuple(ground_state_index)] = 1
             self.data = ga.to_gpu(self.data)
-            self.data.gpudata.size = self.data.nbytes
         else:
             raise ValueError("type of data not understood")
 
+        self.data.gpudata.size = self.data.nbytes
         self._work_data = ga.empty_like(self.data)
         self._work_data.gpudata.size = self._work_data.nbytes
 
@@ -143,7 +143,7 @@ class DensityGeneral:
         if target_gpu_array is None:
             if self._work_data.gpudata.size < diag_size*8:
                 self._work_data.gpudata.free()
-                self._work_data = ga.empty(self_shape, np.float64)
+                self._work_data = ga.empty(diag_shape, np.float64)
                 self._work_data.gpudata.size = self._work_data.nbytes
             target_gpu_array = self._work_data
         else:
@@ -207,8 +207,8 @@ class DensityGeneral:
 
         So far only works for square ptms, and thus is done in-place
         """
-        assert bit0 < len(self.bases)
-        assert bit1 < len(self.bases)
+        assert 0 <= bit0 < len(self.bases)
+        assert 0 <= bit1 < len(self.bases)
 
         # bit0 must be the smaller one.
         if bit1 < bit0:
@@ -254,7 +254,7 @@ class DensityGeneral:
         So far only works for square ptms, and thus is done in-place
         """
 
-        assert bit < len(self.bases)
+        assert 0 <= bit < len(self.bases)
 
         dim_bit = self.bases[bit].dim_pauli
 
@@ -293,7 +293,8 @@ class DensityGeneral:
 
         # make sure work_data is large enough, reshape it
 
-        # TODO hacky as fuck: put the allocated size into the allocation by hand
+        # TODO hacky as fuck: we put the allocated size 
+        # into the allocation object by hand
 
         new_shape = tuple([basis.dim_pauli] + list(self.data.shape))
         new_size_bytes = pytools.product(new_shape)*8
@@ -316,13 +317,13 @@ class DensityGeneral:
         ptm_gpu = self._cached_gpuarray(ptm)
 
         dim_bit = basis.dim_pauli
-        dint = min(64, self.data.size//dim_bit)
+        dint = min(64, new_size_bytes//8//dim_bit)
         block = (1, dim_bit, dint)
         blocksize = dim_bit*dint
         gridsize = max(1, (new_size_bytes//8-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
-        dim_z = self.data.size
+        dim_z = self.data.size #1
         dim_y = 1
         dim_rho = self.data.size
 
@@ -340,7 +341,7 @@ class DensityGeneral:
                                      )
 
         self.data, self._work_data = self._work_data, self.data
-        self.bases.append(basis)
+        self.bases = [basis] + self.bases
 
 
 
@@ -351,7 +352,7 @@ class DensityGeneral:
         bit: integer index of the bit
         """
 
-        assert bit < len(self.bases)
+        assert 0 <= bit < len(self.bases)
 
         # todo on graphics card, optimize for tracing out?
         diag = self.get_diag()
@@ -375,6 +376,8 @@ class DensityGeneral:
         in anticipation of a future increase in size.
         """
 
+        assert 0 <= bit < len(self.bases)
+
         new_shape = list(self.data.shape)
         new_shape[bit] = 1
 
@@ -396,6 +399,7 @@ class DensityGeneral:
                     )
 
         idx = []
+        # todo: can be built more efficiently
 
         for i, pb in enumerate(self.bases):
             if i == bit:
@@ -444,7 +448,8 @@ class DensityGeneralShim(DensityGeneral):
         if isinstance(data, np.ndarray):
             from . import dm_np
             dm_cpu = dm_np.DensityNP(no_qubits, data)
-            data = ga.to_gpu(dm_cpu.dm)
+            data = dm_cpu.dm
+            data = ga.to_gpu(data)
 
         super().__init__([self.pb]*no_qubits, data)
 
@@ -453,10 +458,10 @@ class DensityGeneralShim(DensityGeneral):
         from . import dm_np
 
         dm = dm_np.DensityNP(self.no_qubits) 
-        dm.dm = self.data.get()
+        # transpose switches order: in new dm, qubit 0 is msb, in old it is lsb
+        dm.dm = self.data.get().squeeze()
+        
         return dm.to_array()
-
-        return host_dm
 
     def copy(self):
         "Return a deep copy of this Density."
@@ -469,23 +474,52 @@ class DensityGeneralShim(DensityGeneral):
 
     @property
     def no_qubits(self):
-        return len(self.bases)
+        # ignore bases of length 1 (new feature)
+        b = [b for b in self.bases if b.dim_pauli == 4]
+        return len(b)
+
+    def translate_bit(self, bit):
+        # old style bits are labelled 0 -> lsb,
+        # new style bits are labelled 0 -> msb, 
+        # and we ignore bases of length 1
+
+        assert 0 <= bit < self.no_qubits
+
+        alive_idx = [i for i, pb in enumerate(self.bases)
+                if pb.dim_pauli == 4]
+
+        return self.no_qubits - alive_idx[bit] - 1
         
     def cphase(self, bit0, bit1):
+        bit0 = self.translate_bit(bit0)
+        bit1 = self.translate_bit(bit1)
         cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
         self.apply_two_ptm(bit0, bit1, cphase_ptm)
 
     def hadamard(self, bit):
+        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
+        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
+        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
+        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
-    def rotate_z(self, bit, angle):
+    def rotate_z(self, bit, angle): 
+        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
+
+    def project_measurement(self, bit, state):
+        bit = self.translate_bit(bit)
+        super().project_measurement(bit, state)
+
+    def partial_trace(self, bit):
+        bit = self.translate_bit(bit)
+        return super().partial_trace(bit)

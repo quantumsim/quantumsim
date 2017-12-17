@@ -299,6 +299,8 @@ __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned in
 //and in and out array with shapes
 //as well as dim = len(inshape) = len(outshape)
 //set out = in[np.ix_(idx)]
+
+//indices are given in C order, i.e. most significant first
 __global__ void multitake(double *in, double *out, 
         unsigned int *idx_i, unsigned int *idx_j, 
         unsigned int *inshape, unsigned int *outshape, 
