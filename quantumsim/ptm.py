@@ -586,11 +586,13 @@ class ConjunctionPTM(PTM):
 
         proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
         for i, j in enumerate(mp):
-            proj[i,j] = 1
+            proj[i, j] = 1
 
-        new_op = np.eye(new_dim_hilbert) - proj.T@proj + proj.T @ self.op @ proj
+        new_op = np.eye(new_dim_hilbert) - proj.T@proj + \
+            proj.T @ self.op @ proj
 
         return ConjunctionPTM(new_op)
+
 
 class IntegratedPLM(PTM):
     def __init__(self, plm):
@@ -687,7 +689,7 @@ class RotateXPTM(ConjunctionPTM):
 class RotateYPTM(ConjunctionPTM):
     def __init__(self, angle):
         s, c = np.sin(angle / 2), np.cos(angle / 2)
-        super().__init__([[c, s], [-s, c]])
+        super().__init__([[c, -s], [s, c]])
 
 
 class RotateZPTM(ConjunctionPTM):
@@ -777,20 +779,20 @@ class TwoPTMProduct(TwoPTM):
                             3, 2, 5, 4], [
                             0, 1, 4, 5])
 
-
         # return the result in the right basis, hell yeah
         result = np.einsum(
-                bases_out[0].basisvectors, [0, 21, 22],
-                complete_basis[0].basisvectors, [11, 22, 21],
-                bases_out[1].basisvectors, [1, 23, 24],
-                complete_basis[1].basisvectors, [12, 24, 23],
-                result, [11, 12, 13, 14],
-                complete_basis[0].basisvectors, [13, 25, 26],
-                bases_in[0].basisvectors, [3, 26, 25],
-                complete_basis[1].basisvectors, [14, 27, 28],
-                bases_in[1].basisvectors, [4, 28, 27], optimize=True)
+            bases_out[0].basisvectors, [0, 21, 22],
+            complete_basis[0].basisvectors, [11, 22, 21],
+            bases_out[1].basisvectors, [1, 23, 24],
+            complete_basis[1].basisvectors, [12, 24, 23],
+            result, [11, 12, 13, 14],
+            complete_basis[0].basisvectors, [13, 25, 26],
+            bases_in[0].basisvectors, [3, 26, 25],
+            complete_basis[1].basisvectors, [14, 27, 28],
+            bases_in[1].basisvectors, [4, 28, 27], optimize=True)
 
         return result
+
 
 class TwoKrausPTM(TwoPTM):
     def __init__(self, unitary):
@@ -819,6 +821,7 @@ class TwoKrausPTM(TwoPTM):
                          st0i, [22, 5, 7], st1i, [23, 6, 8],
                          kraus.conj(), [1, 2, 7, 8],
                          [20, 21, 22, 23]).real
+
 
 class TwoPTMExplicit(TwoPTM):
     def __init__(self, ptm, basis0, basis1):

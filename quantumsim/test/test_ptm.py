@@ -5,6 +5,8 @@ import pytest
 
 from pytest import approx
 
+from scipy.linalg.matfuncs import expm
+
 
 # some states in 0xy1 basis
 ground_state = np.array([1, 0, 0, 0])
@@ -375,6 +377,21 @@ class TestRotationsPTM:
 
         assert np.allclose(state, ground_state)
 
+    def test_vs_old(self):
+        pb = ptm.PauliBasis_0xy1()
+        a = 1
+        rx = ptm.RotateXPTM(a).get_matrix(pb)
+        rx_old = ptm.rotate_x_ptm(a)
+        assert rx == approx(rx_old)
+
+        ry = ptm.RotateYPTM(a).get_matrix(pb)
+        ry_old = ptm.rotate_y_ptm(a)
+        assert ry == approx(ry_old)
+
+        rz = ptm.RotateZPTM(a).get_matrix(pb)
+        rz_old = ptm.rotate_z_ptm(a)
+        assert rz == approx(rz_old)
+
 
 class TestTwoPTM:
     def test_identity(self):
@@ -407,8 +424,6 @@ class TestTwoPTM:
 
     def test_random_unitary(self):
         # make a random two-qubit unitary
-        from scipy.linalg.matfuncs import expm
-
         h = np.random.random((4, 4)) + 1j * np.random.random((4, 4))
         h = h + h.conj().transpose()
 
@@ -455,7 +470,7 @@ class TestTwoPTM:
         prod = ptm.TwoPTMProduct([
             ((0, ), p1),
             ((1, ), p2)
-            ])
+        ])
 
         m_prod = prod.get_matrix([b, b]).reshape(16, 16)
 
@@ -463,9 +478,31 @@ class TestTwoPTM:
 
 
 def test_embed():
+    b3 = ptm.GeneralBasis(3)
 
-    p = ptm.RotateXPTM(1)
-
+    angle = 1
+    p = ptm.RotateXPTM(angle)
+    # natural embedding
     p3 = p.embed_hilbert(3)
-
     assert p3.op.shape == (3, 3)
+
+    m3 = p3.get_matrix(b3)
+    assert m3.shape == (9, 9)
+
+    # custom embedding, rotate in 0-2 space
+    p3 = p.embed_hilbert(3, [0, 2])
+    assert p3.op.shape == (3, 3)
+
+    m3 = p3.get_matrix(b3)
+    assert m3.shape == (9, 9)
+
+    # check vs rotation by hand
+
+    x_02 = np.zeros((3, 3))
+    x_02[0, 2] = 1
+    x_02[2, 0] = 1
+    u_rot_02 = expm(-.5j * angle * x_02)
+
+    m3_check = ptm.ConjunctionPTM(u_rot_02).get_matrix(b3)
+
+    assert m3_check == approx(m3)
