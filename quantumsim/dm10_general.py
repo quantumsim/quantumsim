@@ -93,6 +93,8 @@ class DensityGeneral:
         If it is not found in the cache, upload to gpu
         and store in cache, otherwise return cached allocation.
         """
+
+        array = np.ascontiguousarray(array)
         key = hash(array.tobytes())
         try:
             array_gpu = self._gpuarray_cache[key]
@@ -100,7 +102,15 @@ class DensityGeneral:
             array_gpu = ga.to_gpu(array)
             self._gpuarray_cache[key] = array_gpu
 
+        # for testing: read_back_and_check!
+
         return array_gpu
+
+    def _check_cache(self):
+        for k, v in self._gpuarray_cache.items():
+            a = v.get().tobytes()
+            assert hash(a) == k
+
 
     def trace(self):
         # todo there is a smarter way of doing this with pauli-dirac basis
@@ -189,16 +199,7 @@ class DensityGeneral:
         else:
             return target_gpu_array
 
-    def cphase(self, bit0, bit1):
-        warnings.warn(
-            "cphase deprecated, use two_ptm instead",
-            DeprecationWarning)
-
-        cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
-
-        self.apply_two_ptm(bit0, bit1, cphase_ptm)
-
-    def apply_two_ptm(self, bit0, bit1, ptm):
+    def apply_two_ptm(self, bit0, bit1, ptm, new_basis=None):
         """
         Apply a two-qubit Pauli transfer matrix to qubit bit0 and bit1.
 
@@ -206,51 +207,83 @@ class DensityGeneral:
         bit0, bit1: integer indices
         """
 
+        self._check_cache()
+
         assert 0 <= bit0 < len(self.bases)
         assert 0 <= bit1 < len(self.bases)
 
         assert len(ptm.shape) == 4
 
-        # bit1 must be the more significant bit (0 is msb)
+        # bit1 must be the more significant bit (bit 0 is msb)
         if bit1 > bit0:
+            print("flippy")
             bit1, bit0 = bit0, bit1
             ptm = np.einsum("abcd -> badc", ptm)
-            if new_basis:
+            if new_basis is not None:
                 new_basis = list(new_basis)
                 new_basis[1], new_basis[0] = new_basis[0], new_basis[1]
 
         new_shape = list(self.data.shape)
-        dim_1_out, dim_0_out, dim_1_in, dim_0_in = ptm.shape
-        assert new_shape[bit0] == dim_0_in
-        assert new_shape[bit1] == dim_1_in
-        new_shape[bit0] = dim_0_out
-        new_shape[bit1] = dim_1_out
+        dim1_out, dim0_out, dim1_in, dim0_in = ptm.shape
+        assert new_shape[bit0] == dim0_in
+        assert new_shape[bit1] == dim1_in
+        new_shape[bit0] = dim0_out
+        new_shape[bit1] = dim1_out
         new_size = pytools.product(new_shape)
         new_size_bytes = new_size * 8
 
+        if self._work_data.gpudata.size < new_size_bytes:
+            # reallocate
+            self._work_data.gpudata.free()
+            self._work_data = ga.empty(new_shape, np.float64)
+            self._work_data.gpudata.size = self._work_data.nbytes
+        else:
+            # reallocation not required, 
+            # reshape but reeuse allocation
+            self._work_data = ga.GPUArray(
+                    shape=new_shape,
+                    dtype=np.float64,
+                    gpudata=self._work_data.gpudata,
+                    )
+
         ptm_gpu = self._cached_gpuarray(ptm)
 
+        print(int(ptm_gpu.gpudata))
+
         # dim_a_out, dim_b_out, d_internal (arbitrary)
-        block = (dim1_out, dim0_out, 16)
-        blocksize = dim0_out*dim1_out*16
+        dint = min(16, self.data.size//(dim1_out*dim0_out))
+        block = (dim1_out, dim0_out, dint)
+        blocksize = dim0_out*dim1_out*dint
         gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
-        dim_z = pytools.product(self.data.shape[bit0:])
+        dim_z = pytools.product(self.data.shape[bit0+1:])
         dim_y = pytools.product(self.data.shape[bit1+1:bit0])
         dim_rho = self.data.size
+
+        print(bit0, bit1)
+        print(dim_z, dim_y, dim_rho)
+        print(block, grid)
 
         _two_qubit_general_ptm.prepared_call(grid,
                                      block,
                                      self.data.gpudata,
-                                     self.data._work_data,
+                                     self._work_data.gpudata,
                                      ptm_gpu.gpudata,
-                                     dim1, dim0,
+                                     dim1_in, dim0_in,
                                      dim_z,
                                      dim_y,
                                      dim_rho,
                                      shared_size=8 * (ptm.size + blocksize)
                                      )
+
+        self.data, self._work_data = self._work_data, self.data
+
+        if new_basis is not None:
+            self.bases[bit0] = new_basis[0]
+            self.bases[bit1] = new_basis[1]
+
+        self._check_cache()
 
     def apply_ptm(self, bit, ptm, new_basis=None):
         """
@@ -306,12 +339,6 @@ class DensityGeneral:
                                      dim_rho,
                                      shared_size=8 * (ptm.size + blocksize)
                                      )
-
-        self.data, self._work_data = self._work_data, self.data
-
-        if new_basis is not None:
-            self.bases[bit0] = new_basis[0]
-            self.bases[bit1] = new_basis[1]
 
         self.data, self._work_data = self._work_data, self.data
 
@@ -527,29 +554,22 @@ class DensityGeneralShim(DensityGeneral):
         return self.no_qubits - alive_idx[bit] - 1
         
     def cphase(self, bit0, bit1):
-        bit0 = self.translate_bit(bit0)
-        bit1 = self.translate_bit(bit1)
         cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
         self.apply_two_ptm(bit0, bit1, cphase_ptm)
 
     def hadamard(self, bit):
-        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
-        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
-        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
     def rotate_z(self, bit, angle): 
-        bit = self.translate_bit(bit)
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def project_measurement(self, bit, state):
@@ -559,3 +579,16 @@ class DensityGeneralShim(DensityGeneral):
     def partial_trace(self, bit):
         bit = self.translate_bit(bit)
         return super().partial_trace(bit)
+
+    def apply_two_ptm(self, bit0, bit1, ptm):
+        assert ptm.shape == (16, 16)
+        bit0 = self.translate_bit(bit0)
+        bit1 = self.translate_bit(bit1)
+        ptm = ptm.reshape(4,4,4,4)
+        super().apply_two_ptm(bit0, bit1, ptm)
+
+    def apply_ptm(self, bit, ptm):
+        assert ptm.shape == (4,4)
+        bit = self.translate_bit(bit)
+        super().apply_ptm(bit, ptm)
+
