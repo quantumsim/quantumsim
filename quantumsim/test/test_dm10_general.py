@@ -210,3 +210,140 @@ def test_expand_and_rotate_ancilla_via_single_ptm():
 
     assert dm.bases[0] == pb2
     assert dm.data.get() == approx([np.sqrt(.5), 0, 0, -np.sqrt(.5)])
+
+
+def test_get_diag_with_tainted_work():
+
+    pb = ptm.PauliBasis_0xy1()
+    dm = dm10g.DensityGeneral([pb, pb])
+
+    assert dm.data.gpudata.size == 16*8
+    assert dm._work_data.gpudata.size == 16*8
+
+    dm._work_data.fill(42)
+
+    assert dm.get_diag() ==  approx([1, 0, 0, 0])
+
+
+def test_simple_two_qubit_cnot():
+    pb = ptm.PauliBasis_0xy1()
+
+    # msb is control bit
+    u = [[1, 0, 0, 0],
+         [0, 1, 0, 0],           
+         [0, 0, 0, 1],                                                 
+         [0, 0, 1, 0]] 
+    u = np.array(u)
+
+    p_cnot = ptm.double_kraus_to_ptm(u).reshape(4,4,4,4)
+    
+    dm = dm10g.DensityGeneral([pb, pb])
+
+    assert dm.get_diag() == approx([1, 0, 0, 0])
+
+    # bit0 is the msb in ptm
+    dm.apply_two_ptm(1, 0, p_cnot) 
+
+    # cnot on ground state does nothing
+    assert dm.get_diag() == approx([1, 0, 0, 0])
+
+    p_flip = ptm.RotateXPTM(np.pi).get_matrix(pb)
+    dm.apply_ptm(1, p_flip)
+
+    print(dm.data)
+    print(dm.get_diag())
+
+    #bit 0 in dm is msb
+    assert dm.get_diag() == approx([0, 1, 0, 0])
+
+    dm.apply_two_ptm(0, 1, p_cnot) 
+    print(dm.data)
+    print(dm.get_diag())
+    assert dm.get_diag() == approx([0, 0, 0, 1])
+
+
+def test_make_qutrit():
+    p = ptm.GeneralBasis(3)
+    dm = dm10g.DensityGeneral([p])
+
+    d = dm.get_diag()
+
+    assert d == approx([1, 0, 0])
+
+def test_excite_qutrit_by_two_rotations():
+    b = ptm.GeneralBasis(3)
+    dm = dm10g.DensityGeneral([b])
+
+    u01 = np.zeros((3, 3))
+    u01[0, 1] = 1
+    u01[1, 0] = 1
+    u01[2, 2] = 1
+
+    ptm01 = ptm.ConjunctionPTM(u01).get_matrix(b)
+
+    u12 = np.zeros((3, 3))
+    u12[0, 0] = 1
+    u12[1, 2] = 1
+    u12[2, 1] = 1
+
+    ptm12 = ptm.ConjunctionPTM(u12).get_matrix(b)
+
+    # excite to second state
+    dm.apply_ptm(0, ptm01)
+    dm.apply_ptm(0, ptm12)
+
+    diag = dm.get_diag()
+    assert len(diag) == 3
+    assert diag == approx(np.array([0, 0, 1]))
+
+    # and down again
+    dm.apply_ptm(0, ptm12)
+    dm.apply_ptm(0, ptm01)
+
+    diag = dm.get_diag()
+    assert len(diag) == 3
+    assert diag == approx(np.array([1, 0, 0]))
+
+def test_qubit_plus_qutrit():
+    b = ptm.GeneralBasis(3)
+    b2 = ptm.PauliBasis_0xy1()
+    dm = dm10g.DensityGeneral([b, b2])
+
+    u01 = np.zeros((3, 3))
+    u01[0, 1] = 1
+    u01[1, 0] = 1
+    u01[2, 2] = 1
+
+    ptm01 = ptm.ConjunctionPTM(u01).get_matrix(b)
+
+    u12 = np.zeros((3, 3))
+    u12[0, 0] = 1
+    u12[1, 2] = 1
+    u12[2, 1] = 1
+
+    ptm12 = ptm.ConjunctionPTM(u12).get_matrix(b)
+
+    # excite to second state
+    dm.apply_ptm(0, ptm01)
+    dm.apply_ptm(0, ptm12)
+
+    assert dm.get_diag() == approx([0, 0, 0, 0, 1, 0])
+    assert dm.trace() == approx(1)
+
+    # and the other qubit
+
+    px = ptm.RotateXPTM(np.pi).get_matrix(b2)
+    dm.apply_ptm(1, px)
+
+    # and down again
+    dm.apply_ptm(0, ptm12)
+    dm.apply_ptm(0, ptm01)
+
+    assert dm.trace() == approx(1)
+    assert dm.get_diag() == approx([0, 1, 0, 0, 0, 0])
+
+    dm.project_measurement(0, 0)
+    assert dm.trace() == approx(1)
+    dm.project_measurement(1, 1)
+    assert dm.trace() == approx(1)
+

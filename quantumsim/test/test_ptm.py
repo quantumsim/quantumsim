@@ -437,13 +437,12 @@ class TestTwoPTM:
         p1 = ptm.RotateXPTM(1)
         m1 = p1.get_matrix(b)
 
-        p2 = ptm.RotateXPTM(1)
+        p2 = ptm.RotateYPTM(1)
         m2 = p2.get_matrix(b)
 
         m2
 
         # only lower bit
-
         prod = ptm.TwoPTMProduct([
             ((0, ), p1),
         ])
@@ -451,6 +450,16 @@ class TestTwoPTM:
         m_prod = prod.get_matrix([b, b]).reshape(16, 16)
 
         assert m_prod == approx(np.kron(m1, np.eye(4)))
+
+        # both lower and higher
+        prod = ptm.TwoPTMProduct([
+            ((0, ), p1),
+            ((1, ), p2)
+            ])
+
+        m_prod = prod.get_matrix([b, b]).reshape(16, 16)
+
+        assert m_prod == approx(np.kron(m1, m2))
 
 
 def test_embed():
