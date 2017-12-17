@@ -1,12 +1,15 @@
-import quantumsim.dm10_general as dm10g
 import quantumsim.ptm as ptm
-
-import pycuda.tools
 
 import pytest
 import numpy as np
 
 from pytest import approx
+
+try:
+    import quantumsim.dm10_general as dm10g
+except ImportError:
+    pytest.skip("pycuda not installed, skip", allow_module_level=True)
+
 
 
 def test_make_trivial():
