@@ -192,6 +192,7 @@ some_pauli_bases = [
     ptm.GeneralBasis(3)
 ]
 
+
 class TestBasis:
     @pytest.mark.parametrize("pb", some_pauli_bases)
     def test_orthonormal(self, pb):
@@ -332,7 +333,9 @@ class TestRotationsPTM:
         ptm_z = ptm.RotateZPTM(np.pi / 2)
         ptm_y = ptm.RotateYPTM(-np.pi / 2)
 
-        #TODO
+        ptm_x, ptm_y, ptm_z
+
+        # TODO
 
     @pytest.mark.parametrize("pb", some_2d_pauli_bases)
     def test_power(self, pb):
@@ -376,40 +379,40 @@ class TestRotationsPTM:
 class TestTwoPTM:
     def test_identity(self):
         b = ptm.PauliBasis_ixyz()
-        
+
         # empty product should be identity
         p1 = ptm.TwoPTMProduct([])
         id1 = p1.get_matrix([b, b])
 
-        id_np = np.eye(16).reshape(4,4,4,4)
+        id_np = np.eye(16).reshape(4, 4, 4, 4)
 
         assert id1 == approx(id_np)
 
         # explicitly making the identity
-        u = np.eye(4).reshape(2,2,2,2)
+        u = np.eye(4).reshape(2, 2, 2, 2)
         p2 = ptm.TwoKrausPTM(u)
         id2 = p2.get_matrix([b, b])
-        
+
         assert id2 == approx(id_np)
 
         # multiplying the two should be the identity
 
         prod = ptm.TwoPTMProduct([
             ((0, 1), p1), ((0, 1), p2)
-            ])
+        ])
 
         id3 = prod.get_matrix([b, b])
 
         assert id3 == approx(id_np)
 
     def test_random_unitary(self):
-        #make a random two-qubit unitary
+        # make a random two-qubit unitary
         from scipy.linalg.matfuncs import expm
 
-        h = np.random.random((4,4)) + 1j*np.random.random((4,4))
+        h = np.random.random((4, 4)) + 1j * np.random.random((4, 4))
         h = h + h.conj().transpose()
 
-        u = expm(1j*h)
+        u = expm(1j * h)
 
         assert u @ u.T.conj() == approx(np.eye(4))
 
@@ -417,13 +420,13 @@ class TestTwoPTM:
         b = ptm.PauliBasis_0xy1()
         old_pmat = ptm.double_kraus_to_ptm(u)
 
-        p = ptm.TwoKrausPTM(u.reshape(2,2,2,2))
+        p = ptm.TwoKrausPTM(u.reshape(2, 2, 2, 2))
         new_pmat = p.get_matrix([b, b]).reshape(16, 16)
 
         assert new_pmat == approx(old_pmat)
 
         # a random unitary should also be easily invertible
-        p_inv = ptm.TwoKrausPTM(u.T.conj().reshape(2,2,2,2))
+        p_inv = ptm.TwoKrausPTM(u.T.conj().reshape(2, 2, 2, 2))
         new_pmat_inv = p_inv.get_matrix([b, b]).reshape(16, 16)
 
         assert new_pmat_inv @ new_pmat == approx(np.eye(16))
@@ -437,19 +440,23 @@ class TestTwoPTM:
         p2 = ptm.RotateXPTM(1)
         m2 = p2.get_matrix(b)
 
+        m2
+
         # only lower bit
 
         prod = ptm.TwoPTMProduct([
             ((0, ), p1),
-            ])
+        ])
 
         m_prod = prod.get_matrix([b, b]).reshape(16, 16)
 
         assert m_prod == approx(np.kron(m1, np.eye(4)))
 
 
+def test_embed():
 
+    p = ptm.RotateXPTM(1)
 
+    p3 = p.embed_hilbert(3)
 
-
-
+    assert p3.op.shape == (3, 3)

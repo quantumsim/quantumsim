@@ -150,6 +150,7 @@ def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
 
     return AmplitudePhaseDampingPTM(gamma, lamda).get_matrix(pb)
 
+
 def gen_amp_damping_ptm(gamma_down, gamma_up):
     """Return a 4x4 Pauli transfer matrix  representing amplitude damping including an excitation rate gamma_up.
     """
@@ -245,7 +246,8 @@ def double_kraus_to_ptm(kraus, general_basis=False):
 
     return np.einsum("xab, bc, ycd, ad -> xy", dt,
                      kraus, dt, kraus.conj()).real
-    
+
+
 def _to_unit_vector(v):
     if np.allclose(np.sum(v), 1):
         rounded = np.round(v, 8)
@@ -255,14 +257,15 @@ def _to_unit_vector(v):
     return None
 
 
-
 class SingleTone(object):
     __instance = None
+
     def __new__(cls, val):
         if SingleTone.__instance is None:
             SingleTone.__instance = object.__new__(cls)
         SingleTone.__instance.val = val
         return SingleTone.__instance
+
 
 class PauliBasis:
     def __init__(self, basisvectors=None, basisvector_names=None):
@@ -297,11 +300,11 @@ class PauliBasis:
         self.computational_basis_vectors = np.einsum(
             "xii -> ix", self.basisvectors)
 
-        # make instructions on how to 
+        # make instructions on how to
         # extract the diagonal
 
-        cbi = {i: _to_unit_vector(cb) 
-                for i, cb in enumerate(self.computational_basis_vectors)}
+        cbi = {i: _to_unit_vector(cb)
+               for i, cb in enumerate(self.computational_basis_vectors)}
 
         self.comp_basis_indices = cbi
 
@@ -312,16 +315,16 @@ class PauliBasis:
         subbasis = PauliBasis(self.basisvectors[idxes])
         if self.basisvector_names:
             subbasis.basisvector_names = [
-                    self.basisvector_names[i] for i in idxes
-                    ]
+                self.basisvector_names[i] for i in idxes
+            ]
 
         subbasis.superbasis = self
         return subbasis
 
     def get_classical_subbasis(self):
-        idxes = [idx 
-                for st, idx in self.comp_basis_indices.items()
-                if idx is not None]
+        idxes = [idx
+                 for st, idx in self.comp_basis_indices.items()
+                 if idx is not None]
         return self.get_subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
@@ -330,7 +333,6 @@ class PauliBasis:
     def check_orthonormality(self):
         i = np.einsum("xab, yba -> xy", self.basisvectors, self.basisvectors)
         assert np.allclose(i, np.eye(self.dim_pauli))
-
 
     def __repr__(self):
         s = "<PauliBasis d_hilbert={}, d_pauli={}, {}>"
@@ -341,6 +343,7 @@ class PauliBasis:
             bvn_string = "unnamed basis"
 
         return s.format(self.dim_hilbert, self.dim_pauli, bvn_string)
+
 
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
@@ -358,6 +361,7 @@ class GeneralBasis(PauliBasis):
 
         super().__init__()
 
+
 class PauliBasis_0xy1(PauliBasis):
     "the pauli basis used by older versions of quantumsim"
     basisvectors = np.array([[[1, 0], [0, 0]],
@@ -365,6 +369,7 @@ class PauliBasis_0xy1(PauliBasis):
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
                              [[0, 0], [0, 1]]])
     basisvector_names = ["0", "X", "Y", "1"]
+
 
 class PauliBasis_ixyz(PauliBasis):
     "standard Pauli basis for a qubit"
@@ -374,6 +379,7 @@ class PauliBasis_ixyz(PauliBasis):
                                             [[1, 0], [0, -1]]])
 
     basisvector_names = ["I", "X", "Y", "Z"]
+
 
 class PTM:
     def __init__(self):
@@ -428,6 +434,7 @@ class PTM:
     def __matmul__(self, other):
         return ProductPTM([self, other])
 
+
 class ExplicitBasisPTM(PTM):
     def __init__(self, ptm, basis):
         self.ptm = ptm
@@ -447,6 +454,7 @@ class ExplicitBasisPTM(PTM):
                            basis_in.basisvectors).real
 
         return result
+
 
 class LinearCombPTM(PTM):
     def __init__(self, elements):
@@ -479,6 +487,7 @@ class LinearCombPTM(PTM):
             return LinearCombPTM(self.elements + other.elements)
         else:
             return LinearCombPTM(self.elements + collections.Counter([other]))
+
 
 class ProductPTM(PTM):
     def __init__(self, elements):
@@ -539,6 +548,7 @@ class ProductPTM(PTM):
     def __rmatmul__(self, other):
         return other.__matmul__(self)
 
+
 class ConjunctionPTM(PTM):
     def __init__(self, op):
         """
@@ -569,6 +579,19 @@ class ConjunctionPTM(PTM):
 
         return result.real
 
+    def embed_hilbert(self, new_dim_hilbert, mp=None):
+
+        if mp is None:
+            mp = range(min(self.dim_hilbert, new_dim_hilbert))
+
+        proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
+        for i, j in enumerate(mp):
+            proj[i,j] = 1
+
+        new_op = np.eye(new_dim_hilbert) - proj.T@proj + proj.T @ self.op @ proj
+
+        return ConjunctionPTM(new_op)
+
 class IntegratedPLM(PTM):
     def __init__(self, plm):
         """
@@ -591,6 +614,7 @@ class IntegratedPLM(PTM):
 
         # then basis-transform to out basis
         return PTM(ptm_matrix).get_matrix()
+
 
 class AdjunctionPLM(PTM):
     def __init__(self, op):
@@ -619,6 +643,7 @@ class AdjunctionPLM(PTM):
 
         # taking the real part implements the two parts of the commutator
         return result.real
+
 
 class LindbladPLM(PTM):
     def __init__(self, op):
@@ -652,20 +677,24 @@ class LindbladPLM(PTM):
 
         return result.real
 
+
 class RotateXPTM(ConjunctionPTM):
     def __init__(self, angle):
         s, c = np.sin(angle / 2), np.cos(angle / 2)
         super().__init__([[c, -1j * s], [-1j * s, c]])
+
 
 class RotateYPTM(ConjunctionPTM):
     def __init__(self, angle):
         s, c = np.sin(angle / 2), np.cos(angle / 2)
         super().__init__([[c, s], [-s, c]])
 
+
 class RotateZPTM(ConjunctionPTM):
     def __init__(self, angle):
         z = np.exp(-.5j * angle)
         super().__init__([[z, 0], [0, z.conj()]])
+
 
 class AmplitudePhaseDampingPTM(ProductPTM):
     def __init__(self, gamma, lamda):
@@ -703,44 +732,54 @@ class TwoPTMProduct(TwoPTM):
 
         if bases_out is None:
             bases_out = bases_in
-        
+
         # internally done in full basis
         complete_basis0 = GeneralBasis(bases_in[0].dim_hilbert)
         complete_basis1 = GeneralBasis(bases_in[1].dim_hilbert)
 
         complete_basis = [complete_basis0, complete_basis1]
 
-        result = np.eye(complete_basis0.dim_pauli*complete_basis1.dim_pauli)
+        result = np.eye(complete_basis0.dim_pauli * complete_basis1.dim_pauli)
 
         result = result.reshape((
             complete_basis0.dim_pauli,
             complete_basis1.dim_pauli,
             complete_basis0.dim_pauli,
             complete_basis1.dim_pauli,
-            ))
+        ))
 
         for bits, pt in self.elements:
             if len(bits) == 1:
-                #single PTM
+                # single PTM
                 bit = bits[0]
                 print(bit)
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
-                    result = np.einsum(result, [0, 1, 10, 3], 
+                    result = np.einsum(result, [0, 1, 10, 3],
                                        pmat, [10, 2], [0, 1, 2, 3])
                 if bit == 1:
-                    result = np.einsum(result, [0, 1, 2, 10], 
+                    result = np.einsum(result, [0, 1, 2, 10],
                                        pmat, [10, 3], [0, 1, 2, 3])
 
             if len(bits) == 2:
                 # double ptm
-                pmat = pt.get_matrix([complete_basis[bits[0]], complete_basis[bits[1]]])
+                pmat = pt.get_matrix(
+                    [complete_basis[bits[0]], complete_basis[bits[1]]])
                 if bits == (0, 1):
-                    result = np.einsum(result, [0, 1, 2, 3], pmat, [2, 3, 4, 5], [0, 1, 4, 5])
+                    result = np.einsum(
+                        result, [
+                            0, 1, 2, 3], pmat, [
+                            2, 3, 4, 5], [
+                            0, 1, 4, 5])
                 if bits == (1, 0):
-                    result = np.einsum(result, [0, 1, 2, 3], pmat, [3, 2, 5, 4], [0, 1, 4, 5])
+                    result = np.einsum(
+                        result, [
+                            0, 1, 2, 3], pmat, [
+                            3, 2, 5, 4], [
+                            0, 1, 4, 5])
 
         return result
+
 
 class TwoKrausPTM(TwoPTM):
     def __init__(self, unitary):
@@ -754,7 +793,6 @@ class TwoKrausPTM(TwoPTM):
     def get_matrix(self, bases_in, bases_out=None):
         st0i = bases_in[0].basisvectors
         st1i = bases_in[0].basisvectors
-
 
         if bases_out is None:
             st0o, st1o = st0i, st0i
@@ -770,8 +808,6 @@ class TwoKrausPTM(TwoPTM):
                          st0i, [22, 5, 7], st1i, [23, 6, 8],
                          kraus.conj(), [1, 2, 7, 8],
                          [20, 21, 22, 23]).real
-
-
 
 
 class TwoPTMExplicit(TwoPTM):
