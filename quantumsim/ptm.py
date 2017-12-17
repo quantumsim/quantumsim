@@ -723,7 +723,6 @@ class TwoPTMProduct(TwoPTM):
             if len(bits) == 1:
                 #single PTM
                 bit = bits[0]
-                print(bit)
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
                     result = np.einsum(result, [0, 1, 10, 3], 
@@ -740,7 +739,22 @@ class TwoPTMProduct(TwoPTM):
                 if bits == (1, 0):
                     result = np.einsum(result, [0, 1, 2, 3], pmat, [3, 2, 5, 4], [0, 1, 4, 5])
 
+
+        # return the result in the right basis, hell yeah
+        result = np.einsum(
+                bases_out[0].basisvectors, [0, 21, 22],
+                complete_basis[0].basisvectors, [11, 22, 21],
+                bases_out[1].basisvectors, [1, 23, 24],
+                complete_basis[1].basisvectors, [12, 24, 23],
+                result, [11, 12, 13, 14],
+                complete_basis[0].basisvectors, [13, 25, 26],
+                bases_in[0].basisvectors, [3, 26, 25],
+                complete_basis[1].basisvectors, [14, 27, 28],
+                bases_in[1].basisvectors, [4, 28, 27], optimize=True)
+
         return result
+
+
 
 class TwoKrausPTM(TwoPTM):
     def __init__(self, unitary):
@@ -771,16 +785,15 @@ class TwoKrausPTM(TwoPTM):
                          kraus.conj(), [1, 2, 7, 8],
                          [20, 21, 22, 23]).real
 
-
-
-
 class TwoPTMExplicit(TwoPTM):
     def __init__(self, ptm, basis0, basis1):
         pass
 
 
 # TODO:
-# * thought + test on how to handle multi-qubit ptms
+# * better structure of outer products beyond two qubits
+# * Best way is to have processes with types attached to them
+
 # * more explicit support for PTMs that are dimension-agnostic
 # * more reasonable names (SuperOperator, Process, DiffProcess or so)
 # * Singletons/caches to prevent recalculation
