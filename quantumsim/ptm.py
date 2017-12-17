@@ -264,7 +264,6 @@ class SingleTone(object):
         SingleTone.__instance.val = val
         return SingleTone.__instance
 
-
 class PauliBasis:
     def __init__(self, basisvectors=None, basisvector_names=None):
         """
@@ -359,7 +358,6 @@ class GeneralBasis(PauliBasis):
 
         super().__init__()
 
-
 class PauliBasis_0xy1(PauliBasis):
     "the pauli basis used by older versions of quantumsim"
     basisvectors = np.array([[[1, 0], [0, 0]],
@@ -367,7 +365,6 @@ class PauliBasis_0xy1(PauliBasis):
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
                              [[0, 0], [0, 1]]])
     basisvector_names = ["0", "X", "Y", "1"]
-
 
 class PauliBasis_ixyz(PauliBasis):
     "standard Pauli basis for a qubit"
@@ -377,7 +374,6 @@ class PauliBasis_ixyz(PauliBasis):
                                             [[1, 0], [0, -1]]])
 
     basisvector_names = ["I", "X", "Y", "Z"]
-
 
 class PTM:
     def __init__(self):
@@ -432,7 +428,6 @@ class PTM:
     def __matmul__(self, other):
         return ProductPTM([self, other])
 
-
 class ExplicitBasisPTM(PTM):
     def __init__(self, ptm, basis):
         self.ptm = ptm
@@ -452,7 +447,6 @@ class ExplicitBasisPTM(PTM):
                            basis_in.basisvectors).real
 
         return result
-
 
 class LinearCombPTM(PTM):
     def __init__(self, elements):
@@ -485,7 +479,6 @@ class LinearCombPTM(PTM):
             return LinearCombPTM(self.elements + other.elements)
         else:
             return LinearCombPTM(self.elements + collections.Counter([other]))
-
 
 class ProductPTM(PTM):
     def __init__(self, elements):
@@ -546,7 +539,6 @@ class ProductPTM(PTM):
     def __rmatmul__(self, other):
         return other.__matmul__(self)
 
-
 class ConjunctionPTM(PTM):
     def __init__(self, op):
         """
@@ -577,7 +569,6 @@ class ConjunctionPTM(PTM):
 
         return result.real
 
-
 class IntegratedPLM(PTM):
     def __init__(self, plm):
         """
@@ -600,7 +591,6 @@ class IntegratedPLM(PTM):
 
         # then basis-transform to out basis
         return PTM(ptm_matrix).get_matrix()
-
 
 class AdjunctionPLM(PTM):
     def __init__(self, op):
@@ -629,7 +619,6 @@ class AdjunctionPLM(PTM):
 
         # taking the real part implements the two parts of the commutator
         return result.real
-
 
 class LindbladPLM(PTM):
     def __init__(self, op):
@@ -663,24 +652,20 @@ class LindbladPLM(PTM):
 
         return result.real
 
-
 class RotateXPTM(ConjunctionPTM):
     def __init__(self, angle):
         s, c = np.sin(angle / 2), np.cos(angle / 2)
         super().__init__([[c, -1j * s], [-1j * s, c]])
-
 
 class RotateYPTM(ConjunctionPTM):
     def __init__(self, angle):
         s, c = np.sin(angle / 2), np.cos(angle / 2)
         super().__init__([[c, s], [-s, c]])
 
-
 class RotateZPTM(ConjunctionPTM):
     def __init__(self, angle):
         z = np.exp(-.5j * angle)
         super().__init__([[z, 0], [0, z.conj()]])
-
 
 class AmplitudePhaseDampingPTM(ProductPTM):
     def __init__(self, gamma, lamda):
@@ -695,6 +680,105 @@ class AmplitudePhaseDampingPTM(ProductPTM):
         super().__init__([amp_damp, ph_damp])
 
 
+class TwoPTM:
+    def __init__(self, dim0, dim1):
+        pass
+
+    def get_matrix(self, bases_in, bases_out):
+        pass
+
+    def multiply(self, subspace, process):
+        pass
+
+    def multiply_two(self, other):
+        pass
+
+
+class TwoPTMProduct(TwoPTM):
+    def __init__(self, elements=[]):
+        # list of (bit0, bit1, two_ptm) or (bit, single_ptm)
+        self.elements = elements
+
+    def get_matrix(self, bases_in, bases_out=None):
+
+        if bases_out is None:
+            bases_out = bases_in
+        
+        # internally done in full basis
+        complete_basis0 = GeneralBasis(bases_in[0].dim_hilbert)
+        complete_basis1 = GeneralBasis(bases_in[1].dim_hilbert)
+
+        complete_basis = [complete_basis0, complete_basis1]
+
+        result = np.eye(complete_basis0.dim_pauli*complete_basis1.dim_pauli)
+
+        result = result.reshape((
+            complete_basis0.dim_pauli,
+            complete_basis1.dim_pauli,
+            complete_basis0.dim_pauli,
+            complete_basis1.dim_pauli,
+            ))
+
+        for bits, pt in self.elements:
+            if len(bits) == 1:
+                #single PTM
+                bit = bits[0]
+                print(bit)
+                pmat = pt.get_matrix(complete_basis[bit])
+                if bit == 0:
+                    result = np.einsum(result, [0, 1, 10, 3], 
+                                       pmat, [10, 2], [0, 1, 2, 3])
+                if bit == 1:
+                    result = np.einsum(result, [0, 1, 2, 10], 
+                                       pmat, [10, 3], [0, 1, 2, 3])
+
+            if len(bits) == 2:
+                # double ptm
+                pmat = pt.get_matrix([complete_basis[bits[0]], complete_basis[bits[1]]])
+                if bits == (0, 1):
+                    result = np.einsum(result, [0, 1, 2, 3], pmat, [2, 3, 4, 5], [0, 1, 4, 5])
+                if bits == (1, 0):
+                    result = np.einsum(result, [0, 1, 2, 3], pmat, [3, 2, 5, 4], [0, 1, 4, 5])
+
+        return result
+
+class TwoKrausPTM(TwoPTM):
+    def __init__(self, unitary):
+        assert len(unitary.shape) == 4
+        assert unitary.shape[0:2] == unitary.shape[2:4]
+
+        self.unitary = unitary
+
+        self.dims = unitary.shape[0:2]
+
+    def get_matrix(self, bases_in, bases_out=None):
+        st0i = bases_in[0].basisvectors
+        st1i = bases_in[0].basisvectors
+
+
+        if bases_out is None:
+            st0o, st1o = st0i, st0i
+        else:
+            st0o = bases_out[0].basisvectors
+            st1o = bases_out[0].basisvectors
+
+        kraus = self.unitary
+
+        # very nice contraction :D
+        return np.einsum(st0o, [20, 1, 3], st1o, [21, 2, 4],
+                         kraus, [3, 4, 5, 6],
+                         st0i, [22, 5, 7], st1i, [23, 6, 8],
+                         kraus.conj(), [1, 2, 7, 8],
+                         [20, 21, 22, 23]).real
+
+
+
+
+class TwoPTMExplicit(TwoPTM):
+    def __init__(self, ptm, basis0, basis1):
+        pass
+
+
 # TODO:
 # * thought + test on how to handle multi-qubit ptms
 # * more explicit support for PTMs that are dimension-agnostic
@@ -707,4 +791,3 @@ class AmplitudePhaseDampingPTM(ProductPTM):
 # * using auto-forward-differentiation to integrate processes?
 # * return matric reps in other forms (process matrix, chi matrix?)
 # * PTM compilation using circuit interface?
-# * Basis vector names
