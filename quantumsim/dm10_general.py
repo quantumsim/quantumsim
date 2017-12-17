@@ -204,66 +204,91 @@ class DensityGeneral:
 
         ptm: np.array, a two-qubit ptm in the basis of bit0 and bit1
         bit0, bit1: integer indices
-
-        So far only works for square ptms, and thus is done in-place
         """
+
         assert 0 <= bit0 < len(self.bases)
         assert 0 <= bit1 < len(self.bases)
 
-        # bit0 must be the smaller one.
-        if bit1 < bit0:
-            bit1, bit0 = bit0, bit1
-            ptm = np.einsum("abcd -> badc", ptm.reshape((4,4,4,4))).reshape((16,16))
+        assert len(ptm.shape) == 4
 
-        dim0 = self.bases[bit0].dim_pauli
-        dim1 = self.bases[bit1].dim_pauli
+        # bit1 must be the more significant bit (0 is msb)
+        if bit1 > bit0:
+            bit1, bit0 = bit0, bit1
+            ptm = np.einsum("abcd -> badc", ptm)
+            if new_basis:
+                new_basis = list(new_basis)
+                new_basis[1], new_basis[0] = new_basis[0], new_basis[1]
+
+        new_shape = list(self.data.shape)
+        dim_1_out, dim_0_out, dim_1_in, dim_0_in = ptm.shape
+        assert new_shape[bit0] == dim_0_in
+        assert new_shape[bit1] == dim_1_in
+        new_shape[bit0] = dim_0_out
+        new_shape[bit1] = dim_1_out
+        new_size = pytools.product(new_shape)
+        new_size_bytes = new_size * 8
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
-        block = (dim0, dim1, 16)
-        blocksize = dim0*dim1*16
-        gridsize = max(1, (self.data.size-1)//blocksize+1)
+        block = (dim1_out, dim0_out, 16)
+        blocksize = dim0_out*dim1_out*16
+        gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
-        dim_z = pytools.product(self.data.shape[0:bit0])
-        dim_y = pytools.product(self.data.shape[bit0+1:bit1])
+        dim_z = pytools.product(self.data.shape[bit0:])
+        dim_y = pytools.product(self.data.shape[bit1+1:bit0])
         dim_rho = self.data.size
 
         _two_qubit_general_ptm.prepared_call(grid,
                                      block,
                                      self.data.gpudata,
-                                     self.data.gpudata,
+                                     self.data._work_data,
                                      ptm_gpu.gpudata,
-                                     dim0, dim1,
+                                     dim1, dim0,
                                      dim_z,
                                      dim_y,
                                      dim_rho,
                                      shared_size=8 * (ptm.size + blocksize)
                                      )
 
-
-
-    def apply_ptm(self, bit, ptm):
+    def apply_ptm(self, bit, ptm, new_basis=None):
         """
         Apply a one-qubit Pauli transfer matrix to qubit bit.
 
         ptm: np.array, a ptm in the basis of bit.
         bit: integer qubit index
-
-        So far only works for square ptms, and thus is done in-place
         """
 
+        new_shape = list(self.data.shape)
+        assert len(ptm.shape) == 2
         assert 0 <= bit < len(self.bases)
+        dim_bit_out, dim_bit_in = ptm.shape
+        new_shape[bit] = dim_bit_out
+        assert new_shape[bit] == dim_bit_out
+        new_size = pytools.product(new_shape)
+        new_size_bytes = new_size * 8
 
-        dim_bit = self.bases[bit].dim_pauli
+        if self._work_data.gpudata.size < new_size_bytes:
+            # reallocate
+            self._work_data.gpudata.free()
+            self._work_data = ga.empty(new_shape, np.float64)
+            self._work_data.gpudata.size = self._work_data.nbytes
+        else:
+            # reallocation not required, 
+            # reshape but reeuse allocation
+            self._work_data = ga.GPUArray(
+                    shape=new_shape,
+                    dtype=np.float64,
+                    gpudata=self._work_data.gpudata,
+                    )
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
-        dint = min(64, self.data.size//dim_bit)
-        block = (1, dim_bit, dint)
-        blocksize = dim_bit*dint
-        gridsize = max(1, (self.data.size-1)//blocksize+1)
+        dint = min(64, self.data.size//dim_bit_in)
+        block = (1, dim_bit_out, dint)
+        blocksize = dim_bit_out*dint
+        gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
         dim_z = pytools.product(self.data.shape[bit+1:])
@@ -273,26 +298,38 @@ class DensityGeneral:
         _two_qubit_general_ptm.prepared_call(grid,
                                      block,
                                      self.data.gpudata,
-                                     self.data.gpudata,
+                                     self._work_data.gpudata,
                                      ptm_gpu.gpudata,
-                                     1, dim_bit,
+                                     1, dim_bit_in,
                                      dim_z,
                                      dim_y,
                                      dim_rho,
                                      shared_size=8 * (ptm.size + blocksize)
                                      )
 
+        self.data, self._work_data = self._work_data, self.data
+
+        if new_basis is not None:
+            self.bases[bit0] = new_basis[0]
+            self.bases[bit1] = new_basis[1]
+
+        self.data, self._work_data = self._work_data, self.data
+
+        if new_basis is not None:
+            self.bases[bit] = new_basis
+
     def add_ancilla(self, basis, state):
         """
         add an ancilla with `basis` and with state state.
         """
+
+        # TODO: express in terms off `apply_ptm`
 
         # figure out the projection matrix
         ptm = np.zeros(basis.dim_pauli)
         ptm[basis.comp_basis_indices[state]] = 1
 
         # make sure work_data is large enough, reshape it
-
         # TODO hacky as fuck: we put the allocated size 
         # into the allocation object by hand
 
@@ -342,7 +379,6 @@ class DensityGeneral:
 
         self.data, self._work_data = self._work_data, self.data
         self.bases = [basis] + self.bases
-
 
 
     def partial_trace(self, bit):

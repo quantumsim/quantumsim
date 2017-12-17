@@ -159,3 +159,54 @@ def test_add_to_empty():
     dm = dm10g.DensityGeneral([])
     dm.add_ancilla(pb, 1)
     assert dm.get_diag() == approx([0, 1])
+
+def test_basis_transform_via_single_ptm():
+    pb = ptm.PauliBasis_0xy1()
+    pb2 = ptm.PauliBasis_ixyz()
+
+    p = ptm.ProductPTM([]).get_matrix(pb, pb2)
+
+    dm = dm10g.DensityGeneral([pb])
+
+    assert dm.data.get() == approx([1, 0, 0, 0])
+
+    dm.apply_ptm(0, p, new_basis=pb2)
+
+    assert dm.bases[0] == pb2
+    assert dm.data.get() == approx([np.sqrt(.5), 0, 0, np.sqrt(.5)])
+
+def test_expand_ancilla_via_single_ptm():
+    pb2 = ptm.PauliBasis_0xy1()
+    pb = pb2.get_subbasis([0])
+
+    p = ptm.ProductPTM([]).get_matrix(pb, pb2)
+    print(p)
+
+    dm = dm10g.DensityGeneral([pb])
+
+    assert dm.data.get() == approx([1])
+
+    dm.apply_ptm(0, p, new_basis=pb2)
+
+    assert dm.bases[0] == pb2
+    assert dm.data.get() == approx([1, 0, 0, 0])
+
+
+
+def test_expand_and_rotate_ancilla_via_single_ptm():
+    pb1 = ptm.PauliBasis_0xy1()
+    pb = pb1.get_subbasis([0])
+
+    pb2 = ptm.PauliBasis_ixyz()
+
+    p = ptm.RotateXPTM(np.pi).get_matrix(pb, pb2)
+    print(p)
+
+    dm = dm10g.DensityGeneral([pb])
+
+    assert dm.data.get() == approx([1])
+
+    dm.apply_ptm(0, p, new_basis=pb2)
+
+    assert dm.bases[0] == pb2
+    assert dm.data.get() == approx([np.sqrt(.5), 0, 0, -np.sqrt(.5)])
