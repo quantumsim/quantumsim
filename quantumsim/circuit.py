@@ -477,7 +477,7 @@ class CNOT(TwoPTMGate):
 
 class ISwap(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, time, **kwargs):
+    def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
         """
         ISwap gate, described by the two qubit operator
 
@@ -486,14 +486,32 @@ class ISwap(TwoPTMGate):
         0  i 0 0
         0  0 0 1
         """
-        kraus = np.array([
+        d = np.exp(-dephase_var/2)
+        assert d < 1
+        assert d > 0
+        kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, 0, 1j, 0],
-            [0, 1j, 0, 0],
+            [0, 0, 1j*d, 0],
+            [0, 1j*d, 0, 0],
             [0, 0, 0, 1]
         ])
+        kraus1 = 1j*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = 1j*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, -1, 1, 0],
+            [0, 1, -1, 0],
+            [0, 0, 0, 0]
+        ])
 
-        p = ptm.double_kraus_to_ptm(kraus)
+        p = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
         super().__init__(bit0, bit1, p, time, **kwargs)
 
     def plot_gate(self, ax, coords):
@@ -510,7 +528,7 @@ class ISwap(TwoPTMGate):
 
 class ISwapRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, **kwargs):
+    def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
         """
         ISwap rotation gate, described by the two qubit operator
 
@@ -519,15 +537,37 @@ class ISwapRotation(TwoPTMGate):
         0  i*sin(theta)     cos(theta)      0
         0  0                0               1
         """
-        kraus = np.array([
+
+        d = np.exp(-dephase_var / (2*angle/pi)**2 / 2)
+        assert d > 0
+        assert d < 1
+
+        kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, np.cos(angle), 1j*np.sin(angle), 0],
-            [0, 1j*np.sin(angle), np.cos(angle), 0],
+            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
+            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
             [0, 0, 0, 1]
         ])
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, -1, 0],
+            [0, -1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+
+
         self.angle = angle
 
-        p = ptm.double_kraus_to_ptm(kraus)
+        p = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
         super().__init__(bit0, bit1, p, time, **kwargs)
 
     def plot_gate(self, ax, coords):
@@ -575,11 +615,31 @@ class Swap(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+class NoisyCPhase(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
+
+        d = np.exp(-dephase_var / 2)
+        assert d > 0
+        assert d < 1
+
+        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1*d]))+\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, -1*np.sqrt(1-d**2)]))
+
+        self.angle = angle
+
+        super().__init__(bit0, bit1, p, time, **kwargs)
 
 class CPhaseRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, **kwargs):
-        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)]))
+    def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
+
+        d = np.exp(-dephase_var / (angle/pi)**2 / 2)
+        assert d > 0
+        assert d < 1
+
+        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)*d]))+\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, np.exp(1j * angle)*np.sqrt(1-d**2)]))
 
         self.angle = angle
 
