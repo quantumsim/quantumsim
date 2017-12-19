@@ -5,7 +5,7 @@ import scipy.linalg
 
 
 "The transformation matrix between the two bases. Its essentially a Hadamard, so its its own inverse."
-basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
+basis_transformation_matrix = np.array([[np.sqrt(1.5), 0, 0, np.sqrt(0.5)],
                                         [0, 1, 0, 0],
                                         [0, 0, 1, 0],
                                         [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
@@ -300,13 +300,24 @@ class PauliBasis:
         self.computational_basis_vectors = np.einsum(
             "xii -> ix", self.basisvectors)
 
-        # make instructions on how to
+        # make hint on how to efficiently
         # extract the diagonal
-
         cbi = {i: _to_unit_vector(cb)
                for i, cb in enumerate(self.computational_basis_vectors)}
 
         self.comp_basis_indices = cbi
+
+        # make hint on how to trace
+        traces = np.einsum("xii", self.basisvectors) / \
+            np.sqrt(self.dim_hilbert)
+
+        self.trace_index = _to_unit_vector(traces)
+
+    def get_superbasis(self):
+        if self.superbasis:
+            return self.superbasis
+        else:
+            return self
 
     def get_subbasis(self, idxes):
         """
@@ -335,18 +346,31 @@ class PauliBasis:
         assert np.allclose(i, np.eye(self.dim_pauli))
 
     def __repr__(self):
-        s = "<PauliBasis d_hilbert={}, d_pauli={}, {}>"
+        s = "<{} d_hilbert={}, d_pauli={}, {}>"
 
         if self.basisvector_names:
             bvn_string = " ".join(self.basisvector_names)
         else:
             bvn_string = "unnamed basis"
 
-        return s.format(self.dim_hilbert, self.dim_pauli, bvn_string)
+        return s.format(
+            self.__class__.__name__,
+            self.dim_hilbert,
+            self.dim_pauli,
+            bvn_string)
 
 
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
+        """
+        A "general" Pauli basis in the sense that is defined for every hilbert space dimension:
+
+        GeneralBasis(2) is the same as PauliBasis_0xy1(), but with the elements ordered differently.
+
+        The basis matrices are:
+          - Matrices with one "1" on the diagonal, followed by
+          - pairs of "X" like (real) and "Y" like (imaginary) with two non-zero elements each
+        """
         self.basisvectors = general_ptm_basis_vector(dim)
 
         self.basisvector_names = []
@@ -363,7 +387,13 @@ class GeneralBasis(PauliBasis):
 
 
 class PauliBasis_0xy1(PauliBasis):
-    "the pauli basis used by older versions of quantumsim"
+    """
+    A Pauli basis for a two-dimensional Hilbert space.
+    The basis consisting of projections to 0, Pauli matrices sigma_x and sigma_y, and projection to 1,
+    in that order.
+
+    The pauli basis used by older versions of quantumsim.
+    """
     basisvectors = np.array([[[1, 0], [0, 0]],
                              np.sqrt(0.5) * np.array([[0, 1], [1, 0]]),
                              np.sqrt(0.5) * np.array([[0, -1j], [1j, 0]]),
@@ -372,13 +402,62 @@ class PauliBasis_0xy1(PauliBasis):
 
 
 class PauliBasis_ixyz(PauliBasis):
-    "standard Pauli basis for a qubit"
+    """
+    A Pauli basis for two-dimensional Hilbert spaces,
+    the standard Pauli basis consisting of identity and the three Pauli matrices.
+    """
     basisvectors = np.sqrt(0.5) * np.array([[[1, 0], [0, 1]],
                                             [[0, 1], [1, 0]],
                                             [[0, -1j], [1j, 0]],
                                             [[1, 0], [0, -1]]])
 
     basisvector_names = ["I", "X", "Y", "Z"]
+
+
+class GellMannBasis(PauliBasis):
+    """
+    A Pauli basis consisting of the generalization of Pauli matrices for higher dimensions,
+    the generalized Gell-Mann matrices [1, 2].
+
+    These matrices are Hermitian and traceless, except the first, which is the identity.
+
+    GellMannBasis(2) is the same as PauliBasis_ixyz().
+
+    [1] https://en.wikipedia.org/wiki/Generalizations_of_Pauli_matrices
+    [2] https://en.wikipedia.org/wiki/Gell-Mann_matrices
+    """
+
+    def __init__(self, dim_hilbert):
+
+        diag_gell_manns = [np.ones(dim_hilbert) / np.sqrt(dim_hilbert)]
+        for i in range(1, dim_hilbert):
+            di = np.zeros(dim_hilbert)
+            di[:i] = 1
+            di[i] = -i
+            diag_gell_manns.append(di / np.sqrt(i * (i + 1)))
+
+        gellmanns = []
+
+        basisvector_names = []
+
+        for i in range(dim_hilbert):
+            for j in range(dim_hilbert):
+                basisvector_names.append("γ{}{}".format(i, j))
+                if i == j:
+                    g = np.diag(diag_gell_manns[i])
+                else:
+                    g = np.zeros((dim_hilbert, dim_hilbert), np.complex)
+                    if i < j:
+                        g[i, j] = np.sqrt(.5)
+                        g[j, i] = np.sqrt(.5)
+                    else:
+                        g[i, j] = 1j * np.sqrt(.5)
+                        g[j, i] = -1j * np.sqrt(.5)
+                gellmanns.append(g)
+
+        gellmanns = np.array(gellmanns)
+
+        super().__init__(gellmanns, basisvector_names)
 
 
 class PTM:
@@ -791,7 +870,7 @@ class TwoPTMProduct(TwoPTM):
             complete_basis[1].basisvectors, [14, 27, 28],
             bases_in[1].basisvectors, [4, 28, 27], optimize=True)
 
-        return result
+        return result.real
 
 
 class TwoKrausPTM(TwoPTM):
@@ -801,7 +880,7 @@ class TwoKrausPTM(TwoPTM):
 
         self.unitary = unitary
 
-        self.dims = unitary.shape[0:2]
+        self.dim_hilbert = unitary.shape[0:2]
 
     def get_matrix(self, bases_in, bases_out=None):
         st0i = bases_in[0].basisvectors
@@ -823,10 +902,237 @@ class TwoKrausPTM(TwoPTM):
                          [20, 21, 22, 23]).real
 
 
+class CPhaseRotationPTM(TwoKrausPTM):
+    def __init__(self, angle=np.pi):
+        u = np.diag([1, 1, 1, -1]).reshape(2, 2, 2, 2)
+        super().__init__(u)
+
+
 class TwoPTMExplicit(TwoPTM):
     def __init__(self, ptm, basis0, basis1):
         pass
 
+
+class CompilerBlock:
+    def __init__(
+            self,
+            bits,
+            op,
+            index=None,
+            bitmap=None,
+            in_basis=None,
+            out_basis=None):
+        self.bits = bits
+        self.op = op
+        self.bitmap = bitmap
+        self.in_basis = in_basis
+        self.out_basis = out_basis
+        self.ptm = None
+
+    def __repr__(self):
+        if self.op == "measure" or self.op == "getdiag":
+            opstring = self.op
+        else:
+            opstring = "ptm"
+
+        bitsstring = ",".join(self.bits)
+
+        basis_string = ""
+        if self.in_basis:
+            basis_string += "in:" + \
+                "|".join(" ".join(b.basisvector_names) for b in self.in_basis)
+        if self.out_basis:
+            basis_string += " out:" + \
+                "|".join(" ".join(b.basisvector_names) for b in self.out_basis)
+
+        return "<{}: {} on {} {}>".format(
+            self.__class__.__name__, opstring, bitsstring, basis_string)
+
+
+class TwoPTMCompiler:
+
+    def __init__(self, operations, initial_bases=None):
+        """
+        Precompiles and optimizes a set of PTM applications for calculation.
+
+        Operations are list of tuples:
+            - ([bit], PTM) for single PTM applications
+            - ([bit0, bit1], TwoPTM) for two-qubit ptm applications
+            - ([bits], "measure") for requesting partial trace of all but bits
+
+        bit names can be anything hashable.
+
+        Compilation includes:
+            - Contracting single-ptms into adjacent two-qubit ptms
+            - choosing basis that facilitate partial tracing:
+                - traced qubits in gellmann basis
+                - not-traced qubits in general basis
+            - examining sparsity and using truncated bases if applicable
+
+        If initial_basis is None, the initial state is assumed fully separable.
+        Otherwise, its a dict, mapping bits to bases.
+        """
+
+        self.operations = operations
+
+        self.bits = set()
+
+        for bs, op in self.operations:
+            for b in bs:
+                self.bits.add(b)
+
+        self.initial_bases = initial_bases
+        if self.initial_bases is None:
+            self.initial_bases = []
+
+    def contract_to_two_ptms(self):
+
+        ctr = 0
+
+        blocks = []
+        active_block_idx = {}
+        bits_in_block = {}
+
+        for idx, b in enumerate(self.bits):
+            bl = []
+            blocks.append(bl)
+            active_block_idx[b] = idx
+            bits_in_block[b] = [b]
+
+        for bs, op in self.operations:
+            ctr += 1
+            if op == "measure" or op == "getdiag":
+                # measurement goes in single block
+                measure_block = [(bs, op, ctr)]
+                blocks.append(measure_block)
+                for b in bs:
+                    # start new block for this bit
+                    new_bl = []
+                    active_block_idx[b] = len(blocks)
+                    blocks.append(new_bl)
+                    bits_in_block[b] = [b]
+            elif len(bs) == 1:
+                blocks[active_block_idx[bs[0]]].append((bs, op, ctr))
+            elif len(bs) == 2:
+                b0, b1 = bs
+                bl_i0, bl_i1 = active_block_idx[b0], active_block_idx[b1]
+                if bl_i0 == bl_i1:
+                    # qubits are in same block
+                    blocks[bl_i0].append((bs, op, ctr))
+                else:
+                    if len(bits_in_block[b0]) == 2:
+                        # b0 was in block with someone else, new block for b0
+                        new_bl0 = []
+                        bl_i0 = active_block_idx[b0] = len(blocks)
+                        blocks.append(new_bl0)
+                        bits_in_block[b0] = [b0]
+                    if len(bits_in_block[b1]) == 2:
+                        # b1 was in block with someone else, new block for b1
+                        new_bl1 = []
+                        bl_i1 = active_block_idx[b1] = len(blocks)
+                        blocks.append(new_bl1)
+                        bits_in_block[b1] = [b1]
+                    # now we can be sure that both qb are in single block. We
+                    # combine them:
+                    bits_in_block[b0] = [b0, b1]
+                    bits_in_block[b1] = [b0, b1]
+                    # append earlier block to later block
+                    if bl_i0 < bl_i1:
+                        blocks[bl_i1].extend(blocks[bl_i0])
+                        blocks[bl_i0] = []
+                        blocks[bl_i1].append((bs, op, ctr))
+                        active_block_idx[b0] = active_block_idx[b1]
+                    else:
+                        blocks[bl_i0].extend(blocks[bl_i1])
+                        blocks[bl_i1] = []
+                        blocks[bl_i0].append((bs, op, ctr))
+                        active_block_idx[b1] = active_block_idx[b0]
+
+        self.blocks = [bl for bl in blocks if bl]
+
+    def make_block_ptms(self):
+        self.compiled_blocks = []
+
+        for bl in self.blocks:
+            if bl[0][1] == "measure" or bl[0][1] == "getdiag":
+                mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1])
+                self.compiled_blocks.append(mbl)
+            else:
+                product = TwoPTMProduct([])
+                bit_map = {}
+                for bits, op, i in bl:
+                    if len(bits) == 1:
+                        b, = bits
+                        if b not in bit_map:
+                            bit_map[b] = len(bit_map)
+                        product.elements.append(([bit_map[b]], op))
+                    if len(bits) == 2:
+                        b0, b1 = bits
+                        if b0 not in bit_map:
+                            bit_map[b0] = len(bit_map)
+                        if b1 not in bit_map:
+                            bit_map[b1] = len(bit_map)
+                        product.elements.append(
+                            ([bit_map[b0], bit_map[b1]], op))
+
+                ptm_block = CompilerBlock(
+                    bits=list(
+                        bit_map.keys()),
+                    bitmap=bit_map,
+                    op=product)
+                self.compiled_blocks.append(ptm_block)
+
+    def basis_choice(self):
+
+        # for each block
+        #   find previous blocks for involved qubits:
+        #   If none: set in_basis from_initial basis
+        #   else: Set in_basis from that block
+        #
+        #   find out_bases from sparsity analysis
+
+        for i, cb in enumerate(self.compiled_blocks):
+            cb.in_basis = []
+            cb.out_basis = []
+            for bit in cb.bits:
+                previous = [cb2 for j, cb2 in enumerate(
+                    self.compiled_blocks[:i]) if bit in cb2.bits]
+                if len(previous) == 0:
+                    # we are the first, use init_basis
+                    if bit in self.initial_bases:
+                        in_basis = self.initial_bases[bit]
+                    else:
+                        in_basis = GeneralBasis(cb.op.dim_hilbert)
+                else:
+                    previous = previous[-1]
+                    bit_idx_in_previous = previous.bits.index(bit)
+                    in_basis = previous.out_basis[bit_idx_in_previous]
+
+                cb.in_basis.append(in_basis)
+
+            # find out_basis and ptm matrix
+            if cb.op == "measure":
+                cb.out_basis = [b.get_classical_subbasis()
+                                for b in cb.in_basis]
+            elif len(cb.in_basis) == 2:
+                full_basis = [b.get_superbasis() for b in cb.in_basis]
+                full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
+                sparse_out_0 = np.nonzero(
+                    np.einsum("abcd -> a", full_mat**2))[0]
+                sparse_out_1 = np.nonzero(
+                    np.einsum("abcd -> b", full_mat**2))[0]
+                cb.out_basis = [
+                    full_basis[0].get_subbasis(sparse_out_0),
+                    full_basis[1].get_subbasis(sparse_out_1)
+                ]
+                cb.ptm = cb.op.get_matrix(cb.in_basis, cb.out_basis)
+
+    def run(self):
+        if self.blocks is None:
+            self.make_block_ptms()
+        if self.compiled_blocks is None:
+            self.contract_to_two_ptms()
+            self.basis_choice()
 
 # TODO:
 # * better structure of outer products beyond two qubits

@@ -506,3 +506,14 @@ def test_embed():
     m3_check = ptm.ConjunctionPTM(u_rot_02).get_matrix(b3)
 
     assert m3_check == approx(m3)
+
+def test_gellmann_pauli():
+    pauli = ptm.PauliBasis_ixyz()
+    gm = ptm.GellMannBasis(2)
+
+    assert pauli.basisvectors == approx(gm.basisvectors)
+
+def test_gell_mann_normalized():
+    for i in range(1, 5):
+        gm = ptm.GellMannBasis(i)
+        gm.check_orthonormality()
