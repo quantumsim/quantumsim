@@ -136,7 +136,7 @@ class DensityGeneral:
 
         return host_dm
 
-    def get_diag(self, target_gpu_array=None, get_data=True):
+    def get_diag(self, target_gpu_array=None, get_data=True, flatten=True):
         """
         Obtain the diagonal of the density matrix. 
 
@@ -195,7 +195,10 @@ class DensityGeneral:
                     )
 
         if get_data:
-            return target_gpu_array.get().ravel()[:diag_size]
+            if flatten:
+                return target_gpu_array.get().ravel()[:diag_size]
+            else:
+                return target_gpu_array.get().ravel()[:diag_size].reshape(diag_shape)
         else:
             return target_gpu_array
 
@@ -207,8 +210,6 @@ class DensityGeneral:
         bit0, bit1: integer indices
         """
 
-        self._check_cache()
-
         assert 0 <= bit0 < len(self.bases)
         assert 0 <= bit1 < len(self.bases)
 
@@ -216,7 +217,6 @@ class DensityGeneral:
 
         # bit1 must be the more significant bit (bit 0 is msb)
         if bit1 > bit0:
-            print("flippy")
             bit1, bit0 = bit0, bit1
             ptm = np.einsum("abcd -> badc", ptm)
             if new_basis is not None:
@@ -248,22 +248,23 @@ class DensityGeneral:
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
-        print(int(ptm_gpu.gpudata))
+        dint = max(min(16, self.data.size//(dim1_out*dim0_out)), 1)
+
+
+        # find a reasonable internal dimension
+        # dint = 1
+
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
-        dint = min(16, self.data.size//(dim1_out*dim0_out))
         block = (dim1_out, dim0_out, dint)
         blocksize = dim0_out*dim1_out*dint
+        sh_mem_size = dint*dim0_in*dim1_in + ptm.size
         gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
         dim_z = pytools.product(self.data.shape[bit0+1:])
         dim_y = pytools.product(self.data.shape[bit1+1:bit0])
-        dim_rho = self.data.size
-
-        print(bit0, bit1)
-        print(dim_z, dim_y, dim_rho)
-        print(block, grid)
+        dim_rho = new_size #self.data.size
 
         _two_qubit_general_ptm.prepared_call(grid,
                                      block,
@@ -274,7 +275,7 @@ class DensityGeneral:
                                      dim_z,
                                      dim_y,
                                      dim_rho,
-                                     shared_size=8 * (ptm.size + blocksize)
+                                     shared_size=8*sh_mem_size
                                      )
 
         self.data, self._work_data = self._work_data, self.data
@@ -283,7 +284,6 @@ class DensityGeneral:
             self.bases[bit0] = new_basis[0]
             self.bases[bit1] = new_basis[1]
 
-        self._check_cache()
 
     def apply_ptm(self, bit, ptm, new_basis=None):
         """
@@ -326,7 +326,7 @@ class DensityGeneral:
 
         dim_z = pytools.product(self.data.shape[bit+1:])
         dim_y = pytools.product(self.data.shape[:bit])
-        dim_rho = self.data.size
+        dim_rho = new_size #self.data.size
 
         _two_qubit_general_ptm.prepared_call(grid,
                                      block,
@@ -361,7 +361,8 @@ class DensityGeneral:
         # into the allocation object by hand
 
         new_shape = tuple([basis.dim_pauli] + list(self.data.shape))
-        new_size_bytes = pytools.product(new_shape)*8
+        new_size = pytools.product(new_shape)
+        new_size_bytes = new_size * 8
 
         if self._work_data.gpudata.size < new_size_bytes:
             # reallocate
@@ -389,7 +390,7 @@ class DensityGeneral:
 
         dim_z = self.data.size #1
         dim_y = 1
-        dim_rho = self.data.size
+        dim_rho = new_size #self.data.size
 
 
         _two_qubit_general_ptm.prepared_call(grid,
@@ -418,9 +419,7 @@ class DensityGeneral:
         assert 0 <= bit < len(self.bases)
 
         # todo on graphics card, optimize for tracing out?
-        diag = self.get_diag()
-
-        diag = diag.reshape([pb.dim_hilbert for pb in self.bases])
+        diag = self.get_diag(flatten=False)
 
         in_indices = list(range(len(diag.shape)))
         out_indices = [bit]
