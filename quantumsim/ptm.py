@@ -5,7 +5,7 @@ import scipy.linalg
 
 
 "The transformation matrix between the two bases. Its essentially a Hadamard, so its its own inverse."
-basis_transformation_matrix = np.array([[np.sqrt(1.5), 0, 0, np.sqrt(0.5)],
+basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
                                         [0, 1, 0, 0],
                                         [0, 0, 1, 0],
                                         [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
@@ -805,9 +805,11 @@ class TwoPTM:
 
 
 class TwoPTMProduct(TwoPTM):
-    def __init__(self, elements=[]):
+    def __init__(self, elements=None):
         # list of (bit0, bit1, two_ptm) or (bit, single_ptm)
         self.elements = elements
+        if elements is None:
+            self.elements = []
 
     def get_matrix(self, bases_in, bases_out=None):
 
@@ -835,28 +837,26 @@ class TwoPTMProduct(TwoPTM):
                 bit = bits[0]
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
-                    result = np.einsum(result, [0, 1, 10, 3],
-                                       pmat, [10, 2], [0, 1, 2, 3])
+                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3])
                 if bit == 1:
-                    result = np.einsum(result, [0, 1, 2, 10],
-                                       pmat, [10, 3], [0, 1, 2, 3])
+                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3])
 
-            if len(bits) == 2:
+            elif len(bits) == 2:
                 # double ptm
                 pmat = pt.get_matrix(
                     [complete_basis[bits[0]], complete_basis[bits[1]]])
-                if bits == (0, 1):
+                if tuple(bits) == (0, 1):
                     result = np.einsum(
-                        result, [
-                            0, 1, 2, 3], pmat, [
-                            2, 3, 4, 5], [
-                            0, 1, 4, 5])
-                if bits == (1, 0):
+                            pmat, [0, 1, 10, 11], 
+                            result, [10, 11, 2, 3])
+                elif tuple(bits) == (1, 0):
                     result = np.einsum(
-                        result, [
-                            0, 1, 2, 3], pmat, [
-                            3, 2, 5, 4], [
-                            0, 1, 4, 5])
+                            pmat, [1, 0, 11, 10], 
+                            result, [10, 11, 2, 3])
+                else:
+                    raise ValueError()
+            else:
+                raise ValueError()
 
         # return the result in the right basis, hell yeah
         result = np.einsum(
@@ -985,6 +985,9 @@ class TwoPTMCompiler:
         if self.initial_bases is None:
             self.initial_bases = []
 
+        self.blocks = None
+        self.compiled_blocks = None
+
     def contract_to_two_ptms(self):
 
         ctr = 0
@@ -1048,7 +1051,14 @@ class TwoPTMCompiler:
                         blocks[bl_i0].append((bs, op, ctr))
                         active_block_idx[b1] = active_block_idx[b0]
 
+        # active blocks move to end
+        for b, bli in active_block_idx.items():
+            bl = blocks[bli]
+            blocks[bli] = []
+            blocks.append(bl)
+
         self.blocks = [bl for bl in blocks if bl]
+        self.abi = active_block_idx
 
     def make_block_ptms(self):
         self.compiled_blocks = []
@@ -1075,9 +1085,14 @@ class TwoPTMCompiler:
                         product.elements.append(
                             ([bit_map[b0], bit_map[b1]], op))
 
+
+                # order the bitlist
+                bits = list(bit_map.keys())
+                if bit_map[bits[0]] == 1:
+                    bits = list(reversed(bits))
+
                 ptm_block = CompilerBlock(
-                    bits=list(
-                        bit_map.keys()),
+                    bits=bits,
                     bitmap=bit_map,
                     op=product)
                 self.compiled_blocks.append(ptm_block)
@@ -1114,6 +1129,8 @@ class TwoPTMCompiler:
             if cb.op == "measure":
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
+            elif cb.op == "getdiag":
+                cb.out_basis = cb.in_basis
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
                 full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
