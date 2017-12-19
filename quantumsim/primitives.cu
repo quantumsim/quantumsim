@@ -153,6 +153,10 @@ __global__ void two_qubit_general_ptm(
             data[column + ai*dim_b_in + bi] = dm_in[addr_in];
         }
     }
+    const int addr_out = (((x*dim_a_out + ax)*dim_y + y)*dim_b_out + bx)*dim_z + z;
+
+    if (addr_out >= dim_rho)
+        return;
 
     //done loading
     __syncthreads();
@@ -165,7 +169,6 @@ __global__ void two_qubit_general_ptm(
 
     //upload back to global memory
     __syncthreads();
-    const int addr_out = (((x*dim_a_out + ax)*dim_y + y)*dim_b_out + bx)*dim_z + z;
     dm_out[addr_out] = acc;
 }
 
