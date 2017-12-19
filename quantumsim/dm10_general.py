@@ -248,12 +248,19 @@ class DensityGeneral:
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
-        dint = max(min(16, self.data.size//(dim1_out*dim0_out)), 1)
+        # dint = max(min(16, self.data.size//(dim1_out*dim0_out)), 1)
 
 
-        # find a reasonable internal dimension
-        # dint = 1
+        rest_shape = new_shape.copy()
+        rest_shape[bit0] = 1
+        rest_shape[bit1] = 1
 
+        dint = 1
+        for i in sorted(rest_shape):
+            if i*dint > 256//(dim1_out*dim0_out):
+                break
+            else:
+                dint *= i
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
         block = (dim1_out, dim0_out, dint)
@@ -424,7 +431,7 @@ class DensityGeneral:
         in_indices = list(range(len(diag.shape)))
         out_indices = [bit]
 
-        return np.einsum(diag, in_indices, [bit])
+        return np.einsum(diag, in_indices, [bit], optimize=True)
 
     def project_measurement(self, bit, state, lazy_alloc=True):
         """
