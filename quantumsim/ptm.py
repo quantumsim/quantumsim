@@ -1,6 +1,7 @@
 import numpy as np
 import collections
 
+import functools
 import scipy.linalg
 
 
@@ -605,7 +606,7 @@ class ProductPTM(PTM):
         result = np.eye(complete_basis.dim_pauli)
         for pi in self.elements:
             pi_mat = pi.get_matrix(complete_basis)
-            result = result @ pi_mat
+            result = pi_mat@result
 
         trans_mat_in = np.einsum(
             "xab, yba",
@@ -686,15 +687,13 @@ class IntegratedPLM(PTM):
         if basis_out is None:
             basis_out = basis_in
 
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
-
         # we need to get a square representation!
         plm_matrix = self.plm.get_matrix(basis_in, basis_in)
 
         ptm_matrix = scipy.linalg.matfuncs.expm(plm_matrix)
 
         # then basis-transform to out basis
-        return PTM(ptm_matrix).get_matrix()
+        return ExplicitBasisPTM(ptm_matrix, basis_in).get_matrix(basis_in, basis_out)
 
 
 class AdjunctionPLM(PTM):
@@ -837,9 +836,9 @@ class TwoPTMProduct(TwoPTM):
                 bit = bits[0]
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
-                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3])
+                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3], [0, 1, 2, 3])
                 if bit == 1:
-                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3])
+                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3], [0, 1, 2, 3])
 
             elif len(bits) == 2:
                 # double ptm
@@ -866,9 +865,9 @@ class TwoPTMProduct(TwoPTM):
             complete_basis[1].basisvectors, [12, 24, 23],
             result, [11, 12, 13, 14],
             complete_basis[0].basisvectors, [13, 25, 26],
-            bases_in[0].basisvectors, [3, 26, 25],
+            bases_in[0].basisvectors, [2, 26, 25],
             complete_basis[1].basisvectors, [14, 27, 28],
-            bases_in[1].basisvectors, [4, 28, 27], optimize=True)
+            bases_in[1].basisvectors, [3, 28, 27], [0, 1, 2, 3], optimize=True)
 
         return result.real
 
