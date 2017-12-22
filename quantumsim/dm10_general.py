@@ -35,8 +35,7 @@ for kernel_file in [
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
                 kernel_source_file.read(), options=[
-                    "--default-stream", "per-thread", "-lineinfo"])
-            break
+                    "--default-stream", "per-thread", "-lineinfo", '-I', '/usr/include/cuda', '-Xcompiler', '-std=c++03'])
     except FileNotFoundError:
         pass
 
