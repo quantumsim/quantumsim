@@ -99,7 +99,7 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 //if not, you must reshape the ptm (switch a and b) before calling the kernel.
 __global__ void two_qubit_general_ptm(
         double *dm_in, double *dm_out,
-        double *ptm_g, 
+        const double * __restrict__ ptm_g, 
         unsigned int dim_a_in, 
         unsigned int dim_b_in, 
         unsigned int dim_z, unsigned int dim_y,
@@ -134,15 +134,16 @@ __global__ void two_qubit_general_ptm(
     // can do/need termination statement here?
 
     // external memory required: (blockDim.x + dim_a*dim_b**2) double floats
-    extern __shared__ double ptm[];
-    double *data = &ptm[dim_a_in*dim_b_in*dim_a_out*dim_b_out]; 
+    extern __shared__ double data[];
 
     // load ptm to shared memory 
 
     const int row = (ax*dim_b_out + bx)*dim_b_in*dim_a_in;
-    for(int g = zx; g < dim_a_in*dim_b_in; g += d_internal) {
-        ptm[row + g] = ptm_g[row + g];
-    }
+    /*for(int g = zx; g < dim_a_in*dim_b_in; g += d_internal) {*/
+        /*ptm[row + g] = ptm_g[row + g];*/
+    /*}*/
+
+    
 
     // load data to memory
     const int column = zx*dim_a_in*dim_b_in;
@@ -164,7 +165,7 @@ __global__ void two_qubit_general_ptm(
     //calculate the vector product
     double acc=0.0;
     for(int delta=0; delta < dim_a_in*dim_b_in; delta++) {
-        acc += ptm[row + delta]*data[column + delta];
+        acc += ptm_g[row + delta]*data[column + delta];
     }
 
     //upload back to global memory
@@ -304,9 +305,12 @@ __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned in
 //set out = in[np.ix_(idx)]
 
 //indices are given in C order, i.e. most significant first
-__global__ void multitake(double *in, double *out, 
-        unsigned int *idx_i, unsigned int *idx_j, 
-        unsigned int *inshape, unsigned int *outshape, 
+__global__ void multitake(const double * __restrict__ in, 
+        double * __restrict__ out, 
+        const unsigned int * __restrict__ idx_i, 
+        const unsigned int * __restrict__ idx_j, 
+        const unsigned int * __restrict__ inshape, 
+        const unsigned int * __restrict__ outshape, 
         unsigned int dim) {
 
     unsigned int addr_out, addr_in, s;
