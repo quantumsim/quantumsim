@@ -14,6 +14,7 @@ from . import dm_general_np
 
 import pycuda.autoinit
 import pycuda.tools
+import pycuda.reduction
 
 # load the kernels
 from pycuda.compiler import SourceModule
@@ -50,6 +51,13 @@ _two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
 _two_qubit_general_ptm.prepare("PPPIIIII")
 _multitake = mod.get_function("multitake")
 _multitake.prepare("PPPPPPI")
+
+sum_along_axis = pycuda.reduction.ReductionKernel(
+        dtype_out=np.float64, 
+        neutral = "0", reduce_expr="a+b",
+        map_expr= "(i/stride) % dim == offset ? in[i] : 0",
+        arguments = "const double *in, unsigned int stride, unsigned int dim, unsigned int offset"
+        ) 
 
 class DensityGeneral:
     _gpuarray_cache = {}
@@ -200,7 +208,8 @@ class DensityGeneral:
             else:
                 return target_gpu_array.get().ravel()[:diag_size].reshape(diag_shape)
         else:
-            return target_gpu_array
+            return ga.GPUArray(shape=diag_shape, gpudata=target_gpu_array.gpudata, dtype=np.float64)
+
 
     def apply_two_ptm(self, bit0, bit1, ptm, new_basis=None):
         """
@@ -265,7 +274,7 @@ class DensityGeneral:
         # dim_a_out, dim_b_out, d_internal (arbitrary)
         block = (dim1_out, dim0_out, dint)
         blocksize = dim0_out*dim1_out*dint
-        sh_mem_size = dint*dim0_in*dim1_in + ptm.size
+        sh_mem_size = dint*dim0_in*dim1_in #+ ptm.size
         gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
@@ -426,12 +435,18 @@ class DensityGeneral:
         assert 0 <= bit < len(self.bases)
 
         # todo on graphics card, optimize for tracing out?
-        diag = self.get_diag(flatten=False)
 
-        in_indices = list(range(len(diag.shape)))
-        out_indices = [bit]
+        diag = self.get_diag(get_data=False)
 
-        return np.einsum(diag, in_indices, [bit], optimize=True)
+        res = []
+        stride = diag.strides[bit]//8
+        dim = diag.shape[bit]
+        for offset in range(dim):
+            pt = sum_along_axis(diag, stride, dim, offset) 
+            res.append(pt)
+
+        return [p.get() for p in res]
+
 
     def project_measurement(self, bit, state, lazy_alloc=True):
         """
