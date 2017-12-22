@@ -5,8 +5,6 @@ import numpy as np
 import pytest
 
 
-
-
 def test_three_qbit_clean():
     c = circuit.Circuit()
 
@@ -14,9 +12,10 @@ def test_three_qbit_clean():
 
     # clean ancillas have infinite life-time
     for qb in qubit_names:
-        #set lifetime to only almost inf so that waiting gates are added but ineffective
-        c.add_qubit(qb, np.inf, 1e10) 
-    
+        # set lifetime to only almost inf so that waiting gates are added but
+        # ineffective
+        c.add_qubit(qb, np.inf, 1e10)
+
     c.add_hadamard("A1", time=0)
     c.add_hadamard("A2", time=0)
 
@@ -52,26 +51,25 @@ def test_three_qbit_clean():
     for i in range(100):
         c.apply_to(sdm)
 
-
     assert len(m1.measurements) == 100
     assert len(m2.measurements) == 100
 
     assert sdm.classical == {}
 
-    #in a clean run, we expect just one possible path
+    # in a clean run, we expect just one possible path
     assert np.allclose(sdm.trace(), 1)
 
-    assert m1.measurements == [1]*100
-    assert m2.measurements == [0, 1]*50
+    assert m1.measurements == [1] * 100
+    assert m2.measurements == [0, 1] * 50
+
 
 def test_noisy_measurement_sampler():
     c = circuit.Circuit()
     c.add_qubit("A", 0, 0)
 
-
     c.add_hadamard("A", 1)
 
-    sampler = circuit.uniform_noisy_sampler(seed=42, readout_error = 0.1)
+    sampler = circuit.uniform_noisy_sampler(seed=42, readout_error=0.1)
     m1 = c.add_measurement("A", time=2, sampler=sampler)
 
     sdm = sparsedm.SparseDM("A")
@@ -82,17 +80,19 @@ def test_noisy_measurement_sampler():
         true_state.append(sdm.classical['A'])
 
     # these samples assume a certain seed (=42)
-    assert m1.measurements == [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1]
+    assert m1.measurements == [0, 1, 0, 0, 1, 0,
+                               1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1]
     assert true_state != m1.measurements
-    assert true_state == [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1]
+    assert true_state == [0, 1, 0, 0, 1, 0, 1,
+                          0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1]
 
     # we have two measurement errors
     mprob = 0.9**18 * 0.1**2
     assert np.allclose(sdm.classical_probability, mprob)
-    
     # and each measurement has outcome 1/2
     totprob = mprob * 0.5**20
     assert np.allclose(sdm.trace(), totprob)
+
 
 def test_measurement_with_output_bit():
     c = circuit.Circuit()
@@ -101,17 +101,17 @@ def test_measurement_with_output_bit():
     c.add_qubit("O")
     c.add_qubit("O2")
 
-    c.add_rotate_y("A", time=0, angle=np.pi/2)
+    c.add_rotate_y("A", time=0, angle=np.pi / 2)
 
     sampler = circuit.selection_sampler(1)
     c.add_measurement("A", time=1, sampler=sampler, output_bit="O")
 
-    c.add_rotate_y("A", time=3.5, angle=np.pi/2)
+    c.add_rotate_y("A", time=3.5, angle=np.pi / 2)
 
     sampler = circuit.selection_sampler(1)
     c.add_measurement("A", time=4, sampler=sampler, output_bit="O2")
 
-    c.add_rotate_y("A", time=5, angle=np.pi/2)
+    c.add_rotate_y("A", time=5, angle=np.pi / 2)
     c.order()
 
     sdm = sparsedm.SparseDM(c.get_qubit_names())
@@ -119,17 +119,22 @@ def test_measurement_with_output_bit():
     assert sdm.classical['O'] == 0
     assert sdm.classical['O2'] == 0
 
-
     c.apply_to(sdm)
-
 
     assert np.allclose(sdm.trace(), 0.25)
 
-    assert sdm.classical == {'O': 1, 'O2':1}
+    assert sdm.classical == {'O': 1, 'O2': 1}
+
 
 @pytest.mark.skip()
 def test_integration_surface17():
-    def make_circuit(t1=np.inf, t2=np.inf, seed=42, readout_error=0.015, t_gate=40, t_rest=1000):
+    def make_circuit(
+            t1=np.inf,
+            t2=np.inf,
+            seed=42,
+            readout_error=0.015,
+            t_gate=40,
+            t_rest=1000):
         surf17 = circuit.Circuit("Surface 17")
 
         t_rest += t_gate  # nominal rest time is between two gates
@@ -173,7 +178,8 @@ def test_integration_surface17():
             surf17.add_hadamard(b, time=4 * t_gate + t_rest + 5 * t_gate)
 
         for b in z_bits:
-            surf17.add_measurement(b, time=10 * t_gate + t_rest, sampler=sampler)
+            surf17.add_measurement(
+                b, time=10 * t_gate + t_rest, sampler=sampler)
 
         for b in x_bits:
             surf17.add_measurement(b, time=6 * t_gate, sampler=sampler)
@@ -190,12 +196,11 @@ def test_integration_surface17():
         byte = 0
 
         for i in range(4):
-            byte += syndrome["X%d"%i] << (i+4)
+            byte += syndrome["X%d" % i] << (i + 4)
         for i in range(4):
-            byte += syndrome["Z%d"%i] << i 
+            byte += syndrome["Z%d" % i] << i
 
         return byte
-
 
     seed = 890793515
 
@@ -210,11 +215,9 @@ def test_integration_surface17():
     c = make_circuit(t1=t1, t2=t2, seed=seed,
                      readout_error=ro_error, t_gate=t_gate, t_rest=t_rest)
 
-
     sdm = sparsedm.SparseDM(c.get_qubit_names())
-    for b in ["D%d"%i for i in range(9)]:
+    for b in ["D%d" % i for i in range(9)]:
         sdm.ensure_dense(b)
-
 
     syndromes = []
     for _ in range(rounds):
@@ -228,9 +231,11 @@ def test_integration_surface17():
 
     assert syndrome == b'jHhJhL\x08L\tK)K\x08K\x08K\x08K\x08I'
 
+
 def test_free_decay():
 
-    for t1, t2 in [(np.inf, np.inf), (1000, 2000), (np.inf, 1000), (1000, 1000)]:
+    for t1, t2 in [(np.inf, np.inf), (1000, 2000),
+                   (np.inf, 1000), (1000, 1000)]:
         c = circuit.Circuit("Free decay")
         c.add_qubit("Q", t1=t1, t2=t2)
         c.add_rotate_y("Q", time=0, angle=np.pi)
@@ -242,15 +247,17 @@ def test_free_decay():
         c.apply_to(sdm)
         sdm.project_measurement("Q", 0)
 
-        assert np.allclose(sdm.trace(), np.exp(-1000/t1))
+        assert np.allclose(sdm.trace(), np.exp(-1000 / t1))
+
 
 def test_ramsey():
 
-    for t1, t2 in [(np.inf, np.inf), (1000, 2000), (np.inf, 1000), (1000, 1000)]:
+    for t1, t2 in [(np.inf, np.inf), (1000, 2000),
+                   (np.inf, 1000), (1000, 1000)]:
         c = circuit.Circuit("Ramsey")
         c.add_qubit("Q", t1=t1, t2=t2)
-        c.add_rotate_y("Q", time=0, angle=np.pi/2)
-        c.add_rotate_y("Q", time=1000, angle=-np.pi/2)
+        c.add_rotate_y("Q", time=0, angle=np.pi / 2)
+        c.add_rotate_y("Q", time=1000, angle=-np.pi / 2)
         c.add_waiting_gates()
         c.order()
 
@@ -258,8 +265,7 @@ def test_ramsey():
         c.apply_to(sdm)
         sdm.project_measurement("Q", 0)
 
-        assert np.allclose(sdm.trace(), 0.5*(1+np.exp(-1000/t2)))
-
+        assert np.allclose(sdm.trace(), 0.5 * (1 + np.exp(-1000 / t2)))
 
 
 def test_two_qubit_tpcp():
@@ -271,17 +277,19 @@ def test_two_qubit_tpcp():
     c.add_gate("rotate_y", "B", angle=0.2, time=0)
     c.add_gate("rotate_z", "A", angle=0.1, time=1)
     c.add_gate("rotate_x", "B", angle=0.3, time=1)
-    c.add_gate("cphase","A", "B", time=2)
+    c.add_gate("cphase", "A", "B", time=2)
 
     sdm = sparsedm.SparseDM(c.get_qubit_names())
     for i in range(100):
         c.apply_to(sdm)
         x = sdm.full_dm.get_diag()
-        assert np.allclose(x.sum(), 1) # trace preserved
-        assert np.all(x > 0) # probabilities greater than zero
+        assert np.allclose(x.sum(), 1)  # trace preserved
+        assert np.all(x > 0)  # probabilities greater than zero
 
-    assert np.allclose(np.linalg.eigvalsh(sdm.full_dm.to_array()), [0, 0, 0, 1])
-
+    assert np.allclose(
+        np.linalg.eigvalsh(
+            sdm.full_dm.to_array()), [
+            0, 0, 0, 1])
 
 
 def test_cphase_rotation():
@@ -293,9 +301,8 @@ def test_cphase_rotation():
     c.add_gate("rotate_y", "A", angle=1.2, time=0)
     c.add_gate("rotate_y", "B", angle=1.2, time=0)
 
-    
-    for t in [1,2,3,4,5]:
-        g = circuit.CPhaseRotation("A", "B", 2*np.pi/5, t)
+    for t in [1, 2, 3, 4, 5]:
+        g = circuit.CPhaseRotation("A", "B", 2 * np.pi / 5, t)
         c.add_gate(g)
 
     c.add_gate("rotate_y", "A", angle=-1.2, time=6)
@@ -305,15 +312,55 @@ def test_cphase_rotation():
 
     sdm = sparsedm.SparseDM(c.get_qubit_names())
 
-
-
     c.apply_to(sdm)
-
-
 
     d = sdm.full_dm.get_diag()
 
     assert np.allclose(d, [1, 0, 0, 0])
 
 
+def test_euler_rotation():
+    c = circuit.Circuit("test")
+    c.add_qubit("A")
+
+    theta = 0.3
+    lamda = 0.7
+    phi = 4.2
+
+    g = circuit.RotateEuler(bit="A", time=0, theta=theta, lamda=lamda, phi=phi)
+    gconj = circuit.RotateEuler(
+        bit="A",
+        time=10,
+        theta=-theta,
+        lamda=-phi,
+        phi=-lamda)
+
+    c.add_gate(g)
+    c.add_gate(gconj)
+
+    c.order()
+
+    sdm = sparsedm.SparseDM(c.get_qubit_names())
+
+    c.apply_to(sdm)
+
+    d = sdm.full_dm.get_diag()
+
+    assert np.allclose(d, [1, 0])
+
+
+
+def test_classical_not():
+    sdm = sparsedm.SparseDM("A")
+    c = circuit.Circuit()
+    c.add_qubit(circuit.ClassicalBit("A"))
+    c.add_gate(circuit.ClassicalNOT("A", time=0))
+    c.order()
+
+
+    assert sdm.classical['A'] == 0
+
+    c.apply_to(sdm)
+
+    assert sdm.classical['A'] == 1
 
