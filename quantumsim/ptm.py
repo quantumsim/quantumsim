@@ -1,11 +1,12 @@
 import numpy as np
 import collections
 
+import functools
 import scipy.linalg
 
 
 "The transformation matrix between the two bases. Its essentially a Hadamard, so its its own inverse."
-basis_transformation_matrix = np.array([[np.sqrt(1.5), 0, 0, np.sqrt(0.5)],
+basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
                                         [0, 1, 0, 0],
                                         [0, 0, 1, 0],
                                         [np.sqrt(0.5), 0, 0, -np.sqrt(0.5)]])
@@ -223,7 +224,7 @@ def single_kraus_to_ptm_general(kraus):
     st = general_ptm_basis_vector(d)
 
     return np.einsum("xab, bc, ycd, ad -> xy", st,
-                     kraus, st, kraus.conj()).real
+                     kraus, st, kraus.conj(), optimize=True).real
 
 
 def single_kraus_to_ptm(kraus, general_basis=False):
@@ -233,7 +234,7 @@ def single_kraus_to_ptm(kraus, general_basis=False):
     else:
         st = single_tensor
     return np.einsum("xab, bc, ycd, ad -> xy", st,
-                     kraus, st, kraus.conj()).real
+                     kraus, st, kraus.conj(), optimize=True).real
 
 
 def double_kraus_to_ptm(kraus, general_basis=False):
@@ -245,7 +246,7 @@ def double_kraus_to_ptm(kraus, general_basis=False):
     dt = np.kron(st, st)
 
     return np.einsum("xab, bc, ycd, ad -> xy", dt,
-                     kraus, dt, kraus.conj()).real
+                     kraus, dt, kraus.conj(), optimize=True).real
 
 
 def _to_unit_vector(v):
@@ -288,6 +289,8 @@ class PauliBasis:
 
         if basisvector_names is not None:
             self.basisvector_names = basisvector_names
+
+
         shape = self.basisvectors.shape
 
         assert shape[1] == shape[2]
@@ -298,7 +301,7 @@ class PauliBasis:
         self.superbasis = None
 
         self.computational_basis_vectors = np.einsum(
-            "xii -> ix", self.basisvectors)
+            "xii -> ix", self.basisvectors, optimize=True)
 
         # make hint on how to efficiently
         # extract the diagonal
@@ -308,7 +311,7 @@ class PauliBasis:
         self.comp_basis_indices = cbi
 
         # make hint on how to trace
-        traces = np.einsum("xii", self.basisvectors) / \
+        traces = np.einsum("xii", self.basisvectors, optimize=True) / \
             np.sqrt(self.dim_hilbert)
 
         self.trace_index = _to_unit_vector(traces)
@@ -323,11 +326,10 @@ class PauliBasis:
         """
         return a subbasis of this basis
         """
-        subbasis = PauliBasis(self.basisvectors[idxes])
-        if self.basisvector_names:
-            subbasis.basisvector_names = [
-                self.basisvector_names[i] for i in idxes
-            ]
+
+        bvn = [ self.basisvector_names[i] for i in idxes ]
+
+        subbasis = PauliBasis(self.basisvectors[idxes], bvn)
 
         subbasis.superbasis = self
         return subbasis
@@ -339,10 +341,10 @@ class PauliBasis:
         return self.get_subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
-        return np.einsum("xab, ba -> x", self.basisvectors, rho)
+        return np.einsum("xab, ba -> x", self.basisvectors, rho, optimize=True)
 
     def check_orthonormality(self):
-        i = np.einsum("xab, yba -> xy", self.basisvectors, self.basisvectors)
+        i = np.einsum("xab, yba -> xy", self.basisvectors, self.basisvectors, optimize=True)
         assert np.allclose(i, np.eye(self.dim_pauli))
 
     def __repr__(self):
@@ -530,7 +532,7 @@ class ExplicitBasisPTM(PTM):
                            self.basis.basisvectors,
                            self.ptm,
                            self.basis.basisvectors,
-                           basis_in.basisvectors).real
+                           basis_in.basisvectors, optimize=True).real
 
         return result
 
@@ -605,16 +607,16 @@ class ProductPTM(PTM):
         result = np.eye(complete_basis.dim_pauli)
         for pi in self.elements:
             pi_mat = pi.get_matrix(complete_basis)
-            result = result @ pi_mat
+            result = pi_mat@result
 
         trans_mat_in = np.einsum(
             "xab, yba",
             complete_basis.basisvectors,
-            basis_in.basisvectors)
+            basis_in.basisvectors, optimize=True)
         trans_mat_out = np.einsum(
             "xab, yba",
             basis_out.basisvectors,
-            complete_basis.basisvectors)
+            complete_basis.basisvectors, optimize=True)
 
         return (trans_mat_out @ result @ trans_mat_in).real
 
@@ -652,7 +654,7 @@ class ConjunctionPTM(PTM):
         st_in = basis_in.basisvectors
 
         result = np.einsum("xab, bc, ycd, ad -> xy",
-                           st_out, self.op, st_in, self.op.conj())
+                           st_out, self.op, st_in, self.op.conj(), optimize=True)
 
         assert np.allclose(result.imag, 0)
 
@@ -686,15 +688,13 @@ class IntegratedPLM(PTM):
         if basis_out is None:
             basis_out = basis_in
 
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
-
         # we need to get a square representation!
         plm_matrix = self.plm.get_matrix(basis_in, basis_in)
 
         ptm_matrix = scipy.linalg.matfuncs.expm(plm_matrix)
 
         # then basis-transform to out basis
-        return PTM(ptm_matrix).get_matrix()
+        return ExplicitBasisPTM(ptm_matrix, basis_in).get_matrix(basis_in, basis_out)
 
 
 class AdjunctionPLM(PTM):
@@ -720,7 +720,7 @@ class AdjunctionPLM(PTM):
         st_in = basis_in.basisvectors
 
         result = 1j * np.einsum("xab, bc, ycd -> xy",
-                                st_out, self.op, st_in)
+                                st_out, self.op, st_in,optimize=True)
 
         # taking the real part implements the two parts of the commutator
         return result.real
@@ -748,13 +748,13 @@ class LindbladPLM(PTM):
         st_in = basis_in.basisvectors
 
         result = np.einsum("xab, bc, ycd, ad -> xy",
-                           st_out, self.op, st_in, self.op.conj())
+                           st_out, self.op, st_in, self.op.conj(), optimize=True)
 
         result -= 0.5 * np.einsum("xab, cb, cd, yda -> xy",
-                                  st_out, self.op.conj(), self.op, st_in)
+                                  st_out, self.op.conj(), self.op, st_in, optimize=True)
 
         result -= 0.5 * np.einsum("xab, ybc, dc, da -> xy",
-                                  st_out, st_in, self.op.conj(), self.op)
+                                  st_out, st_in, self.op.conj(), self.op, optimize=True)
 
         return result.real
 
@@ -805,9 +805,11 @@ class TwoPTM:
 
 
 class TwoPTMProduct(TwoPTM):
-    def __init__(self, elements=[]):
+    def __init__(self, elements=None):
         # list of (bit0, bit1, two_ptm) or (bit, single_ptm)
         self.elements = elements
+        if elements is None:
+            self.elements = []
 
     def get_matrix(self, bases_in, bases_out=None):
 
@@ -835,28 +837,26 @@ class TwoPTMProduct(TwoPTM):
                 bit = bits[0]
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
-                    result = np.einsum(result, [0, 1, 10, 3],
-                                       pmat, [10, 2], [0, 1, 2, 3])
+                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3], [0, 1, 2, 3], optimize=True)
                 if bit == 1:
-                    result = np.einsum(result, [0, 1, 2, 10],
-                                       pmat, [10, 3], [0, 1, 2, 3])
+                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3], [0, 1, 2, 3], optimize=True)
 
-            if len(bits) == 2:
+            elif len(bits) == 2:
                 # double ptm
                 pmat = pt.get_matrix(
                     [complete_basis[bits[0]], complete_basis[bits[1]]])
-                if bits == (0, 1):
+                if tuple(bits) == (0, 1):
                     result = np.einsum(
-                        result, [
-                            0, 1, 2, 3], pmat, [
-                            2, 3, 4, 5], [
-                            0, 1, 4, 5])
-                if bits == (1, 0):
+                            pmat, [0, 1, 10, 11], 
+                            result, [10, 11, 2, 3], optimize=True)
+                elif tuple(bits) == (1, 0):
                     result = np.einsum(
-                        result, [
-                            0, 1, 2, 3], pmat, [
-                            3, 2, 5, 4], [
-                            0, 1, 4, 5])
+                            pmat, [1, 0, 11, 10], 
+                            result, [10, 11, 2, 3], optimize=True)
+                else:
+                    raise ValueError()
+            else:
+                raise ValueError()
 
         # return the result in the right basis, hell yeah
         result = np.einsum(
@@ -866,9 +866,9 @@ class TwoPTMProduct(TwoPTM):
             complete_basis[1].basisvectors, [12, 24, 23],
             result, [11, 12, 13, 14],
             complete_basis[0].basisvectors, [13, 25, 26],
-            bases_in[0].basisvectors, [3, 26, 25],
+            bases_in[0].basisvectors, [2, 26, 25],
             complete_basis[1].basisvectors, [14, 27, 28],
-            bases_in[1].basisvectors, [4, 28, 27], optimize=True)
+            bases_in[1].basisvectors, [3, 28, 27], [0, 1, 2, 3], optimize=True)
 
         return result.real
 
@@ -899,7 +899,7 @@ class TwoKrausPTM(TwoPTM):
                          kraus, [3, 4, 5, 6],
                          st0i, [22, 5, 7], st1i, [23, 6, 8],
                          kraus.conj(), [1, 2, 7, 8],
-                         [20, 21, 22, 23]).real
+                         [20, 21, 22, 23], optimize=True).real
 
 
 class CPhaseRotationPTM(TwoKrausPTM):
@@ -985,6 +985,9 @@ class TwoPTMCompiler:
         if self.initial_bases is None:
             self.initial_bases = []
 
+        self.blocks = None
+        self.compiled_blocks = None
+
     def contract_to_two_ptms(self):
 
         ctr = 0
@@ -993,24 +996,22 @@ class TwoPTMCompiler:
         active_block_idx = {}
         bits_in_block = {}
 
-        for idx, b in enumerate(self.bits):
-            bl = []
-            blocks.append(bl)
-            active_block_idx[b] = idx
-            bits_in_block[b] = [b]
-
         for bs, op in self.operations:
+
+            for b in bs:
+                if b not in active_block_idx:
+                    new_bl = []
+                    active_block_idx[b] = len(blocks)
+                    blocks.append(new_bl)
+                    bits_in_block[b] = [b]
+
             ctr += 1
             if op == "measure" or op == "getdiag":
                 # measurement goes in single block
                 measure_block = [(bs, op, ctr)]
                 blocks.append(measure_block)
                 for b in bs:
-                    # start new block for this bit
-                    new_bl = []
-                    active_block_idx[b] = len(blocks)
-                    blocks.append(new_bl)
-                    bits_in_block[b] = [b]
+                    del active_block_idx[b]
             elif len(bs) == 1:
                 blocks[active_block_idx[bs[0]]].append((bs, op, ctr))
             elif len(bs) == 2:
@@ -1048,7 +1049,14 @@ class TwoPTMCompiler:
                         blocks[bl_i0].append((bs, op, ctr))
                         active_block_idx[b1] = active_block_idx[b0]
 
+        # active blocks move to end
+        for b, bli in active_block_idx.items():
+            bl = blocks[bli]
+            blocks[bli] = []
+            blocks.append(bl)
+
         self.blocks = [bl for bl in blocks if bl]
+        self.abi = active_block_idx
 
     def make_block_ptms(self):
         self.compiled_blocks = []
@@ -1075,14 +1083,19 @@ class TwoPTMCompiler:
                         product.elements.append(
                             ([bit_map[b0], bit_map[b1]], op))
 
+
+                # order the bitlist
+                bits = list(bit_map.keys())
+                if bit_map[bits[0]] == 1:
+                    bits = list(reversed(bits))
+
                 ptm_block = CompilerBlock(
-                    bits=list(
-                        bit_map.keys()),
+                    bits=bits,
                     bitmap=bit_map,
                     op=product)
                 self.compiled_blocks.append(ptm_block)
 
-    def basis_choice(self):
+    def basis_choice(self, tol=1e-16):
 
         # for each block
         #   find previous blocks for involved qubits:
@@ -1114,13 +1127,15 @@ class TwoPTMCompiler:
             if cb.op == "measure":
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
+            elif cb.op == "getdiag":
+                cb.out_basis = cb.in_basis
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
                 full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
                 sparse_out_0 = np.nonzero(
-                    np.einsum("abcd -> a", full_mat**2))[0]
+                    np.einsum("abcd -> a", full_mat**2, optimize=True) > tol)[0]
                 sparse_out_1 = np.nonzero(
-                    np.einsum("abcd -> b", full_mat**2))[0]
+                    np.einsum("abcd -> b", full_mat**2, optimize=True) > tol)[0]
                 cb.out_basis = [
                     full_basis[0].get_subbasis(sparse_out_0),
                     full_basis[1].get_subbasis(sparse_out_1)

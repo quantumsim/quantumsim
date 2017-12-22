@@ -476,6 +476,29 @@ class TestTwoPTM:
 
         assert m_prod == approx(np.kron(m1, m2))
 
+    def test_cnot(self):
+        u_cnot = np.array([
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 0, 1],
+                [0, 0, 1, 0]]
+                ).reshape(2,2,2,2)
+
+        cnot_direct = ptm.TwoKrausPTM(u_cnot)
+
+        prod = ptm.TwoPTMProduct()
+
+        prod.elements.append(([1], ptm.RotateYPTM(-np.pi/2)))
+        prod.elements.append(([0, 1], ptm.CPhaseRotationPTM(np.pi)))
+        prod.elements.append(([1], ptm.RotateYPTM(np.pi/2)))
+
+
+        b = ptm.GeneralBasis(2)
+
+        mat_direct = cnot_direct.get_matrix([b, b])
+        mat_indirect = prod.get_matrix([b, b])
+
+        assert mat_direct == approx(mat_indirect)
 
 def test_embed():
     b3 = ptm.GeneralBasis(3)
