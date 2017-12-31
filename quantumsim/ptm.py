@@ -719,11 +719,11 @@ class AdjunctionPLM(PTM):
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        result = 1j * np.einsum("xab, bc, ycd -> xy",
+        result = np.einsum("xab, bc, yca -> xy",
                                 st_out, self.op, st_in,optimize=True)
 
         # taking the real part implements the two parts of the commutator
-        return result.real
+        return result.imag
 
 
 class LindbladPLM(PTM):
