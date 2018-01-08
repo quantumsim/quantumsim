@@ -134,6 +134,7 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
                             0, 1 - photon_lamda)
 
                         decay_gate.ptm = np.dot(decay_gate.ptm, ptm_patch)
+                        decay_gate.photon_lamda = photon_lamda
 
                         decay_gate.annotation = "*"
 
