@@ -675,27 +675,19 @@ class ConjunctionPTM(PTM):
         return ConjunctionPTM(new_op)
 
 
-class IntegratedPLM(PTM):
+class PLMIntegrator:
     def __init__(self, plm):
-        """
-        The PTM that arises for applying the Pauli Liouvillian `plm`
-        for one unit of time.
-        """
         self.plm = plm
-        self.dim_hilbert = plm.dim_hilbert
-
-    def get_matrix(self, basis_in, basis_out=None):
-        if basis_out is None:
-            basis_out = basis_in
-
-        # we need to get a square representation!
-        plm_matrix = self.plm.get_matrix(basis_in, basis_in)
-
-        ptm_matrix = scipy.linalg.matfuncs.expm(plm_matrix)
-
-        # then basis-transform to out basis
-        return ExplicitBasisPTM(ptm_matrix, basis_in).get_matrix(basis_in, basis_out)
-
+        self.full_basis = GeneralBasis(self.plm.dim_hilbert)
+        self.lindbladian_mat = self.plm.get_matrix(self.full_basis)
+        
+        self.e, self.v = np.linalg.eig(self.lindbladian_mat)
+        self.vinv = np.linalg.inv(self.v)
+        
+    def get_ptm(self, power):
+        p = self.v @ np.diag(np.exp(power*self.e)) @ self.vinv
+        
+        return ExplicitBasisPTM(p, self.full_basis)
 
 class AdjunctionPLM(PTM):
     def __init__(self, op):
@@ -806,7 +798,13 @@ class TwoPTM:
 
 class TwoPTMProduct(TwoPTM):
     def __init__(self, elements=None):
-        # list of (bit0, bit1, two_ptm) or (bit, single_ptm)
+        """
+        A product of single- and two-qubit process matrices.
+
+        `elements`: a list of (bit0, bit1, two_ptm) or (bit, single_ptm),
+
+        where bit0, bit1 in [0, 1]
+        """
         self.elements = elements
         if elements is None:
             self.elements = []

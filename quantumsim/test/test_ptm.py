@@ -335,7 +335,12 @@ class TestRotationsPTM:
         ptm_z = ptm.RotateZPTM(np.pi / 2)
         ptm_y = ptm.RotateYPTM(-np.pi / 2)
 
-        ptm_x, ptm_y, ptm_z
+        p = ptm_z @ ptm_y @ ptm_x
+
+        mat = p.get_matrix(pb)
+
+        mat2 = ptm.ProductPTM([]).get_matrix(pb)
+
 
         # TODO
 
@@ -392,6 +397,39 @@ class TestRotationsPTM:
         rz_old = ptm.rotate_z_ptm(a)
         assert rz == approx(rz_old)
 
+class TestPLMIntegrator:
+    def test_rot_x(self):
+        sigmax = np.c_[[0, 1], [1, 0]]
+        
+        angle = np.random.random()
+
+        i = ptm.PLMIntegrator(ptm.AdjunctionPLM(sigmax))
+
+        pb = ptm.PauliBasis_0xy1()
+
+        rot = i.get_ptm(angle).get_matrix(pb)
+        rot2 = ptm.RotateXPTM(angle).get_matrix(pb)
+
+        assert rot == approx(rot2)
+
+    def test_amp_ph(self):
+        destroy = np.c_[[0, 0], [1, 0]]
+        
+        time = np.random.random()
+
+        i = ptm.PLMIntegrator(ptm.LindbladPLM(destroy))
+
+        pb = ptm.PauliBasis_0xy1()
+
+        g = 1-np.exp(-time)
+
+        ap = i.get_ptm(time).get_matrix(pb)
+        ap2 = ptm.AmplitudePhaseDampingPTM(gamma=g, lamda=0).get_matrix(pb)
+
+        assert ap == approx(ap2)
+
+
+        
 
 class TestTwoPTM:
     def test_identity(self):
