@@ -487,6 +487,7 @@ class ISwap(TwoPTMGate):
         0  0 0 1
         """
         d = np.exp(-dephase_var/2)
+        d4 = np.exp(-dephase_var/8)
         assert d <= 1
         assert d >= 0
         kraus0 = np.array([
@@ -509,14 +510,14 @@ class ISwap(TwoPTMGate):
         ])
 
         p1 = ptm.double_kraus_to_ptm(kraus0) +\
-             ptm.double_kraus_to_ptm(kraus1) +\
-             ptm.double_kraus_to_ptm(kraus2)
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
 
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1-d/4, 1-d/4]))+\
-             ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-(1-d/4)**2),
-                                              np.sqrt(1-(1-d/4)**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
 
-        super().__init__(bit0, bit1, p0*p1*p0, time, **kwargs)
+        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -529,6 +530,7 @@ class ISwap(TwoPTMGate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
 
 class ISwapRotation(TwoPTMGate):
 
@@ -543,6 +545,7 @@ class ISwapRotation(TwoPTMGate):
         """
 
         d = np.exp(-dephase_var / (2*angle/np.pi)**2 / 2)
+        d4 = np.exp(-dephase_var / (2*angle/np.pi)**2 / 8)
         assert d >= 0
         assert d <= 1
 
@@ -565,16 +568,15 @@ class ISwapRotation(TwoPTMGate):
             [0, 0, 0, 0]
         ])
 
-
         self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1-d/4, 1-d/4]))+\
-             ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-(1-d/4)**2),
-                                              np.sqrt(1-(1-d/4)**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
         p1 = ptm.double_kraus_to_ptm(kraus0) +\
-             ptm.double_kraus_to_ptm(kraus1) +\
-             ptm.double_kraus_to_ptm(kraus2)
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
 
-        super().__init__(bit0, bit1, p0*p1*p0, time, **kwargs)
+        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -587,6 +589,7 @@ class ISwapRotation(TwoPTMGate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
 
 class Swap(TwoPTMGate):
 
@@ -627,16 +630,17 @@ class NoisyCPhase(TwoPTMGate):
     def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
 
         d = np.exp(-dephase_var / 2)
+        d2 = np.exp(-dephase_var / 4)
         assert d >= 0
         assert d <= 1
 
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1*d])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, -1*np.sqrt(1-d**2)]))
-        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1-d/2, 1-d/2])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-(1-d/2)**2),
-                                             np.sqrt(1-(1-d/2)**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, -np.sqrt(1-d**2)]))
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
 
-        super().__init__(bit0, bit1, p0*p1, time, **kwargs)
+        super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
 
 
 class CPhaseRotation(TwoPTMGate):
@@ -644,18 +648,23 @@ class CPhaseRotation(TwoPTMGate):
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
 
         d = np.exp(-dephase_var / (angle/np.pi)**2 / 2)
+        d2 = np.exp(-dephase_var / (angle/np.pi)**2 / 4)
         assert d >= 0
         assert d <= 1
 
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)*d])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, np.exp(1j * angle)*np.sqrt(1-d**2)]))
-        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1-d/2, 1-d/2])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-(1-d/2)**2),
-                                             np.sqrt(1-(1-d/2)**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
+                                              np.exp(1j * angle)*d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
+                                             np.exp(1j * angle) *
+                                             np.sqrt(1-d**2)]))
+
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
 
         self.angle = angle
 
-        super().__init__(bit0, bit1, p0*p1, time, **kwargs)
+        super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
 
 
 class Measurement(Gate):
