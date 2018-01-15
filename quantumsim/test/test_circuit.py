@@ -148,6 +148,19 @@ class TestCircuit:
 
         assert len(c.gates) == 1
 
+    def test_add_no_waiting_classical_bit(self):
+        c = circuit.Circuit()
+    
+        qa = circuit.ClassicalBit("A")
+
+        c.add_qubit(qa)  
+        c.add_qubit("B", np.inf, np.inf)
+        c.add_qubit("C", 10, 10)
+
+        c.add_waiting_gates(tmin=0, tmax=1)
+
+        assert len(c.gates) == 1
+
     def test_apply_to(self):
         sdm = MagicMock()
         sdm.hadamard = MagicMock()

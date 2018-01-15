@@ -1025,8 +1025,7 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
-        qubits_to_do = [qb for qb in self.qubits
-                        if qb.t1 < np.inf or qb.t2 < np.inf]
+        qubits_to_do = [qb for qb in self.qubits]
         if only_qubits:
             qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
 
