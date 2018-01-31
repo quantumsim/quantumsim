@@ -184,6 +184,9 @@ class RotateY(SinglePTMGate):
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
 
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+
         super().__init__(bit, time, p, **kwargs)
 
         self.angle = angle
@@ -196,6 +199,20 @@ class RotateY(SinglePTMGate):
                                                0 else "-", abs(divisor))
         else:
             self.label = r"$R_y(%g)$" % angle
+
+    def adjust(self, angle):
+        p = ptm.rotate_y_ptm(angle)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle,
+                    0,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+        self.ptm = p
+
 
 
 class Hadamard(SinglePTMGate):
@@ -231,6 +248,9 @@ class RotateX(SinglePTMGate):
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
 
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+
         super().__init__(bit, time, p, **kwargs)
 
         self.angle = angle
@@ -243,6 +263,19 @@ class RotateX(SinglePTMGate):
         else:
             self.label = r"$R_x(%g)$" % angle
 
+    def adjust(self, angle):
+        p = ptm.rotate_x_ptm(angle)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle,
+                    0,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+        self.ptm = p
+
 
 class RotateZ(SinglePTMGate):
 
@@ -252,6 +285,8 @@ class RotateZ(SinglePTMGate):
         p = ptm.rotate_z_ptm(angle)
         if dephasing:
             p = np.dot(p, ptm.dephasing_ptm(dephasing, dephasing, 0))
+
+        self.dephasing = dephasing
 
         super().__init__(bit, time, p, **kwargs)
 
@@ -264,6 +299,12 @@ class RotateZ(SinglePTMGate):
             self.label = r"$R_z(\pi/%d)$" % divisor
         else:
             self.label = r"$R_z(%g)$" % angle
+
+    def adjust(self, angle):
+        p = ptm.rotate_z_ptm(angle)
+        if self.dephasing:
+            p = np.dot(p, ptm.dephasing_ptm(self.dephasing, self.dephasing, 0))
+        self.ptm = p
 
 
 class RotateEuler(SinglePTMGate):
@@ -284,6 +325,17 @@ class RotateEuler(SinglePTMGate):
         super().__init__(bit, time, p, **kwargs)
 
         self.label = r"$R(\theta, \phi, \lambda)$"
+
+    def adjust(self, theta, phi, lamda):
+        unitary = np.array(
+            [[np.cos(theta / 2),
+                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+             ])
+
+        p = ptm.single_kraus_to_ptm(unitary)
+        self.ptm = p
 
 
 class IdlingGate:
@@ -543,9 +595,12 @@ class ISwapRotation(TwoPTMGate):
         0  i*sin(theta)     cos(theta)      0
         0  0                0               1
         """
-
-        d = np.exp(-dephase_var / (2*angle/np.pi)**2 / 2)
-        d4 = np.exp(-dephase_var / (2*angle/np.pi)**2 / 8)
+        if angle != 0:
+            d = np.exp(-dephase_var / (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-dephase_var / (2*angle/np.pi)**2 / 8)
+        else:
+            d = 0
+            d4 = 0
         assert d >= 0
         assert d <= 1
 
@@ -576,6 +631,9 @@ class ISwapRotation(TwoPTMGate):
             ptm.double_kraus_to_ptm(kraus1) +\
             ptm.double_kraus_to_ptm(kraus2)
 
+        self.d = d
+        self.d4 = d4
+
         super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
@@ -589,6 +647,37 @@ class ISwapRotation(TwoPTMGate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
+    def adjust(self, angle):
+
+        kraus0 = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(angle)*self.d, 1j*np.sin(angle)*self.d, 0],
+            [0, 1j*np.sin(angle)*self.d, np.cos(angle)*self.d, 0],
+            [0, 0, 0, 1]
+        ])
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, -1, 0],
+            [0, -1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+
+        self.angle = angle
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d4, self.d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d4**2),
+                                             np.sqrt(1-self.d4**2)]))
+        p1 = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
+        self.two_ptm = p0 @ p1 @ p0
 
 
 class Swap(TwoPTMGate):
@@ -647,8 +736,12 @@ class CPhaseRotation(TwoPTMGate):
 
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
 
-        d = np.exp(-dephase_var / (angle/np.pi)**2 / 2)
-        d2 = np.exp(-dephase_var / (angle/np.pi)**2 / 4)
+        if angle != 0:
+            d = np.exp(-dephase_var / (angle/np.pi)**2 / 2)
+            d2 = np.exp(-dephase_var / (angle/np.pi)**2 / 4)
+        else:
+            d = 0
+            d2 = 0
         assert d >= 0
         assert d <= 1
 
@@ -663,8 +756,24 @@ class CPhaseRotation(TwoPTMGate):
                                              np.sqrt(1-d2**2)]))
 
         self.angle = angle
+        self.d = d
+        self.d2 = d2
 
         super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
+
+    def adjust(self, angle):
+
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
+                                              np.exp(1j * angle)*self.d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
+                                             np.exp(1j * angle) *
+                                             np.sqrt(1-self.d**2)]))
+
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d2, self.d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d2**2),
+                                             np.sqrt(1-self.d2**2)]))
+
+        self.two_ptm = p0 @ p1
 
 
 class Measurement(Gate):
