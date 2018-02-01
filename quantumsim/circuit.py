@@ -1272,6 +1272,61 @@ class Circuit:
                 ha='center',
                 va='center')
 
+    def make_full_PTM(self, i_really_want_to_do_this=False):
+        '''
+        Generates the PTM of the entire circuit, assuming no measurements.
+        Warning - this is a very badly scaling process, and is currently
+        only performed on a CPU.
+        Assumes that the circuit has been ordered!
+        '''
+        num_qubits = len(self.qubits)
+        qubits = [q.name for q in self.qubits]
+        if num_qubits > 5 and i_really_want_to_do_this is False:
+            raise ValueError('I dont think you want to do this')
+        full_PTM = np.identity(4**(num_qubits)).reshape((4, 4)*num_qubits)
+
+        for gate in self.gates:
+            if gate.is_measurement:
+                raise TypeError('Cannot get the PTM of a measurement')
+            if gate.conditional_bit:
+                raise TypeError('Cannot get the PTM with a conditional gate')
+
+            if len(gate.involved_qubits) == 1:
+                # Single-qubit gate
+                bit = qubits.index(gate.involved_qubits[0])
+                dummy_idx = num_qubits*2
+                in_indices = list(reversed(range(num_qubits*2)))
+                out_indices = list(reversed(range(num_qubits*2)))
+                in_indices[2*num_qubits - bit - 1] = dummy_idx
+                ptm_indices = [bit, dummy_idx]
+                full_PTM = np.einsum(gate.ptm, ptm_indices, full_PTM,
+                                     in_indices, out_indices, optimize=True)
+
+            elif len(gate.involved_qubits) == 2:
+                # Two qubit gate
+                bit0 = qubits.index(gate.involved_qubits[0])
+                bit1 = qubits.index(gate.involved_qubits[1])
+
+                two_ptm = gate.two_ptm.reshape((4, 4, 4, 4))
+                dummy_idx0, dummy_idx1 = 2*num_qubits, 2*num_qubits + 1
+                out_indices = list(reversed(range(2*num_qubits)))
+                in_indices = list(reversed(range(2*num_qubits)))
+                in_indices[num_qubits*2 - bit0 - 1] = dummy_idx0
+                in_indices[num_qubits*2 - bit1 - 1] = dummy_idx1
+                two_ptm_indices = [
+                    bit1, bit0,
+                    dummy_idx1, dummy_idx0
+                ]
+                full_PTM = np.einsum(
+                    two_ptm, two_ptm_indices, full_PTM,
+                    in_indices, out_indices, optimize=True)
+
+            else:
+                raise ValueError('Sorry, feature not implemented for >2 qubits')
+
+        full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits)
+        return full_PTM
+
 
 def selection_sampler(result=0):
     """ A sampler always returning the measurement result `result`, and not making any
