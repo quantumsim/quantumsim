@@ -596,11 +596,11 @@ class ISwapRotation(TwoPTMGate):
         0  0                0               1
         """
         if angle != 0:
-            d = np.exp(-dephase_var / (2*angle/np.pi)**2 / 2)
-            d4 = np.exp(-dephase_var / (2*angle/np.pi)**2 / 8)
+            d = np.exp(-dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-dephase_var * (2*angle/np.pi)**2 / 8)
         else:
-            d = 0
-            d4 = 0
+            d = 1
+            d4 = 1
         assert d >= 0
         assert d <= 1
 
@@ -631,8 +631,7 @@ class ISwapRotation(TwoPTMGate):
             ptm.double_kraus_to_ptm(kraus1) +\
             ptm.double_kraus_to_ptm(kraus2)
 
-        self.d = d
-        self.d4 = d4
+        self.dephase_var = dephase_var
 
         super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
@@ -650,19 +649,28 @@ class ISwapRotation(TwoPTMGate):
 
     def adjust(self, angle):
 
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 8)
+        else:
+            d = 1
+            d4 = 1
+        assert d >= 0
+        assert d <= 1
+
         kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, np.cos(angle)*self.d, 1j*np.sin(angle)*self.d, 0],
-            [0, 1j*np.sin(angle)*self.d, np.cos(angle)*self.d, 0],
+            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
+            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
             [0, 0, 0, 1]
         ])
-        kraus1 = np.exp(1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
             [0, 0, 0, 0],
             [0, 1, 1, 0],
             [0, 1, 1, 0],
             [0, 0, 0, 0]
         ])
-        kraus2 = np.exp(-1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
             [0, 0, 0, 0],
             [0, 1, -1, 0],
             [0, -1, 1, 0],
@@ -670,9 +678,9 @@ class ISwapRotation(TwoPTMGate):
         ])
 
         self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d4, self.d4])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d4**2),
-                                             np.sqrt(1-self.d4**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
         p1 = ptm.double_kraus_to_ptm(kraus0) +\
             ptm.double_kraus_to_ptm(kraus1) +\
             ptm.double_kraus_to_ptm(kraus2)
@@ -737,11 +745,11 @@ class CPhaseRotation(TwoPTMGate):
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
 
         if angle != 0:
-            d = np.exp(-dephase_var / (angle/np.pi)**2 / 2)
-            d2 = np.exp(-dephase_var / (angle/np.pi)**2 / 4)
+            d = np.exp(-dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-dephase_var * (angle/np.pi)**2 / 4)
         else:
-            d = 0
-            d2 = 0
+            d = 1
+            d2 = 1
         assert d >= 0
         assert d <= 1
 
@@ -756,23 +764,31 @@ class CPhaseRotation(TwoPTMGate):
                                              np.sqrt(1-d2**2)]))
 
         self.angle = angle
-        self.d = d
-        self.d2 = d2
+        self.dephase_var = dephase_var
 
         super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
 
     def adjust(self, angle):
 
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-self.dephase_var * (angle/np.pi)**2 / 4)
+        else:
+            d = 1
+            d2 = 1
+        assert d >= 0
+        assert d <= 1
+
         p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
-                                              np.exp(1j * angle)*self.d])) +\
+                                              np.exp(1j * angle)*d])) +\
             ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
                                              np.exp(1j * angle) *
-                                             np.sqrt(1-self.d**2)]))
+                                             np.sqrt(1-d**2)]))
 
-        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d2, self.d2])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d2**2),
-                                             np.sqrt(1-self.d2**2)]))
-
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
+        self.angle = angle
         self.two_ptm = p0 @ p1
 
 
@@ -1271,6 +1287,61 @@ class Circuit:
                 color='k',
                 ha='center',
                 va='center')
+
+    def make_full_PTM(self, i_really_want_to_do_this=False):
+        '''
+        Generates the PTM of the entire circuit, assuming no measurements.
+        Warning - this is a very badly scaling process, and is currently
+        only performed on a CPU.
+        Assumes that the circuit has been ordered!
+        '''
+        num_qubits = len(self.qubits)
+        qubits = [q.name for q in self.qubits]
+        if num_qubits > 5 and i_really_want_to_do_this is False:
+            raise ValueError('I dont think you want to do this')
+        full_PTM = np.identity(4**(num_qubits)).reshape((4, 4)*num_qubits)
+
+        for gate in self.gates:
+            if gate.is_measurement:
+                raise TypeError('Cannot get the PTM of a measurement')
+            if gate.conditional_bit:
+                raise TypeError('Cannot get the PTM with a conditional gate')
+
+            if len(gate.involved_qubits) == 1:
+                # Single-qubit gate
+                bit = qubits.index(gate.involved_qubits[0])
+                dummy_idx = num_qubits*2
+                in_indices = list(reversed(range(num_qubits*2)))
+                out_indices = list(reversed(range(num_qubits*2)))
+                in_indices[2*num_qubits - bit - 1] = dummy_idx
+                ptm_indices = [bit, dummy_idx]
+                full_PTM = np.einsum(gate.ptm, ptm_indices, full_PTM,
+                                     in_indices, out_indices, optimize=True)
+
+            elif len(gate.involved_qubits) == 2:
+                # Two qubit gate
+                bit0 = qubits.index(gate.involved_qubits[0])
+                bit1 = qubits.index(gate.involved_qubits[1])
+
+                two_ptm = gate.two_ptm.reshape((4, 4, 4, 4))
+                dummy_idx0, dummy_idx1 = 2*num_qubits, 2*num_qubits + 1
+                out_indices = list(reversed(range(2*num_qubits)))
+                in_indices = list(reversed(range(2*num_qubits)))
+                in_indices[num_qubits*2 - bit0 - 1] = dummy_idx0
+                in_indices[num_qubits*2 - bit1 - 1] = dummy_idx1
+                two_ptm_indices = [
+                    bit1, bit0,
+                    dummy_idx1, dummy_idx0
+                ]
+                full_PTM = np.einsum(
+                    two_ptm, two_ptm_indices, full_PTM,
+                    in_indices, out_indices, optimize=True)
+
+            else:
+                raise ValueError('Sorry, feature not implemented for >2 qubits')
+
+        full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits)
+        return full_PTM
 
 
 def selection_sampler(result=0):
