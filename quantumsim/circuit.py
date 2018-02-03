@@ -596,11 +596,11 @@ class ISwapRotation(TwoPTMGate):
         0  0                0               1
         """
         if angle != 0:
-            d = np.exp(-dephase_var / (2*angle/np.pi)**2 / 2)
-            d4 = np.exp(-dephase_var / (2*angle/np.pi)**2 / 8)
+            d = np.exp(-dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-dephase_var * (2*angle/np.pi)**2 / 8)
         else:
-            d = 0
-            d4 = 0
+            d = 1
+            d4 = 1
         assert d >= 0
         assert d <= 1
 
@@ -631,8 +631,7 @@ class ISwapRotation(TwoPTMGate):
             ptm.double_kraus_to_ptm(kraus1) +\
             ptm.double_kraus_to_ptm(kraus2)
 
-        self.d = d
-        self.d4 = d4
+        self.dephase_var = dephase_var
 
         super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
@@ -650,19 +649,28 @@ class ISwapRotation(TwoPTMGate):
 
     def adjust(self, angle):
 
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 8)
+        else:
+            d = 1
+            d4 = 1
+        assert d >= 0
+        assert d <= 1
+
         kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, np.cos(angle)*self.d, 1j*np.sin(angle)*self.d, 0],
-            [0, 1j*np.sin(angle)*self.d, np.cos(angle)*self.d, 0],
+            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
+            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
             [0, 0, 0, 1]
         ])
-        kraus1 = np.exp(1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
             [0, 0, 0, 0],
             [0, 1, 1, 0],
             [0, 1, 1, 0],
             [0, 0, 0, 0]
         ])
-        kraus2 = np.exp(-1j*angle)*np.sqrt(1-self.d**2)/2*np.array([
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
             [0, 0, 0, 0],
             [0, 1, -1, 0],
             [0, -1, 1, 0],
@@ -670,9 +678,9 @@ class ISwapRotation(TwoPTMGate):
         ])
 
         self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d4, self.d4])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d4**2),
-                                             np.sqrt(1-self.d4**2)]))
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
         p1 = ptm.double_kraus_to_ptm(kraus0) +\
             ptm.double_kraus_to_ptm(kraus1) +\
             ptm.double_kraus_to_ptm(kraus2)
@@ -737,11 +745,11 @@ class CPhaseRotation(TwoPTMGate):
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
 
         if angle != 0:
-            d = np.exp(-dephase_var / (angle/np.pi)**2 / 2)
-            d2 = np.exp(-dephase_var / (angle/np.pi)**2 / 4)
+            d = np.exp(-dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-dephase_var * (angle/np.pi)**2 / 4)
         else:
-            d = 0
-            d2 = 0
+            d = 1
+            d2 = 1
         assert d >= 0
         assert d <= 1
 
@@ -756,23 +764,31 @@ class CPhaseRotation(TwoPTMGate):
                                              np.sqrt(1-d2**2)]))
 
         self.angle = angle
-        self.d = d
-        self.d2 = d2
+        self.dephase_var = dephase_var
 
         super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
 
     def adjust(self, angle):
 
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-self.dephase_var * (angle/np.pi)**2 / 4)
+        else:
+            d = 1
+            d2 = 1
+        assert d >= 0
+        assert d <= 1
+
         p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
-                                              np.exp(1j * angle)*self.d])) +\
+                                              np.exp(1j * angle)*d])) +\
             ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
                                              np.exp(1j * angle) *
-                                             np.sqrt(1-self.d**2)]))
+                                             np.sqrt(1-d**2)]))
 
-        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, self.d2, self.d2])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-self.d2**2),
-                                             np.sqrt(1-self.d2**2)]))
-
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
+        self.angle = angle
         self.two_ptm = p0 @ p1
 
 
