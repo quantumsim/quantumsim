@@ -212,6 +212,7 @@ class RotateY(SinglePTMGate):
         if self.dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
         self.ptm = p
+        self.angle = angle
 
 
 
@@ -275,6 +276,7 @@ class RotateX(SinglePTMGate):
         if self.dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
         self.ptm = p
+        self.angle = angle
 
 
 class RotateZ(SinglePTMGate):
@@ -305,6 +307,7 @@ class RotateZ(SinglePTMGate):
         if self.dephasing:
             p = np.dot(p, ptm.dephasing_ptm(self.dephasing, self.dephasing, 0))
         self.ptm = p
+        self.angle = angle
 
 
 class RotateEuler(SinglePTMGate):
@@ -1315,7 +1318,8 @@ class Circuit:
                 out_indices = list(reversed(range(num_qubits*2)))
                 in_indices[2*num_qubits - bit - 1] = dummy_idx
                 ptm_indices = [bit, dummy_idx]
-                full_PTM = np.einsum(gate.ptm, ptm_indices, full_PTM,
+                single_ptm = ptm.to_0xyz_basis(gate.ptm)
+                full_PTM = np.einsum(single_ptm, ptm_indices, full_PTM,
                                      in_indices, out_indices, optimize=True)
 
             elif len(gate.involved_qubits) == 2:
@@ -1323,7 +1327,7 @@ class Circuit:
                 bit0 = qubits.index(gate.involved_qubits[0])
                 bit1 = qubits.index(gate.involved_qubits[1])
 
-                two_ptm = gate.two_ptm.reshape((4, 4, 4, 4))
+                two_ptm = ptm.to_0xyz_basis(gate.two_ptm).reshape((4, 4, 4, 4))
                 dummy_idx0, dummy_idx1 = 2*num_qubits, 2*num_qubits + 1
                 out_indices = list(reversed(range(2*num_qubits)))
                 in_indices = list(reversed(range(2*num_qubits)))
