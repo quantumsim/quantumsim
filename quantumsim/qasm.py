@@ -4,16 +4,16 @@ import numpy as np
 import functools
 
 qasm_grammar = parsimonious.Grammar(r"""
-        program = nl* (qubit_spec)* nl (circuit_spec)+ (dangling_wait)*
+        program = nl* (qubit_spec)* nl (circuit_spec)+ dangling_wait
         qubit_spec = "qubits " id nl
 
-        dangling_wait = ("qwait " numarg nl)?
+        dangling_wait = ("qwait " numarg nl)*
 
         initall = initall_named / initall_fake
         initall_named = "." id
         initall_fake = ""
         gatelist = gate / ("{" gate (more_gates)* "}")
-        circuit_spec = initall nl (gatelist nl)* meas_block nl*
+        circuit_spec = initall nl (gatelist nl)* meas_block nl dangling_wait  nl*
         more_gates = ("|" gate)
 
         gate = !meas_block ws* (wait_gate / two_qubit_gate / single_qubit_gate) ws*
@@ -50,13 +50,15 @@ sgl_qubit_gate_map = {
     "y180": functools.partial(ct.RotateY, angle=np.pi),
     "y": functools.partial(ct.RotateY, angle=np.pi),
     "mrx90": functools.partial(ct.RotateX, angle=-np.pi / 2),
+    "rxm90": functools.partial(ct.RotateX, angle=-np.pi / 2),
     "mx90": functools.partial(ct.RotateX, angle=-np.pi / 2),
     "rx90": functools.partial(ct.RotateX, angle=np.pi / 2),
     "x90": functools.partial(ct.RotateX, angle=np.pi / 2),
     "rx180": functools.partial(ct.RotateX, angle=np.pi),
     "x180": functools.partial(ct.RotateX, angle=np.pi),
     "x": functools.partial(ct.RotateX, angle=np.pi),
-    "prepz": None
+    "prepz": None,
+    "meas": None
 }
 
 dbl_qubit_gate_map = {
