@@ -1291,7 +1291,7 @@ class Circuit:
                 ha='center',
                 va='center')
 
-    def make_full_PTM(self, i_really_want_to_do_this=False):
+    def make_full_PTM(self, qubit_order, i_really_want_to_do_this=False):
         '''
         Generates the PTM of the entire circuit, assuming no measurements.
         Warning - this is a very badly scaling process, and is currently
@@ -1299,7 +1299,10 @@ class Circuit:
         Assumes that the circuit has been ordered!
         '''
         num_qubits = len(self.qubits)
-        qubits = [q.name for q in self.qubits]
+        if qubit_order is not None:
+            qubits = qubit_order
+        else:
+            qubits = [q.name for q in self.qubits]
         if num_qubits > 5 and i_really_want_to_do_this is False:
             raise ValueError('I dont think you want to do this')
         full_PTM = np.identity(4**(num_qubits)).reshape((4, 4)*num_qubits)
@@ -1344,7 +1347,7 @@ class Circuit:
             else:
                 raise ValueError('Sorry, feature not implemented for >2 qubits')
 
-        full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits)
+        full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits).T
         return full_PTM
 
 
@@ -1376,13 +1379,17 @@ def uniform_sampler(seed=42):
         else:
             p0, p1 = yield 1, 1, 1
 
+
 def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
-    declaring the wrong measurement result with probability `readout_error` (symmetric for both outcomes).
+    declaring the wrong measurement result with probability `readout_error`
+    (now allows asymmetry)
 
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
+    if type(readout_error) is float:
+        readout_error = [readout_error, readout_error]
     primers_nones = yield
     while not primers_nones:
         primers_nones = yield
@@ -1394,12 +1401,12 @@ def uniform_noisy_sampler(readout_error, seed=42):
         else:
             proj = 1
         r = rng.random_sample()
-        if r < readout_error:
+        if r < readout_error[proj]:
             decl = 1 - proj
-            prob = readout_error
+            prob = readout_error[proj]
         else:
             decl = proj
-            prob = 1 - readout_error
+            prob = 1 - readout_error[proj]
         p0, p1 = yield decl, proj, prob
 
 
