@@ -902,7 +902,7 @@ class TwoKrausPTM(TwoPTM):
 
 class CPhaseRotationPTM(TwoKrausPTM):
     def __init__(self, angle=np.pi):
-        u = np.diag([1, 1, 1, -1]).reshape(2, 2, 2, 2)
+        u = np.diag([1, 1, 1, np.exp(1j*angle)]).reshape(2, 2, 2, 2)
         super().__init__(u)
 
 
@@ -1161,3 +1161,4 @@ class TwoPTMCompiler:
 # * using auto-forward-differentiation to integrate processes?
 # * return matric reps in other forms (process matrix, chi matrix?)
 # * PTM compilation using circuit interface?
+
