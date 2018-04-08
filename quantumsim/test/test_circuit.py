@@ -16,6 +16,16 @@ class TestCircuit:
         assert len(c.qubits) == 1
         assert c.qubits[0].name == "A"
 
+    def test_add_qubit_twice_raises_error(self):
+
+        c = circuit.Circuit()
+
+        c.add_qubit("A")
+
+        with pytest.raises(ValueError) as excinfo:
+            c.add_qubit("A")
+            assert 'Trying to add qubit with name' in str(excinfo.value)
+
     def test_get_qubit_names(self):
         c = circuit.Circuit()
         c.add_qubit("A")
@@ -38,14 +48,12 @@ class TestCircuit:
         rotate_normal = circuit.RotateY("A", time=20, angle=-np.pi / 2)
         rotate_backwards = circuit.RotateY("A", time=20, angle=np.pi / 2)
 
-        conditional_rotate1 = circuit.ConditionalGate(control_bit="SA", time=20,
-                                                      zero_gates=[rotate_normal],
-                                                      one_gates=[])
+        conditional_rotate1 = circuit.ConditionalGate(
+            control_bit="SA", time=20, zero_gates=[rotate_normal], one_gates=[])
         c.add_gate(conditional_rotate1)
 
-        conditional_rotate2 = circuit.ConditionalGate(control_bit="SA", time=30,
-                                                      zero_gates=[],
-                                                      one_gates=[rotate_backwards])
+        conditional_rotate2 = circuit.ConditionalGate(
+            control_bit="SA", time=30, zero_gates=[], one_gates=[rotate_backwards])
         c.add_gate(conditional_rotate2)
 
         sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, seed=43)
@@ -53,7 +61,6 @@ class TestCircuit:
             "A", time=40, sampler=sampler, output_bit="MA")
         c.add_gate(measurement)
         c.add_gate(circuit.ClassicalCNOT("MA", "SA", time=35))
-
 
         assert len(c.gates) == 6
 
@@ -81,7 +88,6 @@ class TestCircuit:
         c.add_qubit("B")
 
         c.order()
-
 
     def test_add_waiting_full(self):
         c = circuit.Circuit()
@@ -135,6 +141,19 @@ class TestCircuit:
         c = circuit.Circuit()
         c.add_qubit("A")  # should have infinite lifetime by default
         # should have infinite lifetime by default
+        c.add_qubit("B", np.inf, np.inf)
+        c.add_qubit("C", 10, 10)
+
+        c.add_waiting_gates(tmin=0, tmax=1)
+
+        assert len(c.gates) == 1
+
+    def test_add_no_waiting_classical_bit(self):
+        c = circuit.Circuit()
+    
+        qa = circuit.ClassicalBit("A")
+
+        c.add_qubit(qa)  
         c.add_qubit("B", np.inf, np.inf)
         c.add_qubit("C", 10, 10)
 
@@ -240,14 +259,15 @@ class TestVariableQubits:
     def test_add_gates(self):
         c = circuit.Circuit()
 
-        qb = circuit.VariableDecoherenceQubit("A", base_t1=10, base_t2=10, 
-                t1s=[(10, 20, 10)], t2s=[(10, 20, 10)])
+        qb = circuit.VariableDecoherenceQubit(
+            "A", base_t1=10, base_t2=10, t1s=[
+                (10, 20, 10)], t2s=[
+                (10, 20, 10)])
         c.add_qubit(qb)
 
         c.add_gate(circuit.Hadamard("A", time=10))
         c.add_gate(circuit.Hadamard("A", time=0))
         c.add_gate(circuit.Hadamard("A", time=20))
-
 
         c.add_waiting_gates()
         c.order()
@@ -258,12 +278,13 @@ class TestVariableQubits:
         assert c.gates[1].t1 == 10
         assert c.gates[3].t1 == 5
 
-
     def test_averaging(self):
         c = circuit.Circuit()
 
-        qb = circuit.VariableDecoherenceQubit("A", base_t1=10, base_t2=10, 
-                t1s=[(10, 20, 10)], t2s=[(10, 20, 10)])
+        qb = circuit.VariableDecoherenceQubit(
+            "A", base_t1=10, base_t2=10, t1s=[
+                (10, 20, 10)], t2s=[
+                (10, 20, 10)])
         c.add_qubit(qb)
 
         c.add_waiting_gates(tmin=0, tmax=100)
@@ -272,8 +293,7 @@ class TestVariableQubits:
         assert c.gates[0].time == 50
         assert c.gates[0].duration == 100
 
-        assert np.allclose(c.gates[0].t1, 10/(9/10+1/5))
-
+        assert np.allclose(c.gates[0].t1, 10 / (9 / 10 + 1 / 5))
 
 
 class TestHadamardGate:
@@ -478,6 +498,24 @@ class TestMeasurement:
         sdm.peak_measurement.assert_called_once_with("A")
         sdm.project_measurement.assert_called_once_with("A", 0)
         sdm.set_bit.assert_called_once_with("O", 0)
+
+    def test_one_sampler_two_measurements(self):
+        # Biased sampler
+        s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
+        m1 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+        m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+
+        # uniform sampler
+        s = circuit.uniform_sampler(seed=42)
+        m1 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+        m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+
+        # selection sampler
+        s = circuit.selection_sampler(result=1)
+        m1 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+        m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
+
+        m1, m2
 
 
 class TestConditionalGates:

@@ -347,3 +347,20 @@ def test_euler_rotation():
     d = sdm.full_dm.get_diag()
 
     assert np.allclose(d, [1, 0])
+
+
+
+def test_classical_not():
+    sdm = sparsedm.SparseDM("A")
+    c = circuit.Circuit()
+    c.add_qubit(circuit.ClassicalBit("A"))
+    c.add_gate(circuit.ClassicalNOT("A", time=0))
+    c.order()
+
+
+    assert sdm.classical['A'] == 0
+
+    c.apply_to(sdm)
+
+    assert sdm.classical['A'] == 1
+

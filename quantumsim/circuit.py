@@ -35,17 +35,29 @@ class Qubit:
 
     def make_idling_gate(self, start_time, end_time):
         assert start_time < end_time
-        time = (start_time + end_time)/2
+        time = (start_time + end_time) / 2
         duration = end_time - start_time
+        if self.t1 is np.inf and self.t2 is np.inf:
+            return None
+        else:
+            return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
 
-        return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
+class ClassicalBit(Qubit):
+    def __init__(self, name):
+        self.name = name
+
+    def make_idling_gate(self, start_time, end_time):
+        pass
 
 
 class VariableDecoherenceQubit(Qubit):
+
     def __init__(self, name, base_t1, base_t2, t1s, t2s):
         """A Qubit with a name and variable t1 and t2.
 
-        t1s and t2s must be given as a list [(start, end, t)]
+        t1s and t2s are  given as a list of intervals [(start_time, end_time, t1/t2)]
+
+        base_t1 and base_t2 are used when time is not inside any of those intervals.
 
         t1 is defined as measured in a free decay experiment,
         t2 is defined as measured in a ramsey/hahn echo experiment
@@ -56,30 +68,33 @@ class VariableDecoherenceQubit(Qubit):
         self.t2s = t2s
         super().__init__(name, base_t1, base_t2)
 
-    def __str__(self):
-        return self.name
-
     def make_idling_gate(self, start_time, end_time):
         assert start_time < end_time
-        time = (start_time + end_time)/2
+        time = (start_time + end_time) / 2
         duration = end_time - start_time
 
-        decay_rate = 1/self.t1
-        deph_rate = 1/self.t2
+        decay_rate = 1 / self.t1
+        deph_rate = 1 / self.t2
 
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
             if (s < e):
-                decay_rate += (e - s)/t1/duration
+                decay_rate += (e - s) / t1 / duration
 
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
             if (s < e):
-                deph_rate += (e - s)/t2/duration
+                deph_rate += (e - s) / t2 / duration
 
-        return AmpPhDamp(self.name, time, duration, 1/decay_rate, 1/deph_rate)
+        return AmpPhDamp(
+            self.name,
+            time,
+            duration,
+            1 / decay_rate,
+            1 / deph_rate)
+
 
 class Gate:
 
@@ -250,6 +265,7 @@ class RotateZ(SinglePTMGate):
         else:
             self.label = r"$R_z(%g)$" % angle
 
+
 class RotateEuler(SinglePTMGate):
 
     def __init__(self, bit, time, theta, phi, lamda, **kwargs):
@@ -257,14 +273,13 @@ class RotateEuler(SinglePTMGate):
          U = R_Z(phi).R_X(theta).R_Z(lamda)
         """
         unitary = np.array(
-            [[np.cos(theta/2),
-                -1j*np.exp(1j*lamda)*np.sin(theta/2)],
-             [-1j*np.exp(1j*phi)*np.sin(theta/2),
-                    np.exp(1j*(lamda+phi))*np.cos(theta/2)]
-            ])
+            [[np.cos(theta / 2),
+                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+             ])
 
         p = ptm.single_kraus_to_ptm(unitary)
-
 
         super().__init__(bit, time, p, **kwargs)
 
@@ -273,7 +288,6 @@ class RotateEuler(SinglePTMGate):
 
 class IdlingGate:
     pass
-
 
 class AmpPhDamp(SinglePTMGate, IdlingGate):
 
@@ -431,7 +445,9 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class CNOT(TwoPTMGate):
+
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CNOT gate acting at time `time` between bit0 and bit1 (bit1 is the control bit).
         """
@@ -458,6 +474,7 @@ class CNOT(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class ISwap(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
@@ -466,13 +483,80 @@ class ISwap(TwoPTMGate):
 
         1  0 0 0
         0  0 i 0
-        0 -i 0 0
+        0  i 0 0
         0  0 0 1
         """
         kraus = np.array([
             [1, 0, 0, 0],
             [0, 0, 1j, 0],
-            [0, -1j, 0, 0],
+            [0, 1j, 0, 0],
+            [0, 0, 0, 1]
+        ])
+
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]),
+                   marker="x", s=80, color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+class ISwapRotation(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, angle, time, **kwargs):
+        """
+        ISwap rotation gate, described by the two qubit operator
+
+        1  0                0               0
+        0  cos(theta)       i*sin(theta)    0
+        0  i*sin(theta)     cos(theta)      0
+        0  0                0               1
+        """
+        kraus = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(angle), 1j*np.sin(angle), 0],
+            [0, 1j*np.sin(angle), np.cos(angle), 0],
+            [0, 0, 0, 1]
+        ])
+        self.angle = angle
+
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]),
+                   marker="x", s=80, color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+class Swap(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, time, **kwargs):
+        """
+        Swap gate, described by the two qubit operator
+
+        1 0 0 0
+        0 0 1 0
+        0 1 0 0
+        0 0 0 1
+        """
+        kraus = np.array([
+            [1, 0, 0, 0],
+            [0, 0, 1, 0],
+            [0, 1, 0, 0],
             [0, 0, 0, 1]
         ])
 
@@ -496,6 +580,8 @@ class CPhaseRotation(TwoPTMGate):
 
     def __init__(self, bit0, bit1, angle, time, **kwargs):
         p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)]))
+
+        self.angle = angle
 
         super().__init__(bit0, bit1, p, time, **kwargs)
 
@@ -602,6 +688,7 @@ class Measurement(Gate):
 
 
 class ResetGate(SinglePTMGate):
+
     def __init__(self, bit, time, state=0, **kwargs):
         if state == 0:
             p = ptm.gen_amp_damping_ptm(gamma_down=1, gamma_up=0)
@@ -704,6 +791,17 @@ class ClassicalCNOT(Gate):
         if sdm.classical[self.bit0] == 1:
             sdm.classical[self.bit1] = 1 - sdm.classical[self.bit1]
 
+class ClassicalNOT(Gate):
+
+    def __init__(self, bit, time, **kwargs):
+        super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.bit = bit
+        self.label = "NOT"
+
+    def apply_to(self, sdm):
+        sdm.ensure_classical(self.bit)
+        sdm.classical[self.bit] = 1 - sdm.classical[self.bit]
 
 class Circuit:
 
@@ -744,10 +842,18 @@ class Circuit:
 
         if isinstance(args[0], Qubit):
             qubit = args[0]
-            self.qubits.append(qubit)
         else:
-            qb = Qubit(*args, **kwargs)
-            self.qubits.append(qb)
+            qubit = Qubit(*args, **kwargs)
+
+
+        qubit_names = [qb.name for qb in self.qubits]
+
+        if qubit.name in qubit_names:
+            raise ValueError("Trying to add qubit with name {}: a qubit with this name already exists!".format(qubit.name))
+
+        self.qubits.append(qubit)
+
+
 
         return self.qubits[-1]
 
@@ -767,6 +873,10 @@ class Circuit:
             self.gates.append(gate)
         elif isinstance(gate_type, Gate):
             self.gates.append(gate_type)
+        elif gate_type is None:
+            return
+        else:
+            raise(ValueError("Could not add gate: Gate not understood!"))
 
         return self.gates[-1]
 
@@ -812,10 +922,10 @@ class Circuit:
 
         return super().__getattribute__(name)
 
-    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None,
-                          idling_gate=None):
-        """Add AmpPhDamping gates to all qubits in the circuit
-        (unless their t1=t2=np.inf or only_qubits is specified).
+    def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
+        """Add waiting gates to all qubits in the circuit.
+
+        The waiting gates are determined by calling Qubit.make_idling_gate (AmpPhDamping by default).
 
         If only_qubits is an iterable containing qubit names, gates are only added to those qubits.
 
@@ -834,12 +944,9 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
-        qubits_to_do = [qb for qb in self.qubits
-                        if qb.t1 < np.inf or qb.t2 < np.inf]
-
+        qubits_to_do = [qb for qb in self.qubits]
         if only_qubits:
-            qubits_to_do = [
-                qb for qb in qubits_to_do if qb.name in only_qubits]
+            qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
 
         for b in qubits_to_do:
             gts = [
@@ -847,28 +954,31 @@ class Circuit:
                     str(b)) and tmin <= gate.time <= tmax]
 
             if not gts:
-                # self.add_gate(
-                    # idling_gate(
-                        # bit=str(b),
-                        # time=(tmax + tmin) / 2,
-                        # duration=tmax - tmin,
-                        # t1=b.t1, t2=b.t2))
-                self.add_gate(b.make_idling_gate(tmin, tmax))
+                gate = b.make_idling_gate(tmin, tmax)
+                if gate is not None:
+                    self.add_gate(gate)
 
             else:
                 if gts[0].time - tmin > 1e-6:
-                    self.add_gate(b.make_idling_gate(tmin, gts[0].time))
+                    gate = b.make_idling_gate(tmin, gts[0].time)
+                    if gate is not None:
+                        self.add_gate(gate)
                 if tmax - gts[-1].time > 1e-6:
-                    self.add_gate(b.make_idling_gate(gts[-1].time, tmax))
+                    gate = b.make_idling_gate(gts[-1].time, tmax)
+                    if gate is not None:
+                        self.add_gate(gate)
 
                 for g1, g2 in zip(gts[:-1], gts[1:]):
                     if (isinstance(g1, IdlingGate) or
                             isinstance(g2, IdlingGate)):
-                        # there already is an idling gate, probably butterfly,
-                        # skip
-                        continue
-
-                    self.add_gate(b.make_idling_gate(g1.time, g2.time))
+                        # there already is an idling gate,
+                        # maybe added by hand, maybe from previous
+                        # calls of this function, skip
+                        pass
+                    else:
+                        gate = b.make_idling_gate(g1.time, g2.time)
+                        if gate is not None:
+                            self.add_gate(gate)
 
     def order(self):
         """ Reorder the gates in the circuit so that they are applied in temporal order.
@@ -990,14 +1100,16 @@ def uniform_sampler(seed=42):
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
-    p0, p1 = yield
+    primers_nones = yield
+    while not primers_nones:
+        primers_nones = yield
+    p0, p1 = primers_nones
     while True:
         r = rng.random_sample()
         if r < p0 / (p0 + p1):
             p0, p1 = yield 0, 0, 1
         else:
             p0, p1 = yield 1, 1, 1
-
 
 def uniform_noisy_sampler(readout_error, seed=42):
     """A sampler using natural Monte Carlo sampling and including the possibility of
@@ -1006,7 +1118,10 @@ def uniform_noisy_sampler(readout_error, seed=42):
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
-    p0, p1 = yield
+    primers_nones = yield
+    while not primers_nones:
+        primers_nones = yield
+    p0, p1 = primers_nones
     while True:
         r = rng.random_sample()
         if r < p0 / (p0 + p1):
@@ -1051,6 +1166,10 @@ class BiasedSampler:
         @readout_error: probability of the state update and classical output disagreeing
         @seed: seed for rng
         '''
+
+        if ps is None:
+            return None
+
 
         p0, p1 = ps
 

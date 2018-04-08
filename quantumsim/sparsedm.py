@@ -1,6 +1,7 @@
 # This file is part of quantumsim. (https://github.com/brianzi/quantumsim)
 # (c) 2016 Brian Tarasinski
-# Distributed under the GNU GPLv3. See LICENSE.txt or https://www.gnu.org/licenses/gpl.txt
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
 
@@ -12,21 +13,22 @@ try:
     from . import dm10
     default_density_class = dm10.Density
     using_gpu = True
-except:
+except BaseException:
     from . import dm_np
     default_density_class = dm_np.DensityNP
     using_gpu = False
 
+
 class SparseDM:
     def __init__(self, names=None, density_class=default_density_class):
-        """A sparse density matrix for a set of qubits with names `names`. 
+        """A sparse density matrix for a set of qubits with names `names`.
 
-        Each qubit can be in a "classical state", where it is in a basis state 
-        (i.e. 0 or 1) and not correlated with other qubits, so that the total density matrix 
+        Each qubit can be in a "classical state", where it is in a basis state
+        (i.e. 0 or 1) and not correlated with other qubits, so that the total density matrix
         can be written as a product state. This is the case after a measurement projection,
         meaning that a measurement turns a qubit classical.
 
-        If a qubit is not classical, it is quantum, which means that it is part of the 
+        If a qubit is not classical, it is quantum, which means that it is part of the
         full dense density matrix `self.full_dm`.
         """
         if isinstance(names, int):
@@ -43,7 +45,7 @@ class SparseDM:
 
         self.single_ptms_to_do = defaultdict(list)
 
-        self._cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1,1,1,-1]))
+        self._cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1]))
 
         self._last_majority_vote_array = None
         self._last_majority_vote_mask = None
@@ -53,7 +55,7 @@ class SparseDM:
         density matrix, do nothing if it is already there. Does not change the state of the system.
         """
         if bit not in self.names:
-            raise ValueError("This bit does not exist")
+            raise ValueError("ensure_dense: Unknown qubit '{}'.".format(bit))
         if bit not in self.idx_in_full_dm:
             state = self.classical[bit]
             idx = self.full_dm.no_qubits
@@ -70,7 +72,8 @@ class SparseDM:
         """
         self.combine_and_apply_single_ptm(bit)
         if bit not in self.names:
-            raise ValueError("This bit does not exist")
+            raise ValueError(
+                "ensure_classical: Unknown qubit '{}'.".format(bit))
         if bit in self.idx_in_full_dm:
             p0, p1 = self.peak_measurement(bit)
             if p0 < epsilon:
@@ -78,7 +81,8 @@ class SparseDM:
             elif p1 < epsilon:
                 self.project_measurement(bit, 0)
             else:
-                raise ValueError("Trying to classicalize entangled quantum bit")
+                raise ValueError(
+                    "ensure_classical: Impossible to classicalize entangled qubit {}".format(bit))
 
     def peak_measurement(self, bit):
         """Obtain the two partial traces (p0, p1) that define the probabilities for measuring bit in state (0, 1).
@@ -94,8 +98,8 @@ class SparseDM:
         elif self.classical[bit] == 1:
             return (0, 1)
 
-    def project_measurement(self, bit, state): 
-        """Project a bit to a fixed state, making it classical and 
+    def project_measurement(self, bit, state):
+        """Project a bit to a fixed state, making it classical and
         reducing the size of the full density matrix.
         The reduced density matrix is not normalized, so that
         its trace after projection represents the probability for that event.
@@ -106,37 +110,41 @@ class SparseDM:
             self.classical[bit] = state
             for b in self.idx_in_full_dm:
                 if self.idx_in_full_dm[b] == self.full_dm.no_qubits:
-                    self.idx_in_full_dm[b] = self.idx_in_full_dm[bit] 
+                    self.idx_in_full_dm[b] = self.idx_in_full_dm[bit]
             del self.idx_in_full_dm[bit]
         else:
-            raise ValueError("trying to measure classical bit")
-    
+            raise ValueError(
+                "Trying to measure classical bit '{}'.".format(bit))
+
     def peak_multiple_measurements(self, bits):
         """Obtain the probabilities for all combinations of a multiple
-        qubit measurement. 
+        qubit measurement.
 
         bits is a list of qubit names. Return a list with up to `2**len(bits)` tuples of the form
 
-        [(result, probability), ...] 
+        [(result, probability), ...]
 
-        where `result` is a dict describing the measurement result {"bit0": 1, "bit2": 0, ...}, 
-        and `probability` is the corresponding probability. 
+        where `result` is a dict describing the measurement result {"bit0": 1, "bit2": 0, ...},
+        and `probability` is the corresponding probability.
 
         If results are omitted from this list, the corresponding probability is 0.
 
         Note that these probabilities sum up to the trace of the density matrix, thus are not normalized if previous projections took place.
         """
 
-        for bit in bits: 
+        for bit in bits:
             self.combine_and_apply_single_ptm(bit)
 
-        classical_bits = {bit: self.classical[bit] for bit in bits if bit in self.classical}
+        classical_bits = {bit: self.classical[bit]
+                          for bit in bits if bit in self.classical}
 
         res = [(classical_bits, self.full_dm.copy())]
 
         bits = [bit for bit in bits if bit not in self.classical]
 
-        bit_idxs = [(bit, self.idx_in_full_dm[bit]) for i,bit in enumerate(bits)]
+        # commented out because apparently unused...
+        # bit_idxs = [(bit, self.idx_in_full_dm[bit])
+        #   for i, bit in enumerate(bits)]
 
         mask = 0
         for bit in bits:
@@ -148,15 +156,15 @@ class SparseDM:
 
         for idx, prob in enumerate(diagonal):
             if idx & mask in probs:
-                probs[idx & mask]  += prob
-            else: 
-                probs[idx & mask]  = prob
+                probs[idx & mask] += prob
+            else:
+                probs[idx & mask] = prob
 
         res = []
         for idx in probs:
             outcome = classical_bits.copy()
-            for bit in bits: 
-                outcome[bit] = int(idx & (1 << self.idx_in_full_dm[bit])>0)
+            for bit in bits:
+                outcome[bit] = int(idx & (1 << self.idx_in_full_dm[bit]) > 0)
 
             res.append((outcome, probs[idx] * self.classical_probability))
 
@@ -196,11 +204,11 @@ class SparseDM:
         else:
             self.combine_and_apply_single_ptm(bit0)
             self.combine_and_apply_single_ptm(bit1)
-            self.full_dm.cphase(self.idx_in_full_dm[bit0], 
-                    self.idx_in_full_dm[bit1])
+            self.full_dm.cphase(self.idx_in_full_dm[bit0],
+                                self.idx_in_full_dm[bit1])
 
     def apply_all_pending(self):
-        """Apply all single qubit gates that are still cached. 
+        """Apply all single qubit gates that are still cached.
         Should not be necessary to call directly except for testing purposes.
         """
         for bit in list(self.single_ptms_to_do.keys()):
@@ -220,8 +228,8 @@ class SparseDM:
             del self.single_ptms_to_do[bit]
 
     def apply_ptm(self, bit, ptm):
-        """Apply the Pauli transfer matrix `ptm` to qubit `bit`. 
-        `ptm` is a 4x4 real matrix in 0xy1 basis. 
+        """Apply the Pauli transfer matrix `ptm` to qubit `bit`.
+        `ptm` is a 4x4 real matrix in 0xy1 basis.
 
         The matrix is NOT immediately applied, but is cached until a 2-qubit gate or measurement acts on this bit.
         Thus, when several PTMs are applied to a single bit in series, they can be multiplied efficiently before application.
@@ -250,10 +258,8 @@ class SparseDM:
             del self.single_ptms_to_do[bit1]
 
         full_two_ptm = np.dot(two_ptm, np.kron(ptm1, ptm0))
-        self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0], 
-                self.idx_in_full_dm[bit1], full_two_ptm)
-
-
+        self.full_dm.apply_two_ptm(self.idx_in_full_dm[bit0],
+                                   self.idx_in_full_dm[bit1], full_two_ptm)
 
     def hadamard(self, bit):
         """Apply a hadamard gate to qubit #bit.
@@ -270,7 +276,7 @@ class SparseDM:
         self.full_dm.amp_ph_damping(self.idx_in_full_dm[bit], gamma, lamda)
 
     def rotate_x(self, bit, angle):
-        """Apply a rotation around the x-axis of the Bloch sphere of bit `bit` 
+        """Apply a rotation around the x-axis of the Bloch sphere of bit `bit`
         by `angle` (in radians).
         """
         self.combine_and_apply_single_ptm(bit)
@@ -278,7 +284,7 @@ class SparseDM:
         self.full_dm.rotate_x(self.idx_in_full_dm[bit], angle)
 
     def rotate_y(self, bit, angle):
-        """Apply a rotation around the y-axis of the Bloch sphere of bit `bit` 
+        """Apply a rotation around the y-axis of the Bloch sphere of bit `bit`
         by `angle` (in radians).
         """
         self.combine_and_apply_single_ptm(bit)
@@ -286,7 +292,7 @@ class SparseDM:
         self.full_dm.rotate_y(self.idx_in_full_dm[bit], angle)
 
     def rotate_z(self, bit, angle):
-        """Apply a rotation around the z-axis of the Bloch sphere of bit `bit` 
+        """Apply a rotation around the z-axis of the Bloch sphere of bit `bit`
         by `angle` (in radians).
         """
         self.combine_and_apply_single_ptm(bit)
@@ -303,11 +309,11 @@ class SparseDM:
         """Return the (total) probability for measuring more than half 1 (or a specified result)
         when measuring all the given bits. Do not actually perform the measurement.
 
-        This is evaluated as Tr(ρ.M) with M a diagonal matrix. 
+        This is evaluated as Tr(ρ.M) with M a diagonal matrix.
         The diagonal of M is constructed when needed, then cached and reused when possible.
 
         bits: any iterable containing bit names, then return the probability for a majority of one measurements.
-              if bits is a dict of the form {bit1: result1, bit2: result2 , ...} with result in {0, 1}, 
+              if bits is a dict of the form {bit1: result1, bit2: result2 , ...} with result in {0, 1},
               return the probabilty for the majority of the measurements coinciding with the given result.
         """
 
@@ -321,21 +327,22 @@ class SparseDM:
             try:
                 v = bits.get(b)
                 if v not in [0, 1]:
-                    raise ValueError("Measurement result can only be 0 or 1, not "+str(v))
+                    raise ValueError(
+                        "Measurement result can only be 0 or 1, not " + str(v))
                 bit_result[b] = v
             except AttributeError:
                 bit_result[b] = 1
 
-        classical_bits_sum = sum(self.classical[b] ^ (1-bit_result[b])
-                for b in bits if b in self.classical)
+        classical_bits_sum = sum(self.classical[b] ^ (1 - bit_result[b])
+                                 for b in bits if b in self.classical)
 
         mask = 0
         result_mask = 0
         for b in dense_bits:
             mask += 1 << self.idx_in_full_dm[b]
-            result_mask |= ((1-bit_result[b]) << self.idx_in_full_dm[b])
+            result_mask |= ((1 - bit_result[b]) << self.idx_in_full_dm[b])
 
-        if 1: #mask != self._last_majority_vote_mask:
+        if 1:  # mask != self._last_majority_vote_mask:
             adresses = np.arange(2**len(self.idx_in_full_dm)) ^ result_mask
             majority = np.zeros_like(adresses)
             for _ in range(len(self.idx_in_full_dm)):
@@ -347,8 +354,12 @@ class SparseDM:
         else:
             majority = self._last_majority_vote_array
 
-        majority = (majority+classical_bits_sum > len(bits)/2).astype(np.int)
+        majority = (
+            majority +
+            classical_bits_sum > len(bits) /
+            2).astype(
+            np.int)
 
         diag = self.full_dm.get_diag()
 
-        return np.dot(majority, diag)*self.classical_probability
+        return np.dot(majority, diag) * self.classical_probability
