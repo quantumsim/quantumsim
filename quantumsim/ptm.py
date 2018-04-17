@@ -873,6 +873,11 @@ class TwoPTMProduct(TwoPTM):
 
 class TwoKrausPTM(TwoPTM):
     def __init__(self, unitary):
+        """
+        Create a two-subsystem process matrix from a unitary.
+        The unitary has to have shape of form [x, y, x, y], 
+        where x(y) is the dimension of the first (second) subsystem.
+        """
         assert len(unitary.shape) == 4
         assert unitary.shape[0:2] == unitary.shape[2:4]
 
@@ -881,14 +886,17 @@ class TwoKrausPTM(TwoPTM):
         self.dim_hilbert = unitary.shape[0:2]
 
     def get_matrix(self, bases_in, bases_out=None):
+        """
+        Return the process matrix in the basis bases_in = [basis0_in, basis1_in].
+        """
         st0i = bases_in[0].basisvectors
-        st1i = bases_in[0].basisvectors
+        st1i = bases_in[1].basisvectors
 
         if bases_out is None:
-            st0o, st1o = st0i, st0i
+            st0o, st1o = st0i, st1i
         else:
             st0o = bases_out[0].basisvectors
-            st1o = bases_out[0].basisvectors
+            st1o = bases_out[1].basisvectors
 
         kraus = self.unitary
 
