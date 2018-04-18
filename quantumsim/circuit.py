@@ -188,7 +188,9 @@ class RotateY(SinglePTMGate):
         self.dephasing_angle = dephasing_angle
 
         super().__init__(bit, time, p, **kwargs)
+        self.set_labels(angle)
 
+    def set_labels(self, angle):
         self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -212,7 +214,7 @@ class RotateY(SinglePTMGate):
         if self.dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
         self.ptm = p
-        self.angle = angle
+        self.set_labels(angle)
 
 
 
@@ -254,6 +256,10 @@ class RotateX(SinglePTMGate):
 
         super().__init__(bit, time, p, **kwargs)
 
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
+
         self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -276,7 +282,7 @@ class RotateX(SinglePTMGate):
         if self.dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
         self.ptm = p
-        self.angle = angle
+        self.set_labels(angle)
 
 
 class RotateZ(SinglePTMGate):
@@ -291,6 +297,9 @@ class RotateZ(SinglePTMGate):
         self.dephasing = dephasing
 
         super().__init__(bit, time, p, **kwargs)
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
 
         self.angle = angle
         multiple_of_pi = angle / np.pi
@@ -307,7 +316,8 @@ class RotateZ(SinglePTMGate):
         if self.dephasing:
             p = np.dot(p, ptm.dephasing_ptm(self.dephasing, self.dephasing, 0))
         self.ptm = p
-        self.angle = angle
+
+        self.set_labels(angle)
 
 
 class RotateEuler(SinglePTMGate):
