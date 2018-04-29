@@ -1398,7 +1398,7 @@ def uniform_noisy_sampler(readout_error, seed=42):
     See also: Measurement
     """
     rng = np.random.RandomState(seed)
-    if type(readout_error) is float:
+    if type(readout_error) is not list:
         readout_error = [readout_error, readout_error]
     primers_nones = yield
     while not primers_nones:
