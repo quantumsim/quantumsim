@@ -12,7 +12,7 @@ from . import ptm
 import pycuda.autoinit
 
 # load the kernels
-from pycuda.compiler import SourceModule
+from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
 import sys
 import os
@@ -30,7 +30,7 @@ for kernel_file in [
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
-                kernel_source_file.read(), options=[
+                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS+[
                     "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
