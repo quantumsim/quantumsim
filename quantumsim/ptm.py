@@ -258,16 +258,6 @@ def _to_unit_vector(v):
     return None
 
 
-class SingleTone(object):
-    __instance = None
-
-    def __new__(cls, val):
-        if SingleTone.__instance is None:
-            SingleTone.__instance = object.__new__(cls)
-        SingleTone.__instance.val = val
-        return SingleTone.__instance
-
-
 class PauliBasis:
     def __init__(self, basisvectors=None, basisvector_names=None):
         """
@@ -1168,5 +1158,5 @@ class TwoPTMCompiler:
 # * qutip interfacing for me_solve
 # * using auto-forward-differentiation to integrate processes?
 # * return matric reps in other forms (process matrix, chi matrix?)
-# * PTM compilation using circuit interface?
+# * PTM compilation using circuit interface!
 
