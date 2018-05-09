@@ -5,3 +5,4 @@ Parts of Quantumsim
    :maxdepth: 1
 
    quantumsim.circuit
+   quantumsim.sparsedm
