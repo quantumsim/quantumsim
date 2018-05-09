@@ -1,6 +1,6 @@
 .ipynb_checkpoints/*
 
-.*.swo 
+.*.swo
 .*.swp
 dmcpu.c
 *.so
@@ -13,3 +13,4 @@ dmcpu.c
 *egg-info
 
 build/*
+doc/build/*
