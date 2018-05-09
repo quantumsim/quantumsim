@@ -40,6 +40,7 @@ release = ''
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
@@ -184,3 +185,10 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+
+# -- Options for autodoc -----------------------------------------------------
+# Generate stub pages for autosummary directives.
+autosummary_generate = True
+
+autoclass_content = "both"
+autodoc_default_flags = ['show-inheritance']

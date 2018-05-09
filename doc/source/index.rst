@@ -11,6 +11,7 @@ Welcome to Quantumsim's documentation!
    :caption: Contents:
 
    Introduction.ipynb
+   reference/index
 
 Indices and tables
 ==================

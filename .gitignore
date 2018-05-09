@@ -14,3 +14,4 @@ dmcpu.c
 
 build/*
 doc/build/*
+**/generated
