@@ -2,13 +2,9 @@
 :mod:`quantumsim.sparsedm` -- representation of a state
 =======================================================
 
-.. module:: quantumsim
-
-
-Cirquit
--------
+.. module:: quantumsim.sparsedm
 
 .. autosummary::
    :toctree: generated/
 
-   quantumsim.sparsedm.SparseDM
+   SparseDM
