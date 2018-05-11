@@ -6,6 +6,7 @@ High-level interface
 
    quantumsim.circuit
    quantumsim.sparsedm
+   quantumsim.ptm
 
 Backends
 ========
