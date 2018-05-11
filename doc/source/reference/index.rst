@@ -8,6 +8,8 @@ High-level interface
    quantumsim.sparsedm
    quantumsim.ptm
    quantumsim.qasm
+   quantumsim.photons
+   quantumsim.tp
 
 Backends
 ========
