@@ -10,7 +10,7 @@ Welcome to Quantumsim's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   Tutorial.ipynb
+   introduction.ipynb
    reference/index
 
 Indices and tables
