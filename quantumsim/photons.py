@@ -1,4 +1,3 @@
-
 import numpy as np
 
 from collections import defaultdict
@@ -9,8 +8,7 @@ import copy
 
 
 def get_dephasing(tstart, tend, Dt, chi, kappa, alpha0):
-    '''
-    Calculates the photon-induced dephasing over a period of
+    """Calculates the photon-induced dephasing over a period of
     time, and returns a valuefor the decay constant lambda
 
     Input:
@@ -27,7 +25,7 @@ def get_dephasing(tstart, tend, Dt, chi, kappa, alpha0):
 
     Output:
     @lamda : The calculated decay rate
-    '''
+    """
 
     # Photon number at the start of the coherent phase
     # Multiplied by other constants
@@ -55,7 +53,7 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
     the time tmin for one cycle is identified with tmax of the previous cycle.
     """
 
-    times = [g.time for g in c.gates]
+    # times = [g.time for g in c.gates]
     # assert min(times) >= tmin
     # assert max(times) <= tmax
 
@@ -115,7 +113,6 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
                     # t2=qb.t2)
 
                 decay_gate = qb.make_idling_gate(g1.time, g2.time)
-
 
                 if meas_times and pi2_times:
                     last_meas = max(t for t in meas_times if t <= g1.time)

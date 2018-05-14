@@ -23,8 +23,8 @@ class DensityNP:
             data = data.reshape((2, 2) * self.no_qubits)
 
             in_indices = list(reversed(range(self.no_qubits, 3*self.no_qubits)))
-            contraction_indices = [(i, i + self.no_qubits, i + 2*self.no_qubits) for i in range(self.no_qubits)]
             out_indices = list(reversed(range(self.no_qubits)))
+            contraction_indices = [(i, i + self.no_qubits, i + 2*self.no_qubits) for i in reversed(out_indices)]
 
             transformation_tensors = list(zip([single_tensor]*self.no_qubits, contraction_indices))
             transformation_tensors = pytools.flatten(transformation_tensors)
@@ -47,15 +47,17 @@ class DensityNP:
     def to_array(self):
         single_tensor = ptm.single_tensor
 
-        in_indices = list(reversed(range(self.no_qubits)))
+        in_indices = list(range(self.no_qubits))
 
-        idx = [[i, 2*self.no_qubits - i, 3*self.no_qubits - i]
+        idx = [[i, self.no_qubits + i, 2*self.no_qubits + i]
                for i in in_indices]
+
+        out_indices = list(range(self.no_qubits, 3*self.no_qubits))
 
         transformation_tensors = list(zip([single_tensor]*self.no_qubits, idx))
         transformation_tensors = pytools.flatten(transformation_tensors)
 
-        density_matrix = np.einsum(self.dm, in_indices, *transformation_tensors, optimize=True)
+        density_matrix = np.einsum(self.dm, in_indices, *transformation_tensors, out_indices, optimize=True)
         density_matrix = density_matrix.reshape((2**self.no_qubits, 2**self.no_qubits))
         return density_matrix
 
