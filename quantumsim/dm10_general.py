@@ -17,12 +17,10 @@ import pycuda.tools
 import pycuda.reduction
 
 # load the kernels
-from pycuda.compiler import SourceModule
+from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
 import sys
 import os
-
-import warnings
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -35,7 +33,7 @@ for kernel_file in [
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
-                kernel_source_file.read(), options=[
+                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS+[
                     "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
@@ -53,11 +51,12 @@ _multitake = mod.get_function("multitake")
 _multitake.prepare("PPPPPPI")
 
 sum_along_axis = pycuda.reduction.ReductionKernel(
-        dtype_out=np.float64, 
-        neutral = "0", reduce_expr="a+b",
-        map_expr= "(i/stride) % dim == offset ? in[i] : 0",
-        arguments = "const double *in, unsigned int stride, unsigned int dim, unsigned int offset"
-        ) 
+        dtype_out=np.float64,
+        neutral="0", reduce_expr="a+b",
+        map_expr="(i/stride) % dim == offset ? in[i] : 0",
+        arguments="const double *in, unsigned int stride, unsigned int dim, "
+                  "unsigned int offset"
+        )
 
 class DensityGeneral:
     _gpuarray_cache = {}
@@ -95,9 +94,9 @@ class DensityGeneral:
 
     def _cached_gpuarray(self, array):
         """
-        Given a numpy array, 
+        Given a numpy array,
         calculate the python hash of its bytes;
-        
+
         If it is not found in the cache, upload to gpu
         and store in cache, otherwise return cached allocation.
         """
@@ -139,14 +138,14 @@ class DensityGeneral:
         "Return the entries of the density matrix as a dense numpy ndarray."
         dimensions = [2]*self.no_qubits
 
-        host_dm = dm_general_np.DensityGeneralNP(dimensions, 
+        host_dm = dm_general_np.DensityGeneralNP(dimensions,
                 data=self.data.get()).to_array()
 
         return host_dm
 
     def get_diag(self, target_gpu_array=None, get_data=True, flatten=True):
         """
-        Obtain the diagonal of the density matrix. 
+        Obtain the diagonal of the density matrix.
 
         target_gpu_array: an already-allocated gpu array to which the data will be copied.
                           If None, make a new gpu array.
@@ -167,7 +166,7 @@ class DensityGeneral:
         else:
             assert target_gpu_array.size >= diag_size
 
-        idx = [[pb.comp_basis_indices[i] 
+        idx = [[pb.comp_basis_indices[i]
                 for i in range(pb.dim_hilbert)
                 if pb.comp_basis_indices[i] is not None]
                 for pb in self.bases
@@ -247,7 +246,7 @@ class DensityGeneral:
             self._work_data = ga.empty(new_shape, np.float64)
             self._work_data.gpudata.size = self._work_data.nbytes
         else:
-            # reallocation not required, 
+            # reallocation not required,
             # reshape but reeuse allocation
             self._work_data = ga.GPUArray(
                     shape=new_shape,
@@ -324,7 +323,7 @@ class DensityGeneral:
             self._work_data = ga.empty(new_shape, np.float64)
             self._work_data.gpudata.size = self._work_data.nbytes
         else:
-            # reallocation not required, 
+            # reallocation not required,
             # reshape but reeuse allocation
             self._work_data = ga.GPUArray(
                     shape=new_shape,
@@ -373,7 +372,7 @@ class DensityGeneral:
         ptm[basis.comp_basis_indices[state]] = 1
 
         # make sure work_data is large enough, reshape it
-        # TODO hacky as fuck: we put the allocated size 
+        # TODO hacky as fuck: we put the allocated size
         # into the allocation object by hand
 
         new_shape = tuple([basis.dim_pauli] + list(self.data.shape))
@@ -386,7 +385,7 @@ class DensityGeneral:
             self._work_data = ga.empty(new_shape, np.float64)
             self._work_data.gpudata.size = self._work_data.nbytes
         else:
-            # reallocation not required, 
+            # reallocation not required,
             # reshape but reeuse allocation
             self._work_data = ga.GPUArray(
                     shape=new_shape,
@@ -442,7 +441,7 @@ class DensityGeneral:
         stride = diag.strides[bit]//8
         dim = diag.shape[bit]
         for offset in range(dim):
-            pt = sum_along_axis(diag, stride, dim, offset) 
+            pt = sum_along_axis(diag, stride, dim, offset)
             res.append(pt)
 
         return [p.get() for p in res]
@@ -474,7 +473,7 @@ class DensityGeneral:
             self._work_data = ga.empty(new_shape, np.float64)
             self._work_data.gpudata.size = self._work_data.nbytes
         else:
-            # reallocation not required, 
+            # reallocation not required,
             # reshape but reeuse allocation
             self._work_data = ga.GPUArray(
                     shape=new_shape,
@@ -541,10 +540,10 @@ class DensityGeneralShim(DensityGeneral):
         "Return the entries of the density matrix as a dense numpy ndarray."
         from . import dm_np
 
-        dm = dm_np.DensityNP(self.no_qubits) 
+        dm = dm_np.DensityNP(self.no_qubits)
         # transpose switches order: in new dm, qubit 0 is msb, in old it is lsb
         dm.dm = self.data.get().squeeze()
-        
+
         return dm.to_array()
 
     def copy(self):
@@ -564,7 +563,7 @@ class DensityGeneralShim(DensityGeneral):
 
     def translate_bit(self, bit):
         # old style bits are labelled 0 -> lsb,
-        # new style bits are labelled 0 -> msb, 
+        # new style bits are labelled 0 -> msb,
         # and we ignore bases of length 1
 
         assert 0 <= bit < self.no_qubits
@@ -573,7 +572,7 @@ class DensityGeneralShim(DensityGeneral):
                 if pb.dim_pauli == 4]
 
         return self.no_qubits - alive_idx[bit] - 1
-        
+
     def cphase(self, bit0, bit1):
         cphase_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1])).real
         self.apply_two_ptm(bit0, bit1, cphase_ptm)
@@ -590,7 +589,7 @@ class DensityGeneralShim(DensityGeneral):
     def rotate_x(self, bit, angle):
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
-    def rotate_z(self, bit, angle): 
+    def rotate_z(self, bit, angle):
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def project_measurement(self, bit, state):

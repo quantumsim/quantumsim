@@ -47,6 +47,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
     'nbsphinx',
+    'numpydoc',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -76,6 +77,8 @@ exclude_patterns = ['**.ipynb_checkpoints']
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
 
+# Do not show all class members automatically in the class documentation
+numpydoc_show_class_members = False
 
 # -- Options for HTML output -------------------------------------------------
 

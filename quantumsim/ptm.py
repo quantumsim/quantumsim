@@ -1,11 +1,8 @@
 import numpy as np
 import collections
 
-import functools
-import scipy.linalg
-
-
-"The transformation matrix between the two bases. Its essentially a Hadamard, so its its own inverse."
+# The transformation matrix between the two bases. Its essentially a Hadamard,
+# so its its own inverse.
 basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
                                         [0, 1, 0, 0],
                                         [0, 0, 1, 0],
@@ -22,8 +19,7 @@ _ptm_basis_vectors_cache = {}
 
 
 def general_ptm_basis_vector(n):
-    """
-    The vector of 'Pauli matrices' in dimension n.
+    """The vector of 'Pauli matrices' in dimension n.
     First the n diagonal matrices, then
     the off-diagonals in x-like, y-like pairs
     """
@@ -61,35 +57,49 @@ def general_ptm_basis_vector(n):
 
 
 def to_0xy1_basis(ptm, general_basis=False):
-    """Transform a Pauli transfer in the "usual" basis (0xyz) [1],
-    to the 0xy1 basis which is required by sparsesdm.apply_ptm.
+    """Transform a Pauli transfer in the "usual" basis (0xyz) [1]_ ,
+    to the 0xy1 basis which is required by
+    :meth:`~SparseDM.apply_ptm`.
 
     If general_basis is True, transform to the 01xy basis, which is the
-    two-qubit version of the general basis defined by ptm.general_ptm_basis_vector().
+    two-qubit version of the general basis defined by
+    :func:`~general_ptm_basis_vector`.
 
-    ptm: The input transfer matrix in 0xyz basis. Can be 4x4, 4x3 or 3x3 matrix of real numbers.
+    Parameters
+    ----------
+    ptm : 2D array
+        The input transfer matrix in 0xyz basis. Can be 4x4, 4x3 or
+        3x3 matrix of real numbers.
 
-         If 4x4, the first row must be (1,0,0,0). If 4x3, this row is considered to be omitted.
-         If 3x3, the transformation is assumed to be unitary, thus it is assumed that
-         the first column is also (1,0,0,0) and was omitted.
+        If 4x4, the first row must be (1,0,0,0). If 4x3, this row is considered
+        to be omitted. If 3x3, the transformation is assumed to be unitary,
+        thus it is assumed that the first column is also (1,0,0,0) and was
+        omitted.
+    general_basis : boolean
+        Whether to transform to 01xy basis
 
-    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    Returns
+    -------
+    result : 2D array
+        Resulting Pauli transfer matrix in 0xy1 or 01xy basis.
+
+    References
+    ----------
+    .. [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography,
+        http://arxiv.org/abs/1509.02921v1
     """
 
     ptm = np.array(ptm)
 
     if ptm.shape == (3, 3):
         ptm = np.hstack(([[0], [0], [0]], ptm))
-
-    if ptm.shape == (3, 4):
+    elif ptm.shape == (3, 4):
         ptm = np.vstack(([1, 0, 0, 0], ptm))
+    elif not ptm.shape == (4, 4):
+        raise ValueError("Input PTM must be 3x3, 3x4 or 4x4 array")
 
-    assert ptm.shape == (4, 4)
-    assert np.allclose(ptm[0, :], [1, 0, 0, 0])
-
-    # result = np.dot(
-    # basis_transformation_matrix, np.dot(
-    # ptm, basis_transformation_matrix))
+    if not np.allclose(ptm[0, :], [1, 0, 0, 0]):
+        raise ValueError("First row of PTM must be [1, 0, 0, 0]")
 
     if general_basis:
         result = ExplicitBasisPTM(
@@ -104,12 +114,18 @@ def to_0xy1_basis(ptm, general_basis=False):
 
 
 def to_0xyz_basis(ptm):
-    """Transform a Pauli transfer in the 0xy1 basis [1],
-    to the the usual 0xyz. The inverse of to_0xy1_basis.
+    """Transform a Pauli transfer in the 0xy1 basis [1]_ ,
+    to the the usual 0xyz. The inverse of :func:`~to_0xy1_basis`.
 
-    ptm: The input transfer matrix in 0xy1 basis. Must be 4x4.
+    Parameters
+    ----------
+    ptm: 2D array
+        The input transfer matrix in 0xy1 basis. Must be 4x4.
 
-    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    References
+    ----------
+    .. [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography,
+        http://arxiv.org/abs/1509.02921v1
     """
 
     ptm = np.array(ptm)
@@ -123,12 +139,14 @@ def to_0xyz_basis(ptm):
         return np.dot(trans_mat, np.dot(ptm, trans_mat))
     else:
         raise ValueError(
-            "Dimensions wrong, must be one- or two Pauli transfer matrix ")
+            "Wrong dimension of input PTM, must be one- or two-Pauli "
+            "transfer matrix (4x4 or 16x16 array).")
 
 
 def hadamard_ptm(general_basis=False):
-    """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
-    representing perfect unitary Hadamard (Rotation around the (x+z)/sqrt(2) axis by π).
+    """Return a 4x4 Pauli transfer matrix in 0xy1 basis, representing perfect
+    unitary Hadamard (Rotation around the :math:`(x+z)/\\sqrt{2}` axis by
+    :math:`\\pi`).
     """
     u = np.array([[1, 1], [1, -1]]) * np.sqrt(0.5)
     if general_basis:
@@ -139,9 +157,12 @@ def hadamard_ptm(general_basis=False):
 
 
 def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
-    """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
-    representing amplitude and phase damping with parameters gamma and lambda.
-    (See Nielsen & Chuang for definition.)
+    """Return a 4x4 Pauli transfer matrix in 0xy1 basis, representing amplitude
+    and phase damping with parameters `gamma` and `lambda`. [1]_
+
+    References
+    ----------
+    .. [1] See Nielsen & Chuang for definition.
     """
 
     if general_basis:
@@ -153,7 +174,12 @@ def amp_ph_damping_ptm(gamma, lamda, general_basis=False):
 
 
 def gen_amp_damping_ptm(gamma_down, gamma_up):
-    """Return a 4x4 Pauli transfer matrix  representing amplitude damping including an excitation rate gamma_up.
+    """Return a 4x4 Pauli transfer matrix, representing amplitude damping,
+    including an excitation rate `gamma_up`. [1]_
+
+    References
+    ----------
+    .. [1] TODO
     """
 
     gamma = gamma_up + gamma_down
@@ -170,10 +196,11 @@ def gen_amp_damping_ptm(gamma_down, gamma_up):
 
 
 def dephasing_ptm(px, py, pz):
-    """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
-    representing dephasing (shrinking of the Bloch sphere along the principal axes),
-    with different rates across the different axes.
-    p_i/2 is the flip probability, so p_i = 0 corresponds to no shrinking, while p_i = 1 is total dephasing.
+    """Return a 4x4 Pauli transfer matrix in 0xy1 basis, representing dephasing
+    (shrinking of the Bloch sphere along the principal axes), with different
+    rates across the different axes. :math:`p_i/2` is the flip probability,
+    so :math:`p_i = 0` corresponds to no shrinking, while :math:`p_i = 1` is
+    total dephasing.
     """
 
     ptm = np.diag([1 - px, 1 - py, 1 - pz])
@@ -219,7 +246,9 @@ def rotate_z_ptm(angle, general_basis=False):
 
 def single_kraus_to_ptm_general(kraus):
     d = kraus.shape[0]
-    assert kraus.shape == (d, d)
+    if kraus.shape != (d, d):
+        raise ValueError("kraus must be a square matrix, got shape {}"
+                         .format(kraus.shape))
 
     st = general_ptm_basis_vector(d)
 
@@ -228,7 +257,9 @@ def single_kraus_to_ptm_general(kraus):
 
 
 def single_kraus_to_ptm(kraus, general_basis=False):
-    """Given a Kraus operator in z-basis, obtain the corresponding single-qubit ptm in 0xy1 basis"""
+    """Given a Kraus operator in z-basis, obtain the corresponding
+    single-qubit ptm in 0xy1 basis
+    """
     if general_basis:
         st = general_ptm_basis_vector(2)
     else:
@@ -260,15 +291,13 @@ def _to_unit_vector(v):
 
 class PauliBasis:
     def __init__(self, basisvectors=None, basisvector_names=None):
-        """
-        Defines a Pauli basis [1]. The number of element vectors is given by `dim_pauli`,
-        while the dimension of the hilbert space is given by dim_hilbert.
+        """Defines a Pauli basis [1]_ . TODO.
 
-        For instance, for a qubit (Hilbert space dimension d=2), one could employ a Pauli basis
-        with dimension d**2 = 4, or, if one wants do describe a classical state (mixture of |0> and |1>),
-        use a smaller basis with only d_pauli = 2.
-
-        [1] A "Pauli basis" is an orthonormal basis (w.r.t <A, B> = Tr(A.B^\dag)) for a space of Hermitian matrices.
+        References
+        ----------
+        .. [1] A "Pauli basis" is an orthonormal basis (w.r.t
+            :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
+            for a space of Hermitian matrices.
         """
 
         "a tensor B of shape (dim_pauli, dim_hilbert, dim_hilbert)"
@@ -280,10 +309,13 @@ class PauliBasis:
         if basisvector_names is not None:
             self.basisvector_names = basisvector_names
 
-
         shape = self.basisvectors.shape
 
-        assert shape[1] == shape[2]
+        if shape[1] != shape[2]:
+            raise ValueError(
+                "basisvectors.shape[1] must be equal tobasisvectors.shape[2], "
+                "got {} and {} correspondingly"
+                .format(shape[1], shape[2]))
 
         self.dim_hilbert = shape[1]
         self.dim_pauli = shape[0]
@@ -317,7 +349,7 @@ class PauliBasis:
         return a subbasis of this basis
         """
 
-        bvn = [ self.basisvector_names[i] for i in idxes ]
+        bvn = [self.basisvector_names[i] for i in idxes]
 
         subbasis = PauliBasis(self.basisvectors[idxes], bvn)
 
@@ -334,7 +366,8 @@ class PauliBasis:
         return np.einsum("xab, ba -> x", self.basisvectors, rho, optimize=True)
 
     def check_orthonormality(self):
-        i = np.einsum("xab, yba -> xy", self.basisvectors, self.basisvectors, optimize=True)
+        i = np.einsum("xab, yba -> xy", self.basisvectors,
+                      self.basisvectors, optimize=True)
         assert np.allclose(i, np.eye(self.dim_pauli))
 
     def __repr__(self):
@@ -354,14 +387,16 @@ class PauliBasis:
 
 class GeneralBasis(PauliBasis):
     def __init__(self, dim):
-        """
-        A "general" Pauli basis in the sense that is defined for every hilbert space dimension:
+        """A "general" Pauli basis in the sense that is defined for every
+        Hilbert space dimension.
 
-        GeneralBasis(2) is the same as PauliBasis_0xy1(), but with the elements ordered differently.
+        `GeneralBasis(2)` is the same as `PauliBasis_0xy1()`,
+        but with the elements ordered differently.
 
         The basis matrices are:
           - Matrices with one "1" on the diagonal, followed by
-          - pairs of "X" like (real) and "Y" like (imaginary) with two non-zero elements each
+          - pairs of "X" like (real) and "Y" like (imaginary) with two non-zero
+            elements each.
         """
         self.basisvectors = general_ptm_basis_vector(dim)
 
@@ -379,12 +414,11 @@ class GeneralBasis(PauliBasis):
 
 
 class PauliBasis_0xy1(PauliBasis):
-    """
-    A Pauli basis for a two-dimensional Hilbert space.
-    The basis consisting of projections to 0, Pauli matrices sigma_x and sigma_y, and projection to 1,
-    in that order.
+    """A Pauli basis for a two-dimensional Hilbert space.
+    The basis consisting of projections to 0, Pauli matrices :math:`\\sigma_x`
+    and :math:`\\sigma_y`, and projection to 1, in that order.
 
-    The pauli basis used by older versions of quantumsim.
+    The Pauli basis used by older versions of quantumsim.
     """
     basisvectors = np.array([[[1, 0], [0, 0]],
                              np.sqrt(0.5) * np.array([[0, 1], [1, 0]]),
@@ -394,9 +428,8 @@ class PauliBasis_0xy1(PauliBasis):
 
 
 class PauliBasis_ixyz(PauliBasis):
-    """
-    A Pauli basis for two-dimensional Hilbert spaces,
-    the standard Pauli basis consisting of identity and the three Pauli matrices.
+    """A Pauli basis for two-dimensional Hilbert spaces, the standard Pauli
+    basis consisting of identity and the three Pauli matrices.
     """
     basisvectors = np.sqrt(0.5) * np.array([[[1, 0], [0, 1]],
                                             [[0, 1], [1, 0]],
@@ -407,16 +440,19 @@ class PauliBasis_ixyz(PauliBasis):
 
 
 class GellMannBasis(PauliBasis):
-    """
-    A Pauli basis consisting of the generalization of Pauli matrices for higher dimensions,
-    the generalized Gell-Mann matrices [1, 2].
+    """A Pauli basis consisting of the generalization of Pauli matrices for
+    higher dimensions, the generalized Gell-Mann matrices [1]_ [2]_ .
 
-    These matrices are Hermitian and traceless, except the first, which is the identity.
+    These matrices are Hermitian and traceless, except the first, which is the
+    identity.
 
-    GellMannBasis(2) is the same as PauliBasis_ixyz().
+    `GellMannBasis(2)` is the same as `PauliBasis_ixyz()`.
 
-    [1] https://en.wikipedia.org/wiki/Generalizations_of_Pauli_matrices
-    [2] https://en.wikipedia.org/wiki/Gell-Mann_matrices
+    References
+    ----------
+
+    .. [1] https://en.wikipedia.org/wiki/Generalizations_of_Pauli_matrices
+    .. [2] https://en.wikipedia.org/wiki/Gell-Mann_matrices
     """
 
     def __init__(self, dim_hilbert):
@@ -458,22 +494,22 @@ class PTM:
         A Pauli transfer matrix. ABC
         """
 
-        "the hilbert space dimension on which the PTM operates"
-        self.dim_hilbert = ()
+        "The Hilbert space dimension on which the PTM operates"
         raise NotImplementedError
 
     def get_matrix(self, in_basis, out_basis=None):
-        """
-        Return the matrix representation of this PTM in the basis given.
+        """Return the matrix representation of this PTM in the basis given.
 
-        If out_basis is None, in_basis = out_basis is assumed.
+        If `out_basis` is None, `out_basis = in_basis` is assumed.
 
-        If out_basis spans only a subspace, projection on that subspace is implicit.
+        If `out_basis` spans only a subspace, projection on that subspace is
+        implicit.
         """
         raise NotImplementedError
 
     def __add__(self, other):
-        assert isinstance(other, PTM), "cannot add PTM to non-ptm"
+        if not isinstance(other, PTM):
+            raise ValueError("Cannot add PTM to non-ptm")
         if isinstance(other, LinearCombPTM):
             return LinearCombPTM(self.elements + other.elements)
         else:
@@ -505,13 +541,33 @@ class PTM:
     def __matmul__(self, other):
         return ProductPTM([self, other])
 
+    def _check_basis_op_consistency(self, basis_out, basis_in):
+        if self.op.shape != (basis_out.dim_hilbert, basis_in.dim_hilbert):
+            raise ValueError(
+                "Basis Hilbert dimention is incompatible with `self.op`.\n"
+                "basis_out Hilbert dimension must be {}, got {}\n"
+                "basis_in Hilbert dimension must be {}, got {}"
+                .format(self.op.shape[0], basis_out.dim_hilbert,
+                        self.op.shape[1], basis_in.dim_hilbert))
+
+    @staticmethod
+    def _check_basis_ptm_consistency(ptm, basis):
+        if ptm.shape[0] != ptm.shape[1]:
+            raise ValueError(
+                "ptm must be a square matrix, got shape {}".format(ptm.shape))
+
+        if ptm.shape[0] != basis.dim_pauli:
+            raise ValueError(
+                "basis Pauli dimention is incompatible with `ptm`.\n"
+                "basis Pauli dimension must be {}, got {}\n"
+                .format(ptm.shape[0], basis.dim_pauli))
+
 
 class ExplicitBasisPTM(PTM):
     def __init__(self, ptm, basis):
+        self._check_basis_ptm_consistency(ptm, basis)
         self.ptm = ptm
         self.basis = basis
-
-        assert self.ptm.shape == (self.basis.dim_pauli, self.basis.dim_pauli)
 
     def get_matrix(self, basis_in, basis_out=None):
         if basis_out is None:
@@ -529,16 +585,17 @@ class ExplicitBasisPTM(PTM):
 
 class LinearCombPTM(PTM):
     def __init__(self, elements):
-        """
-        A linear combination of other PTMs.
-        Should usually not be instantiated by hand, but created as a result of adding or scaling PTMs.
+        """A linear combination of other PTMs. Should usually not be
+        instantiated by hand, but created as a result of adding or scaling
+        PTMs.
         """
 
         # check dimensions
         dimensions_set = set(p.dim_hilbert for p in elements.keys())
         if len(dimensions_set) > 1:
             raise ValueError(
-                "cannot create linear combination: incompatible dimensions: {}".format(dimensions_set))
+                "Cannot create linear combination: incompatible dimensions: {}"
+                .format(dimensions_set))
 
         self.dim_hilbert = dimensions_set.pop()
 
@@ -553,7 +610,8 @@ class LinearCombPTM(PTM):
         return LinearCombPTM({p: scalar * c for p, c in self.elements.items()})
 
     def __add__(self, other):
-        assert isinstance(other, PTM), "cannot add PTM to non-ptm"
+        if not isinstance(other, PTM):
+            raise ValueError("cannot add PTM to non-ptm")
         if isinstance(other, LinearCombPTM):
             return LinearCombPTM(self.elements + other.elements)
         else:
@@ -562,18 +620,22 @@ class LinearCombPTM(PTM):
 
 class ProductPTM(PTM):
     def __init__(self, elements):
-        """
-        A product of other PTMs.
-        Should usually not be instantiated by hand, but created as a result of multiplying PTMs.
+        """A product of other PTMs. Should usually not be instantiated by hand,
+        but created as a result of multiplying PTMs.
 
-        elements: list of factors. Will be multiplied in order elements[n-1] @ ... @ elements[0].
+        Parameters
+        ----------
+        elements : list of :class:`PTM` derivatives
+            List of factors. Will be multiplied in order
+            `elements[n-1] @ ... @ elements[0]`.
         """
 
         # check dimensions
         dimensions_set = set(p.dim_hilbert for p in elements)
         if len(dimensions_set) > 1:
             raise ValueError(
-                "cannot create product: incompatible dimensions: {}".format(dimensions_set))
+                "cannot create product: incompatible dimensions: {}"
+                .format(dimensions_set))
 
         elif len(dimensions_set) == 1:
             self.dim_hilbert = dimensions_set.pop()
@@ -588,10 +650,17 @@ class ProductPTM(PTM):
         if basis_out is None:
             basis_out = basis_in
 
-        assert basis_in.dim_hilbert == basis_out.dim_hilbert
+        if basis_in.dim_hilbert != basis_out.dim_hilbert:
+            raise ValueError(
+                "`basis_in` and `basis_out` must have equal Hilbert dimensions"
+                ", got {} and {} correspondingly."
+                .format(basis_in.dim_hilbert, basis_out.dim_hilbert))
 
-        if self.dim_hilbert:
-            assert basis_in.dim_hilbert == self.dim_hilbert
+        if self.dim_hilbert and basis_in.dim_hilbert != self.dim_hilbert:
+            raise ValueError(
+                "`basis_in` and `self` must have equal Hilbert dimensions"
+                ", got {} and {} correspondingly."
+                .format(basis_in.dim_hilbert, basis_out.dim_hilbert))
 
         complete_basis = GeneralBasis(basis_in.dim_hilbert)
         result = np.eye(complete_basis.dim_pauli)
@@ -622,14 +691,19 @@ class ProductPTM(PTM):
 
 class ConjunctionPTM(PTM):
     def __init__(self, op):
-        """
-        The PTM describing conjunction with unitary operator `op`, i.e.
+        """The PTM describing conjunction with unitary operator `op`, i.e.
 
-        rho' = P(rho) = op . rho . op^dagger
+        .. math::
+            \\rho^\\prime = P(\\rho) =
+            \\text{op} \\cdot \\rho \\cdot \\text{op}^\\dagger
 
-        `op` is a matrix given in computational basis.
+        Typical usage: `op` describes the unitary time evolution of a system
+        described by :math:`\\rho`.
 
-        Typical usage: op describes the unitary time evolution of a system described by rho.
+        Parameters
+        ----------
+        op : 2D array
+            A matrix given in computational basis.
         """
         self.op = np.array(op)
         self.dim_hilbert = self.op.shape[0]
@@ -638,20 +712,19 @@ class ConjunctionPTM(PTM):
         if basis_out is None:
             basis_out = basis_in
 
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
+        self._check_basis_op_consistency(basis_out, basis_in)
 
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        result = np.einsum("xab, bc, ycd, ad -> xy",
-                           st_out, self.op, st_in, self.op.conj(), optimize=True)
+        result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
+                           self.op.conj(), optimize=True)
 
         assert np.allclose(result.imag, 0)
 
         return result.real
 
     def embed_hilbert(self, new_dim_hilbert, mp=None):
-
         if mp is None:
             mp = range(min(self.dim_hilbert, new_dim_hilbert))
 
@@ -670,39 +743,48 @@ class PLMIntegrator:
         self.plm = plm
         self.full_basis = GeneralBasis(self.plm.dim_hilbert)
         self.lindbladian_mat = self.plm.get_matrix(self.full_basis)
-        
+
         self.e, self.v = np.linalg.eig(self.lindbladian_mat)
         self.vinv = np.linalg.inv(self.v)
-        
+
     def get_ptm(self, power):
         p = self.v @ np.diag(np.exp(power*self.e)) @ self.vinv
-        
+
         return ExplicitBasisPTM(p, self.full_basis)
+
 
 class AdjunctionPLM(PTM):
     def __init__(self, op):
+        """The PLM (Pauli Liouvillian Matrix) describing adjunction with
+        operator `op`, i.e.
+
+        Typical usage: op is a Hamiltonian, the PTM describes the infinitesimal
+        evolution of rho.
+
+        .. math::
+            \\rho^\\prime = P(\\rho) =
+            1i \\left(\\text{op}\\cdot\\rho - \\rho\\cdot\\text{op} \\right)
+
+        Parameters
+        ----------
+        op : 2D array
+            A matrix given in computational basis.
         """
-        The PLM (Pauli Liouvillian Matrix) describing adjunction with operator `op`, i.e.
 
-        rho' = P(rho) =  1j*(op.rho - rho.op)
-
-        Typical usage: op is a Hamiltonian, the PTM describes the infinitesimal evolution of rho.
-
-        """
-        self.op = op
+        self.op = np.array(op)
         self.dim_hilbert = op.shape[0]
 
     def get_matrix(self, basis_in, basis_out=None):
         if basis_out is None:
             basis_out = basis_in
 
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
+        self._check_basis_op_consistency(basis_out, basis_in)
 
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        result = np.einsum("xab, bc, yca -> xy",
-                                st_out, self.op, st_in,optimize=True)
+        result = np.einsum("xab, bc, yca -> xy", st_out, self.op, st_in,
+                           optimize=True)
 
         # taking the real part implements the two parts of the commutator
         return result.imag
@@ -710,10 +792,14 @@ class AdjunctionPLM(PTM):
 
 class LindbladPLM(PTM):
     def __init__(self, op):
-        """
-        The PLM describing the Lindblad superoperator of `op`, i.e.
+        """The PLM describing the Lindblad superoperator of `op`, i.e.
 
-        rho' = P(rho) = op.rho.op^dagger - 1/2 {op^dagger.op, rho}
+        .. math::
+            \\rho^\\prime = P(\\rho) =
+            \\text{op}\\cdot\\rho\\cdot\\text{op}^\\dagger -
+            \\frac{1}{2} \\left\\{
+                \\text{op}^\\dagger\\cdot\\text{op}, \\rho
+            \\right\\}
 
         Typical usage: op is a decay operator.
         """
@@ -724,19 +810,19 @@ class LindbladPLM(PTM):
         if basis_out is None:
             basis_out = basis_in
 
-        assert self.op.shape == (basis_out.dim_hilbert, basis_in.dim_hilbert)
+        self._check_basis_op_consistency(basis_out, basis_in)
 
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        result = np.einsum("xab, bc, ycd, ad -> xy",
-                           st_out, self.op, st_in, self.op.conj(), optimize=True)
+        result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
+                           self.op.conj(), optimize=True)
+        result -= 0.5 * np.einsum("xab, cb, cd, yda -> xy", st_out,
+                                  self.op.conj(), self.op, st_in,
+                                  optimize=True)
 
-        result -= 0.5 * np.einsum("xab, cb, cd, yda -> xy",
-                                  st_out, self.op.conj(), self.op, st_in, optimize=True)
-
-        result -= 0.5 * np.einsum("xab, ybc, dc, da -> xy",
-                                  st_out, st_in, self.op.conj(), self.op, optimize=True)
+        result -= 0.5 * np.einsum("xab, ybc, dc, da -> xy", st_out, st_in,
+                                  self.op.conj(), self.op, optimize=True)
 
         return result.real
 
@@ -788,19 +874,20 @@ class TwoPTM:
 
 class TwoPTMProduct(TwoPTM):
     def __init__(self, elements=None):
-        """
-        A product of single- and two-qubit process matrices.
+        """A product of single- and two-qubit process matrices.
 
-        `elements`: a list of (bit0, bit1, two_ptm) or (bit, single_ptm),
+        Parameters
+        ----------
 
-        where bit0, bit1 in [0, 1]
+        elements : list of tuples
+            A list of `(bit0, bit1, two_ptm)` or `(bit, single_ptm)`,
+            where `bit0`, `bit1` in [0, 1]
         """
         self.elements = elements
         if elements is None:
             self.elements = []
 
     def get_matrix(self, bases_in, bases_out=None):
-
         if bases_out is None:
             bases_out = bases_in
 
@@ -825,9 +912,11 @@ class TwoPTMProduct(TwoPTM):
                 bit = bits[0]
                 pmat = pt.get_matrix(complete_basis[bit])
                 if bit == 0:
-                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3], [0, 1, 2, 3], optimize=True)
+                    result = np.einsum(pmat, [0, 10], result, [10, 1, 2, 3],
+                                       [0, 1, 2, 3], optimize=True)
                 if bit == 1:
-                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3], [0, 1, 2, 3], optimize=True)
+                    result = np.einsum(pmat, [1, 10], result, [0, 10, 2, 3],
+                                       [0, 1, 2, 3], optimize=True)
 
             elif len(bits) == 2:
                 # double ptm
@@ -835,11 +924,11 @@ class TwoPTMProduct(TwoPTM):
                     [complete_basis[bits[0]], complete_basis[bits[1]]])
                 if tuple(bits) == (0, 1):
                     result = np.einsum(
-                            pmat, [0, 1, 10, 11], 
+                            pmat, [0, 1, 10, 11],
                             result, [10, 11, 2, 3], optimize=True)
                 elif tuple(bits) == (1, 0):
                     result = np.einsum(
-                            pmat, [1, 0, 11, 10], 
+                            pmat, [1, 0, 11, 10],
                             result, [10, 11, 2, 3], optimize=True)
                 else:
                     raise ValueError()
@@ -863,21 +952,34 @@ class TwoPTMProduct(TwoPTM):
 
 class TwoKrausPTM(TwoPTM):
     def __init__(self, unitary):
-        """
-        Create a two-subsystem process matrix from a unitary.
-        The unitary has to have shape of form [x, y, x, y], 
+        """Create a two-subsystem process matrix from a unitary.
+        The unitary has to have shape of form [x, y, x, y],
         where x(y) is the dimension of the first (second) subsystem.
+
+        Parameters
+        ----------
+        unitary : 4D array
+            The unitary. Has to have a shape of form `(x, y, x, y)`,
+            where x(y) is the dimension of the first (second) subsystem.
+
         """
-        assert len(unitary.shape) == 4
-        assert unitary.shape[0:2] == unitary.shape[2:4]
+        if len(unitary.shape) != 4 or unitary.shape[0:2] != unitary.shape[2:4]:
+            raise ValueError("unitary has wrong shape: {}"
+                             .format(unitary.shape))
 
         self.unitary = unitary
-
         self.dim_hilbert = unitary.shape[0:2]
 
     def get_matrix(self, bases_in, bases_out=None):
-        """
-        Return the process matrix in the basis bases_in = [basis0_in, basis1_in].
+        """Return the process matrix in the basis
+
+        Parameters
+        ----------
+        bases_in : tuple of two :class:`~PauliBasis` derivatives
+            Input bases in the form `(basis0_in, basis1_in)`.
+        bases_out: tuple of two :class:`~PauliBasis` derivatives or None
+            Output bases in the form `(basis0_in, basis1_in)`.
+            If `None`, assumed equal to `bases_in`.
         """
         st0i = bases_in[0].basisvectors
         st1i = bases_in[1].basisvectors
@@ -946,27 +1048,31 @@ class CompilerBlock:
 
 
 class TwoPTMCompiler:
-
     def __init__(self, operations, initial_bases=None):
-        """
-        Precompiles and optimizes a set of PTM applications for calculation.
-
-        Operations are list of tuples:
-            - ([bit], PTM) for single PTM applications
-            - ([bit0, bit1], TwoPTM) for two-qubit ptm applications
-            - ([bits], "measure") for requesting partial trace of all but bits
-
-        bit names can be anything hashable.
-
+        """Precompiles and optimizes a set of PTM applications for calculation.
         Compilation includes:
-            - Contracting single-ptms into adjacent two-qubit ptms
-            - choosing basis that facilitate partial tracing:
-                - traced qubits in gellmann basis
-                - not-traced qubits in general basis
-            - examining sparsity and using truncated bases if applicable
 
-        If initial_basis is None, the initial state is assumed fully separable.
-        Otherwise, its a dict, mapping bits to bases.
+        - Contracting single-ptms into adjacent two-qubit ptms
+        - choosing basis that facilitate partial tracing:
+            - traced qubits in gellmann basis
+            - not-traced qubits in general basis
+        - examining sparsity and using truncated bases if applicable
+
+        Parameters
+        ----------
+        operations : list of tuples
+            Possible operations are:
+
+            - `([bit], PTM)` for single PTM applications.
+            - `([bit0, bit1], TwoPTM)` for two-qubit ptm applications.
+            - `([bits], "measure")` for requesting partial trace of all but
+              `bits`.
+
+            bit names can be anything hashable.
+
+        initial_bases : None or dict
+            If `initial_basis` is None, the initial state is assumed fully
+            separable.  Otherwise, its a dict, mapping bits to bases.
         """
 
         self.operations = operations
@@ -1079,7 +1185,6 @@ class TwoPTMCompiler:
                         product.elements.append(
                             ([bit_map[b0], bit_map[b1]], op))
 
-
                 # order the bitlist
                 bits = list(bit_map.keys())
                 if bit_map[bits[0]] == 1:
@@ -1128,10 +1233,10 @@ class TwoPTMCompiler:
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
                 full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
-                sparse_out_0 = np.nonzero(
-                    np.einsum("abcd -> a", full_mat**2, optimize=True) > tol)[0]
-                sparse_out_1 = np.nonzero(
-                    np.einsum("abcd -> b", full_mat**2, optimize=True) > tol)[0]
+                sparse_out_0 = np.nonzero(np.einsum(
+                    "abcd -> a", full_mat**2, optimize=True) > tol)[0]
+                sparse_out_1 = np.nonzero(np.einsum(
+                    "abcd -> b", full_mat**2, optimize=True) > tol)[0]
                 cb.out_basis = [
                     full_basis[0].get_subbasis(sparse_out_0),
                     full_basis[1].get_subbasis(sparse_out_1)
@@ -1159,4 +1264,3 @@ class TwoPTMCompiler:
 # * using auto-forward-differentiation to integrate processes?
 # * return matric reps in other forms (process matrix, chi matrix?)
 # * PTM compilation using circuit interface!
-
