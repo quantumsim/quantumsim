@@ -3,6 +3,17 @@
 
 .. module:: quantumsim.circuit
 
+Abstract classes for gates and qubits
+-------------------------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   Qubit
+   Gate
+   SinglePTMGate
+   TwoPTMGate
+
 Cirquit
 -------
 
@@ -46,17 +57,6 @@ Gates
    ConditionalGate
    ClassicalCNOT
    ClassicalNOT
-
-Abstract classes for gates and qubits
--------------------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   Qubit
-   Gate
-   SinglePTMGate
-   TwoPTMGate
 
 Samplers
 --------
