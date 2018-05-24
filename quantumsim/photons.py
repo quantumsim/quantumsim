@@ -11,20 +11,28 @@ def get_dephasing(tstart, tend, Dt, chi, kappa, alpha0):
     """Calculates the photon-induced dephasing over a period of
     time, and returns a valuefor the decay constant lambda
 
-    Input:
-    @tstart : time between the start *of the coherent phase* and
-            the start of the decay period.
-    @tend : time between the start *of the coherent phase* and
-            the end of the decay period
-    @Dt   : time between the end *of the measurement pulse* and
-            the start *of the coherent phase*. This should be
-            about t_rest + gate_time/2.
-    @chi  : energy gap between photon states
-    @kappa : photon decay rate
-    @alpha0 : number of photons at the end of the measurement pulse.
+    Parameters
+    ----------
+    tstart : float
+        Time between the start *of the coherent phase* and the start of the
+        decay period.
+    tend : float
+        Time between the start *of the coherent phase* and the end of the
+        decay period
+    Dt : float
+        Time between the end *of the measurement pulse* and the start
+        *of the coherent phase*. This should be about t_rest + gate_time/2.
+    chi : float
+        Energy gap between photon states.
+    kappa : float
+        Photon decay rate.
+    alpha0 : float
+        Number of photons at the end of the measurement pulse.
 
-    Output:
-    @lamda : The calculated decay rate
+    Returns
+    -------
+    lamda : float
+        The calculated decay rate
     """
 
     # Photon number at the start of the coherent phase
@@ -52,7 +60,6 @@ def add_waiting_gates_photons(c, tmin, tmax, chi, kappa, alpha0):
     Assume that the circuit is periodic;
     the time tmin for one cycle is identified with tmax of the previous cycle.
     """
-
     # times = [g.time for g in c.gates]
     # assert min(times) >= tmin
     # assert max(times) <= tmax
