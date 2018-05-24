@@ -7,13 +7,19 @@ import warnings
 
 class DensityGeneralNP:
     def __init__(self, dimensions, data=None):
+        """A density matrix describing several subsystems with variable number
+        of dimensions.
+
+        Parameters
+        ----------
+        dimensions : list of int
+            Dimensions of qubits in the system.
+
+        data : numpy.ndarray or None.
+            Must be of size (2**no_qubits, 2**no_qubits). Only upper triangle
+            is relevant.  If data is `None`, create a new density matrix with
+            all qubits in ground state.
         """
-        A density matrix describing several subsystems with variable number of dimensions.
-
-        The dimensions are given as a list of integers.
-        """
-
-
         self.dimensions = dimensions
         self.no_qubits = len(self.dimensions)
         self.size = pytools.product(self.dimensions)**2
@@ -26,15 +32,17 @@ class DensityGeneralNP:
 
         if isinstance(data, np.ndarray):
             single_tensors = [ptm.general_ptm_basis_vector(d)
-                    for d in self.dimensions]
+                              for d in self.dimensions]
             assert data.size == self.size
 
-            data = data.reshape(list(pytools.flatten([[d,d] for d in self.dimensions])))
+            data = data.reshape(list(
+                pytools.flatten([[d, d] for d in self.dimensions])))
 
             in_indices = list(
                 reversed(range(self.no_qubits, 3 * self.no_qubits)))
             contraction_indices = [
-                (i, i + self.no_qubits, i + 2 * self.no_qubits) for i in range(self.no_qubits)]
+                (i, i + self.no_qubits, i + 2 * self.no_qubits)
+                for i in range(self.no_qubits)]
             out_indices = list(reversed(range(self.no_qubits)))
 
             transformation_tensors = list(
@@ -42,12 +50,13 @@ class DensityGeneralNP:
             transformation_tensors = pytools.flatten(transformation_tensors)
 
             self.dm = np.einsum(
-                data, in_indices, *transformation_tensors, out_indices, optimize=True).real
+                data, in_indices, *transformation_tensors, out_indices,
+                optimize=True).real
         elif data is None:
             self.dm = np.zeros(self.shape)
             self.dm[tuple([0] * self.no_qubits)] = 1
         else:
-            raise ValueError("type of data not understood")
+            raise ValueError("Unknown type of `data`: {}".format(type(data)))
 
     def renormalize(self):
         self.dm = self.dm / self.trace()
@@ -59,7 +68,7 @@ class DensityGeneralNP:
 
     def to_array(self):
         single_tensors = [ptm.general_ptm_basis_vector(d)
-                for d in self.dimensions]
+                          for d in self.dimensions]
 
         in_indices = list(reversed(range(self.no_qubits)))
 
@@ -93,7 +102,8 @@ class DensityGeneralNP:
         out_indices = list(reversed(range(self.no_qubits, 2 * self.no_qubits)))
 
         complex_dm_dimension = pytools.product(self.dimensions)
-        return np.einsum(self.dm, indices, *trace_argument, out_indices, optimize=True).reshape(complex_dm_dimension)
+        return np.einsum(self.dm, indices, *trace_argument, out_indices,
+                         optimize=True).reshape(complex_dm_dimension)
 
     def apply_two_ptm(self, bit0, bit1, two_ptm):
 
@@ -112,27 +122,28 @@ class DensityGeneralNP:
             dummy_idx1, dummy_idx0
         ]
         self.dm = np.einsum(
-            self.dm, in_indices, two_ptm, two_ptm_indices, out_indices, optimize=True)
+            self.dm, in_indices, two_ptm, two_ptm_indices, out_indices,
+            optimize=True)
 
-    def apply_ptm(self, bit, one_ptm):
-        assert bit < self.no_qubits
-
+    def apply_ptm(self, bit, ptm):
+        self._validate_bit(bit, 'bit')
         dim = self.shape[bit]
-        assert one_ptm.shape == (dim, dim)
+        self._validate_ptm_shape(ptm, (dim, dim), 'ptm')
 
         dummy_idx = self.no_qubits
         out_indices = list(reversed(range(self.no_qubits)))
         in_indices = list(reversed(range(self.no_qubits)))
         in_indices[self.no_qubits - bit - 1] = dummy_idx
         ptm_indices = [bit, dummy_idx]
-        self.dm = np.einsum(self.dm, in_indices, one_ptm,
+        self.dm = np.einsum(self.dm, in_indices, ptm,
                             ptm_indices, out_indices, optimize=True)
 
     def add_ancilla(self, anc_st, anc_dim):
         anc_dm = np.zeros(anc_dim**2)
         anc_dm[anc_st] = 1
         self.dm = np.einsum(
-            anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)), optimize=True)
+            anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)),
+            optimize=True)
         self.dimensions.insert(0, anc_dim)
         self.shape = [d**2 for d in self.dimensions]
         self.no_qubits = len(self.dimensions)
@@ -167,11 +178,11 @@ class DensityGeneralNP:
             trace_argument.append(tt)
             trace_argument.append([i])
 
-        return np.einsum(self.dm, list(range(self.no_qubits)), *trace_argument, optimize=True)
+        return np.einsum(self.dm, list(range(self.no_qubits)), *trace_argument,
+                         optimize=True)
 
     def project_measurement(self, bit, state):
-
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
 
         # the behaviour is a bit weird: swap the MSB to bit and then project
         # out the highest one!
@@ -199,11 +210,11 @@ class DensityGeneralNP:
         p = ptm.single_kraus_to_ptm(u, general_basis=True)
         self.apply_ptm(bit, p)
 
-
     def amp_ph_damping(self, bit, gamma, lamda):
         warnings.warn("amp_ph_damping deprecated, use apply_ptm",
                       DeprecationWarning)
-        self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda, general_basis=True))
+        self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda,
+                                                   general_basis=True))
 
     def rotate_y(self, bit, angle):
         warnings.warn("rotate_y deprecated, use apply_ptm", DeprecationWarning)
@@ -218,13 +229,28 @@ class DensityGeneralNP:
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle, general_basis=True))
 
     def cphase(self, bit0, bit1):
-        assert bit0 < self.no_qubits
-        assert bit1 < self.no_qubits
+        self._validate_bit(bit0, 'bit0')
+        self._validate_bit(bit1, 'bit1')
 
         warnings.warn("cphase deprecated, use apply_ptm", DeprecationWarning)
-        two_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1]), 
-                general_basis=True)
+        two_ptm = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -1]),
+                                          general_basis=True)
         self.apply_two_ptm(bit0, bit1, two_ptm)
+
+    def _validate_bit(self, number, name):
+        if number < 0 or number >= self.no_qubits:
+            raise ValueError(
+                "`{name}` number {n} does not exist in the system, "
+                "it contains {n_qubits} qubits in total."
+                .format(name=name, n=number, n_qubits=self.no_qubits))
+
+    def _validate_ptm_shape(self, ptm, target_shape, name):
+        if ptm.shape != target_shape:
+            raise ValueError(
+                "`{name}` shape must be {target_shape}, got {real_shape}"
+                .format(name=name,
+                        target_shape=target_shape,
+                        real_shape=ptm.shape))
 
 
 class DensityNP(DensityGeneralNP):
@@ -239,5 +265,4 @@ class DensityNP(DensityGeneralNP):
 
     def add_ancilla(self, anc_st):
         assert anc_st < 2
-
         super().add_ancilla(anc_st, anc_dim=2)
