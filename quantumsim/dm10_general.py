@@ -71,8 +71,8 @@ class DensityGeneral:
         bases : a list of :class:`ptm.PauliBasis`
             A descrption of the basis for the subsystems.
 
-        data : numpy.ndarray, pycuda.gpuarray.array,
-               pycuda.driver.DeviceAllocation, or None.
+        data : :class:`numpy.ndarray`, :class:`pycuda.gpuarray.array`,\
+        :class:`pycuda.driver.DeviceAllocation`, or `None`.
             Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if
             not already there.  Only upper triangle is relevant.  If data is
             `None`, create a new density matrix with all qubits in ground

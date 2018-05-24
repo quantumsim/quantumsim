@@ -17,5 +17,8 @@ Backends
 .. toctree::
    :maxdepth: 1
 
+   quantumsim.dm_general
+   quantumsim.dm_general_np
+   quantumsim.dm10_general
    quantumsim.dm10
    quantumsim.dm_np
