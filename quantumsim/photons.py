@@ -1,3 +1,8 @@
+# This file is part of quantumsim. (https://github.com/quantumsim/quantumsim)
+# (c) 2016 Brian Tarasinski
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
+
 import numpy as np
 
 from collections import defaultdict

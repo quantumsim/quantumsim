@@ -1,5 +1,9 @@
-import numpy as np
+# This file is part of quantumsim. (https://github.com/quantumsim/quantumsim)
+# (c) 2016 Brian Tarasinski
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
 
+import numpy as np
 
 "The transformation matrix between the two basis. Its essentially a Hadamard, so its its own inverse."
 basis_transformation_matrix = np.array([[np.sqrt(0.5), 0, 0, np.sqrt(0.5)],
@@ -102,7 +106,7 @@ def gen_amp_damping_ptm(gamma_down, gamma_up):
         [0, 0, np.sqrt((1 - gamma)), 0],
         [(2*p - 1)*gamma, 0, 0, 1 - gamma]]
     )
-    
+
     return to_0xy1_basis(ptm)
 
 def dephasing_ptm(px, py, pz):
