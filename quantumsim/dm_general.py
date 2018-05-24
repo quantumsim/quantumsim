@@ -10,7 +10,7 @@ import pycuda.gpuarray as ga
 import pycuda.autoinit
 
 # load the kernels
-from pycuda.compiler import SourceModule
+from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
 import sys
 import os
@@ -28,7 +28,7 @@ for kernel_file in [
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
-                kernel_source_file.read(), options=[
+                kernel_source_file.read(), options=DEFAULT_NVCC_FLAG+[
                     "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
@@ -143,13 +143,13 @@ class Density:
 
     def multi_basis_project(self, selector):
         """
-        Perform a projection to a cartesian subbasis on many 
+        Perform a projection to a cartesian subbasis on many
         axes at the same time. (Essentially slicing).
 
         Generalization of the get_diag method.
         """
 
-        
+
 
 
     def apply_two_ptm(self, bit0, bit1, ptm):
