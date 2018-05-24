@@ -8,3 +8,4 @@
    :toctree: generated/
 
    SparseDM
+   SubsystemDescription

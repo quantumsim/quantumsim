@@ -1,4 +1,4 @@
-:mod:`quantumsim.dm10` -- CUDA-based backend
+(legacy) :mod:`quantumsim.dm10` -- CUDA-based backend
 ============================================
 
 .. module:: quantumsim.dm10
@@ -7,3 +7,4 @@
    :toctree: generated/
 
    Density
+   DensityGeneral

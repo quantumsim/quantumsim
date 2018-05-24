@@ -1,4 +1,3 @@
-
 :mod:`quantumsim.photons` -- utilities for photon-induced dephasing
 ===================================================================
 
