@@ -69,12 +69,18 @@ class Density:
     _ptm_cache = {}
 
     def __init__(self, no_qubits, data=None):
-        """create a new density matrix for several qubits.
-        no_qubits: number of qubits.
-        data: a numpy.ndarray, gpuarray.array, or pycuda.driver.DeviceAllocation.
-              must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if not already there.
-              Only upper triangle is relevant.
-              If data is None, create a new density matrix with all qubits in ground state.
+        """Create a new density matrix for several qubits.
+
+        Parameters
+        ----------
+        no_qubits: int
+            Number of qubits.
+        data: :class:`numpy.ndarray`, :class:`pycuda.gpuarray.array`,\
+        :class:`pycuda.driver.DeviceAllocation` or `None`
+            Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if
+            not already there. Only upper triangle is relevant. If `data` is
+            `None`, create a new density matrix with all qubits in ground
+            state.
         """
 
         self.allocated_qubits = 0
@@ -364,10 +370,11 @@ class Density:
 
         return self
 
+
 class DensityGeneral(Density):
     """A subclass of Density that uses general_two_qubit_ptm as a backend,
-    for testing purposes"""
-
+    for testing purposes
+    """
 
     def apply_two_ptm(self, bit0, bit1, ptm):
         assert bit0 < self.no_qubits
@@ -376,7 +383,8 @@ class DensityGeneral(Density):
         # bit0 must be the smaller one.
         if bit1 < bit0:
             bit1, bit0 = bit0, bit1
-            ptm = np.einsum("abcd -> badc", ptm.reshape((4,4,4,4))).reshape((16,16))
+            ptm = (np.einsum("abcd -> badc", ptm.reshape((4, 4, 4, 4)))
+                   .reshape((16, 16)))
 
         key = hash(ptm.tobytes())
         try:
