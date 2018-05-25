@@ -93,9 +93,9 @@ def to_0xy1_basis(ptm, general_basis=False):
 
     if ptm.shape == (3, 3):
         ptm = np.hstack(([[0], [0], [0]], ptm))
-    elif ptm.shape == (3, 4):
+    if ptm.shape == (3, 4):
         ptm = np.vstack(([1, 0, 0, 0], ptm))
-    elif not ptm.shape == (4, 4):
+    if not ptm.shape == (4, 4):
         raise ValueError("Input PTM must be 3x3, 3x4 or 4x4 array")
 
     if not np.allclose(ptm[0, :], [1, 0, 0, 0]):

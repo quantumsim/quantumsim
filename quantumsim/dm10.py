@@ -96,7 +96,10 @@ class Density:
                 no_qubits)
 
         if isinstance(data, np.ndarray):
-            assert data.shape == (1 << no_qubits, 1 << no_qubits)
+            if data.shape != (1 << no_qubits, 1 << no_qubits):
+                raise ValueError(
+                    "`data` shape is wrong (required {}; actual {})"
+                    .format((1 << no_qubits, 1 << no_qubits), data.shape))
             data = data.astype(np.complex128)
             complex_dm = ga.to_gpu(data)
             block_size = 2**4
@@ -116,8 +119,14 @@ class Density:
                 self.no_qubits,
                 0)
         elif isinstance(data, ga.GPUArray):
-            assert data.size == self._size
-            assert data.dtype == np.float64
+            if data.size != self._size:
+                raise ValueError(
+                    "`data` size is wrong (required {}; actual {})"
+                    .format(self._size, data.size))
+            if data.dtype != np.float64:
+                raise ValueError(
+                    "`data` dtype is wrong (required {}; actual {})"
+                    .format(np.float64, data.dtype))
             self.data = data
         elif data is None:
             d = np.zeros(self._size, np.float64)
@@ -223,15 +232,14 @@ class Density:
         # self.no_qubits)
 
     def apply_two_ptm(self, bit0, bit1, ptm):
-        assert bit0 < self.no_qubits
-        assert bit1 < self.no_qubits
+        self._validate_bit(bit0, 'bit0')
+        self._validate_bit(bit1, 'bit1')
 
         key = hash(ptm.tobytes())
         try:
             ptm_gpu = self._ptm_cache[key]
         except KeyError:
-            assert ptm.shape == (16, 16)
-            assert ptm.dtype == np.float64
+            self._validate_ptm(ptm, (16, 16), 'ptm')
             self._ptm_cache[key] = ga.to_gpu(ptm)
             ptm_gpu = self._ptm_cache[key]
 
@@ -248,14 +256,13 @@ class Density:
                                      shared_size=8 * (256 + self._blocksize))
 
     def apply_ptm(self, bit, ptm):
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
 
         key = hash(ptm.tobytes())
         try:
             ptm_gpu = self._ptm_cache[key]
         except KeyError:
-            assert ptm.shape == (4, 4)
-            assert ptm.dtype == np.float64
+            self._validate_ptm(ptm, (4, 4), 'ptm')
             self._ptm_cache[key] = ga.to_gpu(ptm)
             ptm_gpu = self._ptm_cache[key]
 
@@ -271,27 +278,33 @@ class Density:
                                         shared_size=8 * (17 + self._blocksize))
 
     def hadamard(self, bit):
-        warnings.warn("hadamard deprecated, use apply_ptm", DeprecationWarning)
+        warnings.warn("hadamard deprecated, use apply_ptm",
+                      DeprecationWarning)
         self.apply_ptm(bit, ptm.hadamard_ptm())
 
     def amp_ph_damping(self, bit, gamma, lamda):
-        warnings.warn("amp_ph_damping deprecated, use apply_ptm", DeprecationWarning)
+        warnings.warn("amp_ph_damping deprecated, use apply_ptm",
+                      DeprecationWarning)
         self.apply_ptm(bit, ptm.amp_ph_damping_ptm(gamma, lamda))
 
     def rotate_y(self, bit, angle):
-        warnings.warn("rotate_y deprecated, use apply_ptm", DeprecationWarning)
+        warnings.warn("rotate_y deprecated, use apply_ptm",
+                      DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_y_ptm(angle))
 
     def rotate_x(self, bit, angle):
-        warnings.warn("rotate_x deprecated, use apply_ptm", DeprecationWarning)
+        warnings.warn("rotate_x deprecated, use apply_ptm",
+                      DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_x_ptm(angle))
 
     def rotate_z(self, bit, angle):
-        warnings.warn("rotate_z deprecated, use apply_ptm", DeprecationWarning)
+        warnings.warn("rotate_z deprecated, use apply_ptm",
+                      DeprecationWarning)
         self.apply_ptm(bit, ptm.rotate_z_ptm(angle))
 
     def add_ancilla(self, anc_st):
-        """Add an ancilla in the ground or excited state as the highest new bit.
+        """Add an ancilla in the ground or excited state as the highest new
+        bit.
         """
 
         byte_size_of_smaller_dm = 2**(2 * self.no_qubits) * 8
@@ -310,15 +323,16 @@ class Density:
                 drv.memset_d8(int(self.data.gpudata) + byte_size_of_smaller_dm,
                               0, 3 * byte_size_of_smaller_dm)
             if anc_st == 1:
-                drv.memcpy_dtod(int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
-                                self.data.gpudata, byte_size_of_smaller_dm)
+                drv.memcpy_dtod(
+                    int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
+                    self.data.gpudata, byte_size_of_smaller_dm)
                 drv.memset_d8(self.data.gpudata, 0, 3 *
                               byte_size_of_smaller_dm)
 
         self._set_no_qubits(self.no_qubits + 1)
 
     def partial_trace(self, bit):
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
         if self.no_qubits > 10:
             raise NotImplementedError(
                 "Trace not implemented for more than 10 qubits yet")
@@ -347,7 +361,7 @@ class Density:
         return tr0, tr1
 
     def project_measurement(self, bit, state):
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
 
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
@@ -370,6 +384,27 @@ class Density:
 
         return self
 
+    def _validate_bit(self, number, name):
+        if number < 0 or number >= self.no_qubits:
+            raise ValueError(
+                "`{name}` number {n} does not exist in the system, "
+                "it contains {n_qubits} qubits in total."
+                .format(name=name, n=number, n_qubits=self.no_qubits))
+
+    def _validate_ptm(self, ptm, target_shape, name):
+        if ptm.shape != target_shape:
+            raise ValueError(
+                "`{name}` shape must be {target_shape}, got {real_shape}"
+                .format(name=name,
+                        target_shape=target_shape,
+                        real_shape=ptm.shape))
+        if ptm.dtype != np.float64:
+            raise ValueError(
+                "`{name}` dtype must be {target_dtype}, got {real_dtype}"
+                .format(name=name,
+                        target_dtype=np.float64,
+                        real_dtype=ptm.dtype))
+
 
 class DensityGeneral(Density):
     """A subclass of Density that uses general_two_qubit_ptm as a backend,
@@ -377,8 +412,8 @@ class DensityGeneral(Density):
     """
 
     def apply_two_ptm(self, bit0, bit1, ptm):
-        assert bit0 < self.no_qubits
-        assert bit1 < self.no_qubits
+        self._validate_bit(bit0, 'bit0')
+        self._validate_bit(bit1, 'bit1')
 
         # bit0 must be the smaller one.
         if bit1 < bit0:
@@ -390,8 +425,7 @@ class DensityGeneral(Density):
         try:
             ptm_gpu = self._ptm_cache[key]
         except KeyError:
-            assert ptm.shape == (16, 16)
-            assert ptm.dtype == np.float64
+            self._validate_ptm(ptm, (16, 16), 'ptm')
             self._ptm_cache[key] = ga.to_gpu(ptm)
             ptm_gpu = self._ptm_cache[key]
 
@@ -401,14 +435,13 @@ class DensityGeneral(Density):
         gridsize = max(1, (4**self.no_qubits)//blocksize)
         grid = (gridsize, 1, 1)
 
-
         _two_qubit_general_ptm.prepared_call(grid,
-                                     block,
-                                     self.data.gpudata,
-                                     self.data.gpudata,
-                                     ptm_gpu.gpudata,
-                                     4, 4,
-                                     4**bit0,
-                                     4**(bit1-bit0-1),
-                                     4**self.no_qubits,
-                                     shared_size=8 * (256 + blocksize))
+                                             block,
+                                             self.data.gpudata,
+                                             self.data.gpudata,
+                                             ptm_gpu.gpudata,
+                                             4, 4,
+                                             4**bit0,
+                                             4**(bit1-bit0-1),
+                                             4**self.no_qubits,
+                                             shared_size=8 * (256 + blocksize))

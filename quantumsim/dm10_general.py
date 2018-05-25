@@ -246,7 +246,7 @@ class DensityGeneral:
 
         self._validate_bit(bit0, 'bit0')
         self._validate_bit(bit1, 'bit1')
-        if ptm.shape != 4:
+        if len(ptm.shape) != 4:
             raise ValueError(
                 "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
 
@@ -339,7 +339,8 @@ class DensityGeneral:
 
         new_shape = list(self.data.shape)
         self._validate_bit(bit, 'bit')
-        if ptm.shape != 2:
+        # TODO Refactor to use self._validate_ptm
+        if len(ptm.shape) != 2:
             raise ValueError(
                 "`ptm` must be a 2D array, got {}D".format(len(ptm.shape)))
         dim_bit_out, dim_bit_in = ptm.shape
