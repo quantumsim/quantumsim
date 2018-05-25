@@ -26,16 +26,28 @@ class SubsystemDescription:
 
 
 class SparseDM:
+    """A sparse density matrix for a set of qubits with names `names`.
+
+    Each qubit can be in a "classical state", where it is in a basis state
+    (i.e. 0 or 1) and not correlated with other qubits, so that the total
+    density matrix can be written as a product state. This is the case
+    after a measurement projection, meaning that a measurement turns a
+    qubit classical.
+
+    If a qubit is not classical, it is quantum, which means that it is part
+    of the full dense density matrix `self.full_dm`.
+    """
+
     def __init__(self, names=None, density_class=None):
-        """A sparse density matrix for a set of qubits with names `names`.
+        """Initialize a new sparse density matrix object.
 
-        Each qubit can be in a "classical state", where it is in a basis state
-        (i.e. 0 or 1) and not correlated with other qubits, so that the total density matrix
-        can be written as a product state. This is the case after a measurement projection,
-        meaning that a measurement turns a qubit classical.
-
-        If a qubit is not classical, it is quantum, which means that it is part of the
-        full dense density matrix `self.full_dm`.
+        Parameters
+        ----------
+        names : int or list of hashable
+            Names of the qubits. If integer is provided, they will be numbered
+            from 0 to `names - 1`.
+        density_class : one of supported
+            TODO (see documentation)
         """
 
         if density_class is None:
@@ -61,8 +73,9 @@ class SparseDM:
         self._last_majority_vote_mask = None
 
     def ensure_dense(self, bit):
-        """Make sure that the bit is removed from the classical bits and added to the
-        density matrix, do nothing if it is already there. Does not change the state of the system.
+        """Make sure that the bit is removed from the classical bits and added
+        to the density matrix, do nothing if it is already there. Does not
+        change the state of the system.
         """
         if bit not in self.names:
             raise ValueError("ensure_dense: Unknown qubit '{}'.".format(bit))
@@ -77,8 +90,10 @@ class SparseDM:
             self.max_bits_in_full_dm = new_max
 
     def ensure_classical(self, bit, epsilon=1e-7):
-        """Try to make a qubit classical. This only succeeds if the qubit already is classical, or if a measurement
-        returns a definite result with fidelity > (1-epsilon), in which case the measurement is performed with the probable outcome.
+        """Try to make a qubit classical. This only succeeds if the qubit
+        already is classical, or if a measurement returns a definite result
+        with `fidelity > (1-epsilon)`, in which case the measurement is
+        performed with the probable outcome.
         """
         self.combine_and_apply_single_ptm(bit)
         if bit not in self.names:
@@ -92,11 +107,14 @@ class SparseDM:
                 self.project_measurement(bit, 0)
             else:
                 raise ValueError(
-                    "ensure_classical: Impossible to classicalize entangled qubit {}".format(bit))
+                    "ensure_classical: Impossible to classicalize entangled"
+                    " qubit {}".format(bit))
 
     def peak_measurement(self, bit):
-        """Obtain the two partial traces (p0, p1) that define the probabilities for measuring bit in state (0, 1).
-        The state of the system is not changed. Use project_measurement to perform the actual measurement projection.
+        """Obtain the two partial traces `(p0, p1)` that define the
+        probabilities for measuring bit in state `(0, 1)`.  The state of the
+        system is not changed. Use project_measurement to perform the actual
+        measurement projection.
         """
         self.combine_and_apply_single_ptm(bit)
         if bit in self.idx_in_full_dm:
@@ -130,16 +148,20 @@ class SparseDM:
         """Obtain the probabilities for all combinations of a multiple
         qubit measurement.
 
-        bits is a list of qubit names. Return a list with up to `2**len(bits)` tuples of the form
+        bits is a list of qubit names. Return a list with up to `2**len(bits)`
+        tuples of the form
 
-        [(result, probability), ...]
+            [(result, probability), ...]
 
-        where `result` is a dict describing the measurement result {"bit0": 1, "bit2": 0, ...},
-        and `probability` is the corresponding probability.
+        where `result` is a dict describing the measurement result
+        `{"bit0": 1, "bit2": 0, ...}`, and `probability` is the corresponding
+        probability.
 
-        If results are omitted from this list, the corresponding probability is 0.
+        If results are omitted from this list,
+        the corresponding probability is 0.
 
-        Note that these probabilities sum up to the trace of the density matrix, thus are not normalized if previous projections took place.
+        Note that these probabilities sum up to the trace of the density
+        matrix, thus are not normalized if previous projections took place.
         """
 
         for bit in bits:
@@ -181,7 +203,8 @@ class SparseDM:
         return res
 
     def trace(self):
-        """Return the trace of the density matrix, which is the probability for all measurement projections in its history.
+        """Return the trace of the density matrix, which is the probability for
+        all measurement projections in its history.
         """
         return self.classical_probability * self.full_dm.trace()
 
@@ -241,11 +264,14 @@ class SparseDM:
         """Apply the Pauli transfer matrix `ptm` to qubit `bit`.
         `ptm` is a 4x4 real matrix in 0xy1 basis.
 
-        The matrix is NOT immediately applied, but is cached until a 2-qubit gate or measurement acts on this bit.
-        Thus, when several PTMs are applied to a single bit in series, they can be multiplied efficiently before application.
+        The matrix is NOT immediately applied, but is cached until a 2-qubit
+        gate or measurement acts on this bit.  Thus, when several PTMs are
+        applied to a single bit in series, they can be multiplied efficiently
+        before application.
 
-        This behaviour is essentially transparent to the user, except that this means that often sdm.classical still
-        contains the last classical state of the qubit.
+        This behaviour is essentially transparent to the user, except that this
+        means that often sdm.classical still contains the last classical state
+        of the qubit.
         """
         self.single_ptms_to_do[bit].append(ptm)
 
@@ -316,17 +342,28 @@ class SparseDM:
         self.classical[bit] = value
 
     def majority_vote(self, bits):
-        """Return the (total) probability for measuring more than half 1 (or a specified result)
-        when measuring all the given bits. Do not actually perform the measurement.
+        """Return the (total) probability for measuring more than half 1
+        (or a specified result) when measuring all the given bits. Do not
+        actually perform the measurement.
 
-        This is evaluated as Tr(ρ.M) with M a diagonal matrix.
-        The diagonal of M is constructed when needed, then cached and reused when possible.
+        This is evaluated as :math:`\\text{tr}(\\pho\\cdotM)` with :math:`M` a
+        diagonal matrix.  The diagonal of :math:`M` is constructed when needed,
+        then cached and reused when possible.
 
-        bits: any iterable containing bit names, then return the probability for a majority of one measurements.
-              if bits is a dict of the form {bit1: result1, bit2: result2 , ...} with result in {0, 1},
-              return the probabilty for the majority of the measurements coinciding with the given result.
+        Parameters
+        ----------
+
+        bits: iterable of bit names
+            Any iterable containing bit names, then return the probability for
+            a majority of one measurements.  if bits is a dict of the form
+            `{bit1: result1, bit2: result2 , ...}` with result in {0, 1},
+
+        Returns
+        -------
+        float
+            The probabilty for the majority of the measurements coinciding
+            with the given result.
         """
-
         dense_bits = {b for b in bits if b in self.idx_in_full_dm}
 
         for bit in bits:
