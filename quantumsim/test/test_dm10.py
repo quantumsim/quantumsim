@@ -1,9 +1,6 @@
 import numpy as np
 import pytest
 
-import quantumsim.dm_np as dm_np
-import quantumsim.dm_general_np as dm_g_np
-
 import quantumsim.ptm as ptm
 
 # There are two implementations for the backend (on CPU and on GPU)
@@ -47,6 +44,7 @@ def dm_random(request):
     dm = request.param(n, a)
     return dm
 
+
 @pytest.fixture(params=implementations_to_test)
 def dm_random_small(request):
     n = 2
@@ -57,6 +55,7 @@ def dm_random_small(request):
     a = a / np.trace(a)
     dm = request.param(n, a)
     return dm
+
 
 # Test cases begin here
 
@@ -99,7 +98,7 @@ class TestDensityInit:
     def test_wrong_size(self, dmclass):
         n = 10
         a = np.zeros((2**n, 2**n))
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dmclass(n + 1, a)
 
 
@@ -180,10 +179,11 @@ class TestRenormalize:
         assert np.allclose(tr, 1)
         assert np.allclose(a2, a / np.trace(a))
 
+
 class TestDensityCPhase:
 
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.cphase(10, 11)
 
     def test_does_nothing_to_ground_state(self, dm):
@@ -238,10 +238,11 @@ class TestDensityCPhase:
         a1 = dm.to_array()
         assert np.allclose(a0, a1)
 
+
 class TestDensityHadamard:
 
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.hadamard(10)
 
     def test_does_something_to_ground_state(self, dm):
@@ -283,6 +284,7 @@ class TestDensityHadamard:
 
         assert np.allclose(dm.to_array()[0, 0], 1)
 
+
 class TestCnot:
     def test_cnot_groundstate(self, dmclass):
         dm = dmclass(2)
@@ -303,7 +305,6 @@ class TestCnot:
         a = dm.to_array()
         assert np.allclose(np.diagonal(a), [0, 0, 0, 1])
 
-
     def test_cnot_direct_10_to_11(self, dmclass):
         u = [[1, 0, 0, 0],
              [0, 1, 0, 0],
@@ -311,8 +312,7 @@ class TestCnot:
              [0, 0, 1, 0]]
         dm = dmclass(2)
         if hasattr(dm, "dimensions"):
-            cnot_ptm = ptm.double_kraus_to_ptm(np.array(u),
-                    general_basis=True)
+            cnot_ptm = ptm.double_kraus_to_ptm(np.array(u), general_basis=True)
         else:
             cnot_ptm = ptm.double_kraus_to_ptm(np.array(u))
         dm.rotate_x(0, np.pi)
@@ -320,15 +320,16 @@ class TestCnot:
         a = dm.to_array()
         assert np.allclose(np.diagonal(a), [0, 0, 0, 1])
 
+
 class TestDensityRotateX:
 
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.rotate_x(10, 2.3)
 
     def test_does_something_to_ground_state(self, dm):
         a0 = dm.to_array()
-        dm.rotate_x(4, 2.3) 
+        dm.rotate_x(4, 2.3)
 
     def test_excite(self, dmclass):
         dm = dmclass(2)
@@ -356,10 +357,11 @@ class TestDensityRotateX:
 
         assert np.allclose(a0, a1)
 
+
 class TestDensityRotateY:
 
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.rotate_y(10, 2.3)
 
     def test_does_something_to_ground_state(self, dm):
@@ -379,17 +381,18 @@ class TestDensityRotateY:
 
     def test_cubes_to_one(self, dm):
         a0 = dm.to_array()
-        dm.rotate_y(1, 2*np.pi /3 )
-        dm.rotate_y(1, 2*np.pi /3 )
-        dm.rotate_y(1, 2*np.pi /3 )
+        dm.rotate_y(1, 2*np.pi/3)
+        dm.rotate_y(1, 2*np.pi/3)
+        dm.rotate_y(1, 2*np.pi/3)
         a1 = dm.to_array()
 
         assert np.allclose(a0, a1)
 
+
 class TestDensityRotateZ:
 
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.rotate_z(10, 2.3)
 
     def test_does_nothing_to_ground_state(self, dm):
@@ -428,6 +431,7 @@ class TestDensityRotateZ:
 
         assert np.allclose(a0, a1)
 
+
 class TestCommutationXYZ:
 
     def test_excite_deexcite(self, dm):
@@ -464,9 +468,10 @@ class TestCommutationXYZ:
 
         assert np.allclose(a0, a1)
 
+
 class TestDensityAmpPhDamping:
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.amp_ph_damping(10, 0.0, 0.0)
 
     def test_does_nothing_to_ground_state(self, dm):
@@ -496,6 +501,7 @@ class TestDensityAmpPhDamping:
         a2 = dm.to_array()
 
         assert np.allclose(a2[0, 0], 1)
+
 
 class TestDensityAddAncilla:
 
@@ -541,7 +547,6 @@ class TestDensityAddAncilla:
         a2 = dm_random.to_array()
 
         assert np.allclose(a, a2)
-        
 
     @pytest.mark.skip(reason="projection behaviour not the same")
     def test_multiple_add_project(self, dmclass):
@@ -578,18 +583,17 @@ class TestDensityAddAncilla:
         dm.project_measurement(0, 1)
         assert np.allclose(dm.trace(), 1)
 
+
 class TestDensityProjectMeasurement:
     def test_bit_too_high(self, dm):
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             dm.project_measurement(12, 1)
-
 
     def test_project_reduces_no_qubits(self, dm):
         old_no_qubits = dm.no_qubits
 
         dm.project_measurement(0, 0)
         assert dm.no_qubits == old_no_qubits - 1
-
 
     def test_measure_on_gs_gives_gs(self, dm):
         dm.project_measurement(3, 0)
@@ -640,5 +644,3 @@ class TestDensityProjectMeasurement:
         p0, p1 = dm.partial_trace(2)
         assert np.allclose(p1, 0)
         assert np.allclose(p0, 1)
-
-

@@ -22,8 +22,6 @@ from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 import sys
 import os
 
-import warnings
-
 package_path = os.path.dirname(os.path.realpath(__file__))
 
 mod = None
@@ -54,40 +52,52 @@ _multitake.prepare("PPPPPPI")
 
 sum_along_axis = pycuda.reduction.ReductionKernel(
         dtype_out=np.float64,
-        neutral = "0", reduce_expr="a+b",
-        map_expr= "(i/stride) % dim == offset ? in[i] : 0",
-        arguments = "const double *in, unsigned int stride, unsigned int dim, unsigned int offset"
+        neutral="0", reduce_expr="a+b",
+        map_expr="(i/stride) % dim == offset ? in[i] : 0",
+        arguments="const double *in, unsigned int stride, unsigned int dim, "
+                  "unsigned int offset"
         )
+
 
 class DensityGeneral:
     _gpuarray_cache = {}
 
     def __init__(self, bases, data=None):
+        """Create a new density matrix for several qudits.
+
+        Parameters
+        ----------
+
+        bases : a list of :class:`ptm.PauliBasis`
+            A descrption of the basis for the subsystems.
+
+        data : :class:`numpy.ndarray`, :class:`pycuda.gpuarray.array`,\
+        :class:`pycuda.driver.DeviceAllocation`, or `None`.
+            Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if
+            not already there.  Only upper triangle is relevant.  If data is
+            `None`, create a new density matrix with all qubits in ground
+            state.
         """
-        Create a new density matrix for several qudits.
-
-        bases: a list of ptm.PauliBasis describing the subsystems.
-
-        data: a numpy.ndarray, gpuarray.array, or pycuda.driver.DeviceAllocation.
-              must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if not already there.
-              Only upper triangle is relevant.
-              If data is None, create a new density matrix with all qubits in ground state.
-        """
-
         self.bases = bases
 
         shape = tuple([pb.dim_pauli for pb in self.bases])
 
         if isinstance(data, ga.GPUArray):
-            assert shape == data.shape
+            if shape != data.shape:
+                raise ValueError(
+                    "`bases` Pauli dimensionality should be the same as the "
+                    "shape of `data` array.\n"
+                    "bases shapes: {}, data shape: {}"
+                    .format(shape, data.shape))
             self.data = data
         elif data is None:
             self.data = np.zeros(shape, np.float64)
-            ground_state_index = [pb.comp_basis_indices[0] for pb in self.bases]
+            ground_state_index = [pb.comp_basis_indices[0]
+                                  for pb in self.bases]
             self.data[tuple(ground_state_index)] = 1
             self.data = ga.to_gpu(self.data)
         else:
-            raise ValueError("type of data not understood")
+            raise ValueError("Unknown type of `data`: {}".format(type(data)))
 
         self.data.gpudata.size = self.data.nbytes
         self._work_data = ga.empty_like(self.data)
@@ -119,7 +129,6 @@ class DensityGeneral:
             a = v.get().tobytes()
             assert hash(a) == k
 
-
     def trace(self):
         # todo there is a smarter way of doing this with pauli-dirac basis
         return np.sum(self.get_diag())
@@ -130,28 +139,32 @@ class DensityGeneral:
         self.data *= np.float(1 / tr)
 
     def copy(self):
-        "Return a deep copy of this Density."
+        """Return a deep copy of this Density."""
         data_cp = self.data.copy()
         cp = DensityGeneral(self.bases, data=data_cp)
         return cp
 
     def to_array(self):
-        "Return the entries of the density matrix as a dense numpy ndarray."
+        """Return the entries of the density matrix as a dense numpy ndarray.
+        """
         dimensions = [2]*self.no_qubits
 
-        host_dm = dm_general_np.DensityGeneralNP(dimensions,
-                data=self.data.get()).to_array()
+        host_dm = dm_general_np.DensityGeneralNP(
+            dimensions, data=self.data.get()).to_array()
 
         return host_dm
 
     def get_diag(self, target_gpu_array=None, get_data=True, flatten=True):
-        """
-        Obtain the diagonal of the density matrix.
+        """Obtain the diagonal of the density matrix.
 
-        target_gpu_array: an already-allocated gpu array to which the data will be copied.
-                          If None, make a new gpu array.
+        Parameters
+        ----------
+        target_gpu_array : `None` or `pycuda.gpuarray.array`
+            An already-allocated GPU array to which the data will be copied.
+            If `None`, make a new GPU array.
 
-        get_data: boolean, whether the data should be copied from the gpu.
+        get_data: boolean
+            Whether the data should be copied from the gpu.
         """
 
         diag_bases = [pb.get_classical_subbasis() for pb in self.bases]
@@ -165,13 +178,16 @@ class DensityGeneral:
                 self._work_data.gpudata.size = self._work_data.nbytes
             target_gpu_array = self._work_data
         else:
-            assert target_gpu_array.size >= diag_size
+            if target_gpu_array.size < diag_size:
+                raise ValueError(
+                    "Size of `target_gpu_array` is too small ({}).\n"
+                    "Should be at least {}."
+                    .format(target_gpu_array.size, diag_size))
 
         idx = [[pb.comp_basis_indices[i]
                 for i in range(pb.dim_hilbert)
                 if pb.comp_basis_indices[i] is not None]
-                for pb in self.bases
-                ]
+               for pb in self.bases]
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
         idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
@@ -204,25 +220,35 @@ class DensityGeneral:
 
         if get_data:
             if flatten:
-                return target_gpu_array.get().ravel()[:diag_size]
+                return (target_gpu_array.get()
+                        .ravel()[:diag_size])
             else:
-                return target_gpu_array.get().ravel()[:diag_size].reshape(diag_shape)
+                return (target_gpu_array.get()
+                        .ravel()[:diag_size]
+                        .reshape(diag_shape))
         else:
-            return ga.GPUArray(shape=diag_shape, gpudata=target_gpu_array.gpudata, dtype=np.float64)
-
+            return ga.GPUArray(shape=diag_shape,
+                               gpudata=target_gpu_array.gpudata,
+                               dtype=np.float64)
 
     def apply_two_ptm(self, bit0, bit1, ptm, new_basis=None):
+        """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
+
+        Parameters
+        ----------
+        ptm: 4D array
+            A two-qubit ptm in the basis of `bit0` and `bit1`.
+        bit0 : int
+            Index of first qubit
+        bit1: int
+            Index of second qubit
         """
-        Apply a two-qubit Pauli transfer matrix to qubit bit0 and bit1.
 
-        ptm: np.array, a two-qubit ptm in the basis of bit0 and bit1
-        bit0, bit1: integer indices
-        """
-
-        assert 0 <= bit0 < len(self.bases)
-        assert 0 <= bit1 < len(self.bases)
-
-        assert len(ptm.shape) == 4
+        self._validate_bit(bit0, 'bit0')
+        self._validate_bit(bit1, 'bit1')
+        if len(ptm.shape) != 4:
+            raise ValueError(
+                "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
 
         # bit1 must be the more significant bit (bit 0 is msb)
         if bit1 > bit0:
@@ -259,7 +285,6 @@ class DensityGeneral:
 
         # dint = max(min(16, self.data.size//(dim1_out*dim0_out)), 1)
 
-
         rest_shape = new_shape.copy()
         rest_shape[bit0] = 1
         rest_shape[bit1] = 1
@@ -274,25 +299,25 @@ class DensityGeneral:
         # dim_a_out, dim_b_out, d_internal (arbitrary)
         block = (dim1_out, dim0_out, dint)
         blocksize = dim0_out*dim1_out*dint
-        sh_mem_size = dint*dim0_in*dim1_in #+ ptm.size
+        sh_mem_size = dint*dim0_in*dim1_in  # + ptm.size
         gridsize = max(1, (new_size-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
         dim_z = pytools.product(self.data.shape[bit0+1:])
         dim_y = pytools.product(self.data.shape[bit1+1:bit0])
-        dim_rho = new_size #self.data.size
+        dim_rho = new_size  # self.data.size
 
-        _two_qubit_general_ptm.prepared_call(grid,
-                                     block,
-                                     self.data.gpudata,
-                                     self._work_data.gpudata,
-                                     ptm_gpu.gpudata,
-                                     dim1_in, dim0_in,
-                                     dim_z,
-                                     dim_y,
-                                     dim_rho,
-                                     shared_size=8*sh_mem_size
-                                     )
+        _two_qubit_general_ptm.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            self._work_data.gpudata,
+            ptm_gpu.gpudata,
+            dim1_in, dim0_in,
+            dim_z,
+            dim_y,
+            dim_rho,
+            shared_size=8*sh_mem_size)
 
         self.data, self._work_data = self._work_data, self.data
 
@@ -300,18 +325,24 @@ class DensityGeneral:
             self.bases[bit0] = new_basis[0]
             self.bases[bit1] = new_basis[1]
 
-
     def apply_ptm(self, bit, ptm, new_basis=None):
         """
         Apply a one-qubit Pauli transfer matrix to qubit bit.
 
-        ptm: np.array, a ptm in the basis of bit.
-        bit: integer qubit index
+        Parameters
+        ----------
+        ptm: 2D array
+            A PTM in the basis of bit.
+        bit: int
+            Qubit index
         """
 
         new_shape = list(self.data.shape)
-        assert len(ptm.shape) == 2
-        assert 0 <= bit < len(self.bases)
+        self._validate_bit(bit, 'bit')
+        # TODO Refactor to use self._validate_ptm
+        if len(ptm.shape) != 2:
+            raise ValueError(
+                "`ptm` must be a 2D array, got {}D".format(len(ptm.shape)))
         dim_bit_out, dim_bit_in = ptm.shape
         new_shape[bit] = dim_bit_out
         assert new_shape[bit] == dim_bit_out
@@ -342,19 +373,19 @@ class DensityGeneral:
 
         dim_z = pytools.product(self.data.shape[bit+1:])
         dim_y = pytools.product(self.data.shape[:bit])
-        dim_rho = new_size #self.data.size
+        dim_rho = new_size  # self.data.size
 
-        _two_qubit_general_ptm.prepared_call(grid,
-                                     block,
-                                     self.data.gpudata,
-                                     self._work_data.gpudata,
-                                     ptm_gpu.gpudata,
-                                     1, dim_bit_in,
-                                     dim_z,
-                                     dim_y,
-                                     dim_rho,
-                                     shared_size=8 * (ptm.size + blocksize)
-                                     )
+        _two_qubit_general_ptm.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            self._work_data.gpudata,
+            ptm_gpu.gpudata,
+            1, dim_bit_in,
+            dim_z,
+            dim_y,
+            dim_rho,
+            shared_size=8 * (ptm.size + blocksize))
 
         self.data, self._work_data = self._work_data, self.data
 
@@ -362,9 +393,7 @@ class DensityGeneral:
             self.bases[bit] = new_basis
 
     def add_ancilla(self, basis, state):
-        """
-        add an ancilla with `basis` and with state state.
-        """
+        """Add an ancilla with `basis` and with state state."""
 
         # TODO: express in terms off `apply_ptm`
 
@@ -404,38 +433,37 @@ class DensityGeneral:
         gridsize = max(1, (new_size_bytes//8-1)//blocksize+1)
         grid = (gridsize, 1, 1)
 
-        dim_z = self.data.size #1
+        dim_z = self.data.size  # 1
         dim_y = 1
-        dim_rho = new_size #self.data.size
+        dim_rho = new_size  # self.data.size
 
-
-        _two_qubit_general_ptm.prepared_call(grid,
-                                     block,
-                                     self.data.gpudata,
-                                     self._work_data.gpudata,
-                                     ptm_gpu.gpudata,
-                                     1, 1,
-                                     dim_z,
-                                     dim_y,
-                                     dim_rho,
-                                     shared_size=8 * (ptm.size + blocksize)
-                                     )
+        _two_qubit_general_ptm.prepared_call(
+            grid,
+            block,
+            self.data.gpudata,
+            self._work_data.gpudata,
+            ptm_gpu.gpudata,
+            1, 1,
+            dim_z,
+            dim_y,
+            dim_rho,
+            shared_size=8 * (ptm.size + blocksize)
+        )
 
         self.data, self._work_data = self._work_data, self.data
         self.bases = [basis] + self.bases
 
-
     def partial_trace(self, bit):
+        """ Return the diagonal of the reduced density matrix of a qubit.
+
+        Parameters
+        ----------
+        bit: int
+            Index of the qubit.
         """
-        Return the diagonal of the reduced density matrix of a qubit.
+        self._validate_bit(bit, 'bit')
 
-        bit: integer index of the bit
-        """
-
-        assert 0 <= bit < len(self.bases)
-
-        # todo on graphics card, optimize for tracing out?
-
+        # TODO on graphics card, optimize for tracing out?
         diag = self.get_diag(get_data=False)
 
         res = []
@@ -447,27 +475,27 @@ class DensityGeneral:
 
         return [p.get() for p in res]
 
-
     def project_measurement(self, bit, state, lazy_alloc=True):
-        """
-        Remove a qubit from the density matrix by projecting
+        """Remove a qubit from the density matrix by projecting
         on a computational basis state.
 
-        bit: which bit to project
-        state: which state in the Hilbert space to project on
-        lazy_alloc: bool. If True, do not allocate a smaller space
-        for the new matrix, instead leave it at the same size as now,
-        in anticipation of a future increase in size.
+        bit: int
+            Which bit to project.
+        state: int
+            Which state in the Hilbert space to project on
+        lazy_alloc: boolean
+            If True, do not allocate a smaller space for the new matrix,
+            instead leave it at the same size as now, in anticipation of a
+            future increase in size.
         """
-
-        assert 0 <= bit < len(self.bases)
+        self._validate_bit(bit, 'bit')
 
         new_shape = list(self.data.shape)
         new_shape[bit] = 1
 
         new_size_bytes = self.data.nbytes//self.bases[bit].dim_pauli
 
-        # TODO hacky as fuck: put the allocated size into the allocation by hand
+        # TODO hack: put the allocated size into the allocation by hand
         if self._work_data.gpudata.size < new_size_bytes or not lazy_alloc:
             # reallocate
             self._work_data.gpudata.free()
@@ -483,14 +511,12 @@ class DensityGeneral:
                     )
 
         idx = []
-        # todo: can be built more efficiently
-
+        # TODO: can be built more efficiently
         for i, pb in enumerate(self.bases):
             if i == bit:
                 idx.append([pb.comp_basis_indices[state]])
             else:
                 idx.append(list(range(pb.dim_pauli)))
-
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
         idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
@@ -521,6 +547,14 @@ class DensityGeneral:
 
         subbase_idx = [self.bases[bit].comp_basis_indices[state]]
         self.bases[bit] = self.bases[bit].get_subbasis(subbase_idx)
+
+    def _validate_bit(self, number, name):
+        if number < 0 or number >= len(self.bases):
+            raise ValueError(
+                "`{name}` number {n} does not exist in the system, "
+                "it contains {n_qubits} qubits in total."
+                .format(name=name, n=number, n_qubits=len(self.bases)))
+
 
 class DensityGeneralShim(DensityGeneral):
     """A subclass of Density that uses general_two_qubit_ptm as a backend,
@@ -566,12 +600,8 @@ class DensityGeneralShim(DensityGeneral):
         # old style bits are labelled 0 -> lsb,
         # new style bits are labelled 0 -> msb,
         # and we ignore bases of length 1
-
-        assert 0 <= bit < self.no_qubits
-
-        alive_idx = [i for i, pb in enumerate(self.bases)
-                if pb.dim_pauli == 4]
-
+        self._validate_bit(bit, 'bit')
+        alive_idx = [i for i, pb in enumerate(self.bases) if pb.dim_pauli == 4]
         return self.no_qubits - alive_idx[bit] - 1
 
     def cphase(self, bit0, bit1):
@@ -602,14 +632,28 @@ class DensityGeneralShim(DensityGeneral):
         return super().partial_trace(bit)
 
     def apply_two_ptm(self, bit0, bit1, ptm):
-        assert ptm.shape == (16, 16)
+        self._validate_ptm_shape(ptm, (16, 16), 'ptm')
         bit0 = self.translate_bit(bit0)
         bit1 = self.translate_bit(bit1)
-        ptm = ptm.reshape(4,4,4,4)
+        ptm = ptm.reshape(4, 4, 4, 4)
         super().apply_two_ptm(bit0, bit1, ptm)
 
     def apply_ptm(self, bit, ptm):
-        assert ptm.shape == (4,4)
+        self._validate_ptm_shape(ptm, (4, 4), 'ptm')
         bit = self.translate_bit(bit)
         super().apply_ptm(bit, ptm)
 
+    def _validate_bit(self, number, name):
+        if number < 0 or number >= self.no_qubits:
+            raise ValueError(
+                "`{name}` number {n} does not exist in the system, "
+                "it contains {n_qubits} qubits in total."
+                .format(name=name, n=number, n_qubits=self.no_qubits))
+
+    def _validate_ptm_shape(self, ptm, target_shape, name):
+        if ptm.shape != target_shape:
+            raise ValueError(
+                "`{name}` shape must be {target_shape}, got {real_shape}"
+                .format(name=name,
+                        target_shape=target_shape,
+                        real_shape=ptm.shape))

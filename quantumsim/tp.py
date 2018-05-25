@@ -5,27 +5,29 @@
 
 
 def partial_greedy_toposort(partial_orders, targets=set()):
-    """Given a list of partial orders [p1, p2, ...] of hashable items pi = [a_i0, a_i1, ...],
-    representing the constraints
+    """Given a list of partial orders `[p1, p2, ...]` of hashable items
+    pi = [a_i0, a_i1, ...], representing the constraints
 
         a_i0 < a_i1 < ...
 
-    construct a total ordering P: i0 < i1 < i2 < ...
+    construct a total ordering
 
-    Some of the lists are denoted as target,
-    and the ordering is chosen so that the number of overlaps between target lists is minimized, i.e.
+        P: i0 < i1 < i2 < ...
+
+    Some of the lists are denoted as target, and the ordering is chosen so
+    that the number of overlaps between target lists is minimized, i.e.
     if p1 and p2 are targets, try to prevent
 
-    a_10 < a_20 < a_1n < a_2n.
+        a_10 < a_20 < a_1n < a_2n.
 
     This is done by a greedy algorithm.
 
-    Parameters:
+    Parameters
+    ----------
 
-        partial_order: lists of lists of items, representing partial sequences
-        targets: list of indices into partial_order, signifying which lists are targets
-
-
+    partial_order: lists of lists of items
+        Represents partial sequences targets: list of indices into
+        partial_order, signifying which lists are targets
     """
 
     targets = set(targets)

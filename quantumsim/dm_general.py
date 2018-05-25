@@ -28,7 +28,7 @@ for kernel_file in [
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
-                kernel_source_file.read(), options=DEFAULT_NVCC_FLAG+[
+                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS+[
                     "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
@@ -67,14 +67,21 @@ class Density:
     _ptm_cache = {}
 
     def __init__(self, dimensions, data=None):
-        """A density matrix for several subsystems, where the dimension of each subsystem can be chosen.
+        """A density matrix for several subsystems, where the dimension of
+        each subsystem can be chosen.
 
-        dimensions = list of ints, dimension. len(dimensions) is the number of qubits.
+        Parameters
+        ----------
 
-        data: a numpy.ndarray, gpuarray.array, or pycuda.driver.DeviceAllocation.
-              must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if not already there.
-              Only upper triangle is relevant.
-              If data is None, create a new density matrix with all qubits in ground state.
+        dimensions : list of ints
+            Dimension of each qubit. `len(dimensions)` is the number of qubits.
+
+        data: :class:`numpy.ndarray`, :class:`pycuda.gpuarray.array`,\
+        :class:`pycuda.driver.DeviceAllocation` or `None`
+            Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU
+            if not already there.  Only upper triangle is relevant.
+            If `data` is `None`, create a new density matrix with all qubits
+            in ground state.
         """
 
         # two gpuarrays to allocate regions on the GPU
@@ -113,13 +120,13 @@ class Density:
         self.data *= np.float(1 / tr)
 
     def copy(self):
-        "Return a deep copy of this Density."
+        """Return a deep copy of this Density."""
         data_cp = self.data.copy()
         cp = Density(self.dimensions, data=data_cp)
         return cp
 
     def to_array(self):
-        "Return the entries of the density matrix as a dense numpy ndarray."
+        """Return the entries of the density matrix as a dense numpy array."""
 
         return self.data.get()
 
@@ -140,28 +147,22 @@ class Density:
 
         return self.diag_work.get()
 
-
     def multi_basis_project(self, selector):
-        """
-        Perform a projection to a cartesian subbasis on many
-        axes at the same time. (Essentially slicing).
+        """Perform a projection to a cartesian subbasis on many axes at the
+        same time. (Essentially slicing).
 
         Generalization of the get_diag method.
         """
 
-
-
-
     def apply_two_ptm(self, bit0, bit1, ptm):
-        assert bit0 < self.no_qubits
-        assert bit1 < self.no_qubits
+        self._validate_bit(bit0, 'bit0')
+        self._validate_bit(bit1, 'bit1')
 
         key = hash(ptm.tobytes())
         try:
             ptm_gpu = self._ptm_cache[key]
         except KeyError:
-            assert ptm.shape == (16, 16)
-            assert ptm.dtype == np.float64
+            self._validate_ptm(ptm, (16, 16), 'ptm')
             self._ptm_cache[key] = ga.to_gpu(ptm)
             ptm_gpu = self._ptm_cache[key]
 
@@ -178,9 +179,9 @@ class Density:
                                      shared_size=8 * (256 + self._blocksize))
 
     def add_ancilla(self, anc_st, anc_dim):
-        """Add an ancilla in the ground or excited state as the highest new bit.
+        """Add an ancilla in the ground or excited state as the highest new
+        bit.
         """
-
         byte_size_of_smaller_dm = 2**(2 * self.no_qubits) * 8
 
         if self.allocated_qubits == self.no_qubits:
@@ -194,18 +195,20 @@ class Density:
         else:
             # reuse previously allocated memory
             if anc_st == 0:
-                drv.memset_d8(int(self.data.gpudata) + byte_size_of_smaller_dm,
-                              0, 3 * byte_size_of_smaller_dm)
+                drv.memset_d8(
+                    int(self.data.gpudata) + byte_size_of_smaller_dm,
+                    0, 3 * byte_size_of_smaller_dm)
             if anc_st == 1:
-                drv.memcpy_dtod(int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
-                                self.data.gpudata, byte_size_of_smaller_dm)
+                drv.memcpy_dtod(
+                    int(self.data.gpudata) + 3 * byte_size_of_smaller_dm,
+                    self.data.gpudata, byte_size_of_smaller_dm)
                 drv.memset_d8(self.data.gpudata, 0, 3 *
                               byte_size_of_smaller_dm)
 
         self._set_no_qubits(self.no_qubits + 1)
 
     def partial_trace(self, bit):
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
         if self.no_qubits > 10:
             raise NotImplementedError(
                 "Trace not implemented for more than 10 qubits yet")
@@ -234,7 +237,7 @@ class Density:
         return tr0, tr1
 
     def project_measurement(self, bit, state):
-        assert bit < self.no_qubits
+        self._validate_bit(bit, 'bit')
 
         block = (self._blocksize, 1, 1)
         grid = (self._gridsize, 1, 1)
@@ -256,3 +259,24 @@ class Density:
         self._set_no_qubits(self.no_qubits - 1)
 
         return self
+
+    def _validate_bit(self, number, name):
+        if number < 0 or number >= self.no_qubits:
+            raise ValueError(
+                "`{name}` number {n} does not exist in the system, "
+                "it contains {n_qubits} qubits in total."
+                .format(name=name, n=number, n_qubits=self.no_qubits))
+
+    def _validate_ptm(self, ptm, target_shape, name):
+        if ptm.shape != target_shape:
+            raise ValueError(
+                "`{name}` shape must be {target_shape}, got {real_shape}"
+                .format(name=name,
+                        target_shape=target_shape,
+                        real_shape=ptm.shape))
+        if ptm.dtype != np.float64:
+            raise ValueError(
+                "`{name}` dtype must be {target_dtype}, got {real_dtype}"
+                .format(name=name,
+                        target_dtype=np.float64,
+                        real_dtype=ptm.dtype))

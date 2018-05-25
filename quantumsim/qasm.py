@@ -72,22 +72,31 @@ def dropnil(lst):
 
 
 class QASMParser(parsimonious.NodeVisitor):
-    """
-    Class to generate circuits from a qasm file
-
-    qubit_parameters is a dictionary defining the qubit properties:
-        qubit_parameters = {qubit_name: qubit_pars, ...}
-
-    where
-
-        qubit_pars.keys() == ['t1', 't2', 'frac_1_0', 'frac_1_1']
-
-    dt gives gate timings:
-        dt = (single_qubit_gate_time, two_qubit_gate_time)
-    """
-
     def __init__(self, qubit_parameters, timegrid=20,
                  gate_1_step=1, gate_2_step=5):
+        """Class to generate circuits from a qasm file.
+
+        Parameters
+        ----------
+        qubit_parameters : dict
+            A dictionary defining the qubit properties:
+
+            >>> qubit_parameters = {qubit_name: qubit_pars, ...}`
+
+            where
+
+            >>> qubit_pars.keys() == ['t1', 't2', 'frac_1_0', 'frac_1_1']
+
+        timegrid : float
+            TODO
+
+        gate_1_step : float
+            TODO
+
+        gate_2_step : float
+            TODO
+        """
+
 
         self.grammar = qasm_grammar
         self.lines = []
@@ -106,7 +115,7 @@ class QASMParser(parsimonious.NodeVisitor):
             num_qubits = int(children[1])
             for i in range(num_qubits):
                 self.qubit_names.append("q" + str(i))
-        except ValueError as e:
+        except ValueError:
             raise Exception(
                 "Argument must be a number at 'qubits '" +
                 children[1])
