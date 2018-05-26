@@ -858,6 +858,8 @@ class Measurement(Gate):
             self.sampler = uniform_sampler()
         next(self.sampler)
         self.measurements = []
+        self.probabilities = []
+        self.projects = []
 
     def plot_gate(self, ax, coords):
         super().plot_gate(ax, coords)
@@ -894,9 +896,10 @@ class Measurement(Gate):
     def apply_to(self, sdm):
         bit = self.bit
         p0, p1 = sdm.peak_measurement(bit)
+        self.probabilities.append([p0, p1])
 
         declare, project, cond_prob = self.sampler.send((p0, p1))
-
+        self.projects.append(project)
         self.measurements.append(declare)
         if self.output_bit:
             sdm.set_bit(self.output_bit, declare)
