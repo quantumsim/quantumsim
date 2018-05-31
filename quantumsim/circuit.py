@@ -13,6 +13,7 @@ from . import ptm
 
 import functools
 import copy
+import warnings
 
 
 class Qubit:
