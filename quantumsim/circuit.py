@@ -1374,13 +1374,20 @@ def selection_sampler(result=0):
         yield result, result, 1
 
 
-def uniform_sampler(seed=42):
+def uniform_sampler(state=None, seed=None):
     """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
     is defined by the seed; you should never use two samplers with the same seed in one circuit.
 
     See also: Measurement
     """
-    rng = np.random.RandomState(seed)
+
+    if state is None:
+        if seed is None:
+            warnings.warn('No seed specified, running with system time.')
+        self.rng = np.random.RandomState(seed=seed)
+    else:
+        self.rng = random_state
+
     primers_nones = yield
     while not primers_nones:
         primers_nones = yield
@@ -1393,14 +1400,20 @@ def uniform_sampler(seed=42):
             p0, p1 = yield 1, 1, 1
 
 
-def uniform_noisy_sampler(readout_error, seed=42):
+def uniform_noisy_sampler(readout_error, state=None, seed=None):
     """A sampler using natural Monte Carlo sampling and including the possibility of
     declaring the wrong measurement result with probability `readout_error`
     (now allows asymmetry)
 
     See also: Measurement
     """
-    rng = np.random.RandomState(seed)
+    if state is None:
+        if seed is None:
+            warnings.warn('No seed specified, running with system time.')
+        self.rng = np.random.RandomState(seed=seed)
+    else:
+        self.rng = random_state
+
     if not type(readout_error) in [list, tuple]:
         readout_error = [readout_error, readout_error]
     primers_nones = yield
@@ -1420,7 +1433,11 @@ def uniform_noisy_sampler(readout_error, seed=42):
         else:
             decl = proj
             prob = 1 - readout_error[proj]
-        p0, p1 = yield decl, proj, prob
+
+        ps = yield decl, proj, prob
+        while not ps:
+            ps = yield
+        p0, p1 = ps
 
 
 class BiasedSampler:
@@ -1430,13 +1447,19 @@ class BiasedSampler:
     All the class does is to store the product of all p_twiddles for renormalisation purposes
     '''
 
-    def __init__(self, readout_error, alpha, seed=42):
+    def __init__(self, readout_error, alpha, state=None, seed=None):
         '''
         @alpha: number between 0 and 1 for renormalisation purposes.
         '''
         self.alpha = alpha
         self.p_twiddle = 1
-        self.rng = np.random.RandomState(seed)
+
+        if state is None:
+            if seed is None:
+                warnings.warn('No seed specified, running with system time.')
+            self.rng = np.random.RandomState(seed=seed)
+        else:
+            self.rng = random_state
 
         self.readout_error = readout_error
         ro_temp = readout_error ** self.alpha
