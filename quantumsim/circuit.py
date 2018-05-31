@@ -1385,9 +1385,9 @@ def uniform_sampler(state=None, seed=None):
     if state is None:
         if seed is None:
             warnings.warn('No seed specified, running with system time.')
-        self.rng = np.random.RandomState(seed=seed)
+        rng = np.random.RandomState(seed=seed)
     else:
-        self.rng = random_state
+        rng = state
 
     primers_nones = yield
     while not primers_nones:
@@ -1411,9 +1411,9 @@ def uniform_noisy_sampler(readout_error, state=None, seed=None):
     if state is None:
         if seed is None:
             warnings.warn('No seed specified, running with system time.')
-        self.rng = np.random.RandomState(seed=seed)
+        rng = np.random.RandomState(seed=seed)
     else:
-        self.rng = random_state
+        rng = state
 
     if not type(readout_error) in [list, tuple]:
         readout_error = [readout_error, readout_error]
@@ -1460,7 +1460,7 @@ class BiasedSampler:
                 warnings.warn('No seed specified, running with system time.')
             self.rng = np.random.RandomState(seed=seed)
         else:
-            self.rng = random_state
+            self.rng = state
 
         self.readout_error = readout_error
         ro_temp = readout_error ** self.alpha
@@ -1478,7 +1478,6 @@ class BiasedSampler:
 
         if ps is None:
             return None
-
 
         p0, p1 = ps
 
