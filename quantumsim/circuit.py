@@ -38,6 +38,7 @@ class Qubit:
         assert start_time < end_time
         time = (start_time + end_time) / 2
         duration = end_time - start_time
+
         if self.t1 is np.inf and self.t2 is np.inf:
             return None
         else:
@@ -226,6 +227,28 @@ class Hadamard(SinglePTMGate):
         """
         super().__init__(bit, time, ptm.hadamard_ptm(), **kwargs)
         self.label = r"$H$"
+
+
+class ResidualExcitationGate(SinglePTMGate):
+
+    def __init__(
+            self,
+            bit,
+            time,
+            population,
+            **kwargs):
+        '''
+        A gate that incoherently excites 0 towards 1
+        '''
+        p = np.array([
+            [1, 0, 0, 0],
+            [0, np.sqrt(1 - population), 0, 0],
+            [0, 0, np.sqrt(1 - population), 0],
+            [-population, 0, 0, 1 - population]]
+        )
+        p = ptm.to_0xy1_basis(ptm)
+
+        super().__init__(bit, time, p, **kwargs)
 
 
 class RotateX(SinglePTMGate):
