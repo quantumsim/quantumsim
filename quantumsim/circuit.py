@@ -916,11 +916,14 @@ class ResetGate(SinglePTMGate):
     def __init__(self, bit, time, population, **kwargs):
         p = ptm.gen_amp_damping_ptm(gamma_down=1-population,
                                     gamma_up=population)
+        if population > 0.5:
+            state = 1
+        else:
+            state = 0
 
         super().__init__(bit, time, p, **kwargs)
         self.state = state
         self.label = "-> {}".format(state)
-        self.is_measurement = True
 
 
 class ConditionalGate(Gate):
