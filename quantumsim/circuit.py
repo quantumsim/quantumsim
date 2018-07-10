@@ -229,28 +229,6 @@ class Hadamard(SinglePTMGate):
         self.label = r"$H$"
 
 
-class ResidualExcitationGate(SinglePTMGate):
-
-    def __init__(
-            self,
-            bit,
-            time,
-            population,
-            **kwargs):
-        '''
-        A gate that incoherently excites 0 towards 1
-        '''
-        p = np.array([
-            [1, 0, 0, 0],
-            [0, np.sqrt(1 - population), 0, 0],
-            [0, 0, np.sqrt(1 - population), 0],
-            [-population, 0, 0, 1 - population]]
-        )
-        p = ptm.to_0xy1_basis(ptm)
-
-        super().__init__(bit, time, p, **kwargs)
-
-
 class RotateX(SinglePTMGate):
 
     def __init__(
@@ -935,20 +913,14 @@ class Measurement(Gate):
 
 class ResetGate(SinglePTMGate):
 
-    def __init__(self, bit, time, state=0, **kwargs):
-        if state == 0:
-            p = ptm.gen_amp_damping_ptm(gamma_down=1, gamma_up=0)
-        if state == 1:
-            p = ptm.gen_amp_damping_ptm(gamma_down=0, gamma_up=1)
+    def __init__(self, bit, time, population, **kwargs):
+        p = ptm.gen_amp_damping_ptm(gamma_down=1-population,
+                                    gamma_up=population)
 
         super().__init__(bit, time, p, **kwargs)
         self.state = state
         self.label = "-> {}".format(state)
         self.is_measurement = True
-
-    def apply_to(self, sdm):
-        super().apply_to(sdm)
-        sdm.project_measurement(self.involved_qubits[-1], self.state)
 
 
 class ConditionalGate(Gate):
