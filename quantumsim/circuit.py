@@ -913,14 +913,18 @@ class Measurement(Gate):
 
 class ResetGate(SinglePTMGate):
 
-    def __init__(self, bit, time, population, **kwargs):
+    def __init__(self, bit, time, population=0, *, state=None, **kwargs):
+        if state is not None:
+            warnings.warn('`state` keyword argument is deprecated,'
+                          ' please use `population`', DeprecationWarning)
+            population = state
+        elif population > 0.5:
+            state=1
+        else:
+            state=0
+
         p = ptm.gen_amp_damping_ptm(gamma_down=1-population,
                                     gamma_up=population)
-        if population > 0.5:
-            state = 1
-        else:
-            state = 0
-
         super().__init__(bit, time, p, **kwargs)
         self.state = state
         self.label = "-> {}".format(state)
