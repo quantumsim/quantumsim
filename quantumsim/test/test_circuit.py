@@ -49,11 +49,13 @@ class TestCircuit:
         rotate_backwards = circuit.RotateY("A", time=20, angle=np.pi / 2)
 
         conditional_rotate1 = circuit.ConditionalGate(
-            control_bit="SA", time=20, zero_gates=[rotate_normal], one_gates=[])
+            control_bit="SA", time=20, zero_gates=[rotate_normal],
+            one_gates=[])
         c.add_gate(conditional_rotate1)
 
         conditional_rotate2 = circuit.ConditionalGate(
-            control_bit="SA", time=30, zero_gates=[], one_gates=[rotate_backwards])
+            control_bit="SA", time=30, zero_gates=[],
+            one_gates=[rotate_backwards])
         c.add_gate(conditional_rotate2)
 
         sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, seed=43)
@@ -150,10 +152,10 @@ class TestCircuit:
 
     def test_add_no_waiting_classical_bit(self):
         c = circuit.Circuit()
-    
+
         qa = circuit.ClassicalBit("A")
 
-        c.add_qubit(qa)  
+        c.add_qubit(qa)
         c.add_qubit("B", np.inf, np.inf)
         c.add_qubit("C", 10, 10)
 
@@ -175,7 +177,8 @@ class TestCircuit:
         c.add_gate(circuit.Hadamard("A", 0))
         c.add_gate(circuit.Hadamard("A", 10))
 
-        c.add_gate(circuit.Measurement("A", 20, sampler=None))
+        with pytest.warns(UserWarning):
+            c.add_gate(circuit.Measurement("A", 20, sampler=None))
 
         c.add_waiting_gates()
 
@@ -393,13 +396,15 @@ class TestAmpPhDamping:
 class TestMeasurement:
 
     def test_init(self):
-        m = circuit.Measurement("A", 0, sampler=None)
+        with pytest.warns(UserWarning):
+            m = circuit.Measurement("A", 0, sampler=None)
         assert m.is_measurement
         assert m.involves_qubit("A")
         assert m.time == 0
 
     def test_apply_with_uniform_sampler(self):
-        m = circuit.Measurement("A", 0, sampler=None)
+        with pytest.warns(UserWarning):
+            m = circuit.Measurement("A", 0, sampler=None)
 
         sdm = MagicMock()
         sdm.peak_measurement = MagicMock(return_value=(0, 1))
@@ -447,7 +452,8 @@ class TestMeasurement:
         sdm.project_measurement.assert_called_once_with("A", 1)
 
     def test_apply_random(self):
-        m = circuit.Measurement("A", 0, sampler=None)
+        sampler = circuit.uniform_sampler(42)
+        m = circuit.Measurement("A", 0, sampler=sampler)
 
         with patch('numpy.random.RandomState') as rsclass:
             rs = MagicMock()
@@ -472,7 +478,8 @@ class TestMeasurement:
             sdm.project_measurement.assert_called_once_with("A", 1)
 
     def test_output_bit(self):
-        m = circuit.Measurement("A", 0, sampler=None, output_bit="O")
+        with pytest.warns(UserWarning):
+            m = circuit.Measurement("A", 0, sampler=None, output_bit="O")
 
         sdm = MagicMock()
         sdm.peak_measurement = MagicMock(return_value=(0, 1))
@@ -501,7 +508,8 @@ class TestMeasurement:
 
     def test_one_sampler_two_measurements(self):
         # Biased sampler
-        s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
+        with pytest.warns(UserWarning):
+            s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
         m1 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
         m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
 
@@ -565,7 +573,7 @@ class TestSamplers:
             s = circuit.uniform_sampler(seed=42)
             next(s)
 
-            rsclass.assert_called_once_with(42)
+            rsclass.assert_called_once_with(seed=42)
 
             for p0 in np.linspace(0, 1, 10):
                 proj, dec, prob = s.send((p0, 1 - p0))
@@ -582,7 +590,7 @@ class TestSamplers:
             s = circuit.uniform_noisy_sampler(0.4, seed=42)
             next(s)
 
-            rsclass.assert_called_once_with(42)
+            rsclass.assert_called_once_with(seed=42)
 
             # no readout error
             dec, proj, prob = s.send((0.2, 0.8))
@@ -603,10 +611,11 @@ class TestSamplers:
             rsclass.return_value = rs
             rs.random_sample = MagicMock(return_value=0.5)
 
-            s = circuit.BiasedSampler(alpha=1, readout_error=0.4)
+            with pytest.warns(UserWarning):
+                s = circuit.BiasedSampler(alpha=1, readout_error=0.4)
             next(s)
 
-            rsclass.assert_called_once_with(42)
+            rsclass.assert_called_once_with(seed=None)
 
             # no readout error
             dec, proj, prob = s.send((0.2, 0.8))
@@ -614,7 +623,8 @@ class TestSamplers:
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 0, 0.6)
 
-            s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
+            with pytest.warns(UserWarning):
+                s = circuit.BiasedSampler(alpha=1, readout_error=0.7)
             next(s)
             dec, proj, prob = s.send((0.2, 0.8))
             assert (proj, dec, prob) == (1, 0, 0.7)

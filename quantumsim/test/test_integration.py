@@ -28,9 +28,11 @@ def test_three_qbit_clean():
     c.add_hadamard("A1", time=300)
     c.add_hadamard("A2", time=300)
 
-    m1 = circuit.Measurement("A1", time=350, sampler=None)
+    with pytest.warns(UserWarning):
+        m1 = circuit.Measurement("A1", time=350, sampler=None)
     c.add_gate(m1)
-    m2 = circuit.Measurement("A2", time=350, sampler=None)
+    with pytest.warns(UserWarning):
+        m2 = circuit.Measurement("A2", time=350, sampler=None)
     c.add_gate(m2)
 
     c.add_waiting_gates(tmin=0, tmax=1500)
