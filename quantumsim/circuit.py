@@ -19,7 +19,8 @@ import warnings
 class Qubit:
 
     def __init__(self, name, t1=np.inf, t2=np.inf):
-        """A Qubit with a name and amplitude damping time t1 and phase damping time t2,
+        """A Qubit with a name and amplitude damping time t1 and phase damping
+        time t2,
 
         t1 is defined as measured in a free decay experiment,
         t2 is defined as measured in a ramsey/hahn echo experiment
@@ -58,9 +59,10 @@ class VariableDecoherenceQubit(Qubit):
     def __init__(self, name, base_t1, base_t2, t1s, t2s):
         """A Qubit with a name and variable t1 and t2.
 
-        t1s and t2s are  given as a list of intervals [(start_time, end_time, t1/t2)]
-
-        base_t1 and base_t2 are used when time is not inside any of those intervals.
+        t1s and t2s are  given as a list of intervals
+        [(start_time, end_time, t1/t2)]
+        base_t1 and base_t2 are used when time is not inside any of those
+        intervals.
 
         t1 is defined as measured in a free decay experiment,
         t2 is defined as measured in a ramsey/hahn echo experiment
@@ -102,7 +104,8 @@ class VariableDecoherenceQubit(Qubit):
 class Gate:
 
     def __init__(self, time, conditional_bit=None):
-        """A Gate acting at time `time`. If conditional_bit is set, only act when that bit is a classical 1. """
+        """A Gate acting at time `time`. If conditional_bit is set, only act
+        when that bit is a classical 1. """
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -152,7 +155,8 @@ class Gate:
 class SinglePTMGate(Gate):
 
     def __init__(self, bit, time, ptm, **kwargs):
-        """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit `bit` at point `time`.
+        """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit
+        `bit` at point `time`.
         """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
@@ -198,7 +202,8 @@ class RotateY(SinglePTMGate):
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_y(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
+        elif not np.allclose(angle, 0) and np.allclose(
+                np.round(1. / multiple_of_pi, 0), 1. / multiple_of_pi):
             divisor = 1 / multiple_of_pi
             self.label = r"$R_y(%s\pi/%d)$" % ("" if divisor >
                                                0 else "-", abs(divisor))
@@ -218,7 +223,6 @@ class RotateY(SinglePTMGate):
             p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
         self.ptm = p
         self.set_labels(angle)
-
 
 
 class Hadamard(SinglePTMGate):
@@ -267,7 +271,8 @@ class RotateX(SinglePTMGate):
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_x(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
+        elif not np.allclose(angle, 0) and np.allclose(
+                np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
             divisor = 1 / multiple_of_pi
             self.label = r"$R_x(\pi/%d)$" % divisor
         else:
@@ -308,7 +313,8 @@ class RotateZ(SinglePTMGate):
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
             self.label = r"$R_z(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
+        elif not np.allclose(angle, 0) and np.allclose(
+                np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
             divisor = 1 / multiple_of_pi
             self.label = r"$R_z(\pi/%d)$" % divisor
         else:
@@ -326,7 +332,8 @@ class RotateZ(SinglePTMGate):
 class RotateEuler(SinglePTMGate):
 
     def __init__(self, bit, time, theta, phi, lamda, **kwargs):
-        """ A single qubit rotation described by three Euler angles (theta, phi, lambda)
+        """ A single qubit rotation described by three Euler angles
+        (theta, phi, lambda)
          U = R_Z(phi).R_X(theta).R_Z(lamda)
         """
         unitary = np.array(
@@ -357,15 +364,17 @@ class RotateEuler(SinglePTMGate):
 class IdlingGate:
     pass
 
+
 class AmpPhDamp(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, t2, **kwargs):
-        """A amplitude-and-phase damping gate (rest gate) acting at point `time` for duration `duration`
-        with amplitude damping time t1 and phase damping t2
-        (t1 as measured in free decay experiments, t2 as measured in ramsey or echo experiments).
+        """A amplitude-and-phase damping gate (rest gate) acting at point
+        `time` for duration `duration` with amplitude damping time t1 and phase
+        damping t2 (t1 as measured in free decay experiments, t2 as measured in
+        ramsey or echo experiments).
 
-        Note that the gate acts at only one point in time, but acts as if the damping was active for
-        the time `duration`.
+        Note that the gate acts at only one point in time, but acts as if the
+        damping was active for the time `duration`.
 
         kwargs: conditional_bit
 
@@ -386,7 +395,8 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
 
         gamma = 1 - np.exp(-duration / t1)
         lamda = 1 - np.exp(-duration / t_phi)
-        super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda), **kwargs)
+        super().__init__(bit, time, ptm.amp_ph_damping_ptm(gamma, lamda),
+                         **kwargs)
         self.label = r"$%g\,\mathrm{ns}$" % self.duration
 
     def plot_gate(self, ax, coords):
@@ -403,7 +413,8 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
 class DepolarizingNoise(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, **kwargs):
-        """A depolarizing noise gate with damping rate 1/t1, acting for time `duration`.
+        """A depolarizing noise gate with damping rate 1/t1, acting for time
+        `duration`.
 
         kwargs: conditional_bit
 
@@ -418,7 +429,8 @@ class DepolarizingNoise(SinglePTMGate, IdlingGate):
             del kwargs['t2']
 
         gamma = 1 - np.exp(-duration / t1)
-        super().__init__(bit, time, ptm.dephasing_ptm(gamma, gamma, gamma), **kwargs)
+        super().__init__(bit, time, ptm.dephasing_ptm(gamma, gamma, gamma),
+                         **kwargs)
 
     def plot_gate(self, ax, coords):
         ax.scatter((self.time),
@@ -428,7 +440,8 @@ class DepolarizingNoise(SinglePTMGate, IdlingGate):
 class BitflipNoise(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, **kwargs):
-        """A depolarizing noise gate with damping rate 1/t1, acting for time `duration`.
+        """A depolarizing noise gate with damping rate 1/t1, acting for time
+        `duration`.
 
         kwargs: conditional_bit
 
@@ -443,7 +456,8 @@ class BitflipNoise(SinglePTMGate, IdlingGate):
             del kwargs['t2']
 
         gamma = 1 - np.exp(-duration / t1)
-        super().__init__(bit, time, ptm.dephasing_ptm(0, gamma, gamma), **kwargs)
+        super().__init__(bit, time, ptm.dephasing_ptm(0, gamma, gamma),
+                         **kwargs)
 
     def plot_gate(self, ax, coords):
         ax.scatter((self.time),
@@ -492,7 +506,8 @@ class TwoPTMGate(Gate):
 class CPhase(Gate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
-        """A CPhase gate acting at time `time` between bit0 and bit1 (it is symmetric).
+        """A CPhase gate acting at time `time` between bit0 and bit1 (it is
+        symmetric).
 
         Other arguments: conditional_bit
         """
@@ -517,7 +532,8 @@ class CPhase(Gate):
 class CNOT(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
-        """A CNOT gate acting at time `time` between bit0 and bit1 (bit1 is the control bit).
+        """A CNOT gate acting at time `time` between bit0 and bit1
+        (bit1 is the control bit).
         """
         kraus = np.array([
             [1, 0, 0, 0],
@@ -823,17 +839,18 @@ class Measurement(Gate):
 
           declare, project, rel_prob = sampler.send((p0, p1))
 
-        where `p0`, `p1` are two relative probabilities for the outcome 0 and 1.
-        `project` is the true post-measurement state of the system,
+        where `p0`, `p1` are two relative probabilities for the outcome 0 and
+        1. `project` is the true post-measurement state of the system,
         `declare` is the declared outcome of the measurement.
 
-        `rel_prob` is the conditional probability for the declaration, given the
-        input and projection; for a perfect measurement this is 1.
+        `rel_prob` is the conditional probability for the declaration, given
+        the input and projection; for a perfect measurement this is 1.
 
-        If sampler is None, a noiseless Monte Carlo sampler is instantiated with seed 42.
+        If sampler is None, a noiseless Monte Carlo sampler is instantiated
+        with some random seed (depends on Numpy's defaults).
 
-        After applying the circuit to a density matrix, the declared measurement results
-        are stored in self.measurements.
+        After applying the circuit to a density matrix, the declared
+        measurement results are stored in self.measurements.
 
         Additionally, the bits output_bit and real_output_bit (if defined)
         are set to the declared/projected value.
@@ -920,9 +937,9 @@ class ResetGate(SinglePTMGate):
                           ' please use `population`', DeprecationWarning)
             population = state
         elif population > 0.5:
-            state=1
+            state = 1
         else:
-            state=0
+            state = 0
 
         p = ptm.gen_amp_damping_ptm(gamma_down=1-population,
                                     gamma_up=population)
@@ -935,10 +952,11 @@ class ConditionalGate(Gate):
 
     def __init__(self, time, control_bit, zero_gates=[], one_gates=[]):
         """
-        A container that applies gates depending on the state of a classical control bit.
-        The gates are applied in the order given.
+        A container that applies gates depending on the state of a classical
+        control bit.  The gates are applied in the order given.
 
-        The times of the subgates are ignored, the gates are applied at the time of this gate.
+        The times of the subgates are ignored, the gates are applied at the
+        time of this gate.
         """
 
         super().__init__(time)
@@ -991,7 +1009,8 @@ class ClassicalCNOT(Gate):
     def __init__(self, bit0, bit1, time, **kwargs):
         """A CNOT gate acting at time `time`, toggling bit1 if bit0 is 1.
 
-        This gate enforces the bits to be classical, if you want a proper CNOT, build it using PTMs.
+        This gate enforces the bits to be classical, if you want a proper CNOT,
+        build it using PTMs.
         """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit0)
@@ -1017,6 +1036,7 @@ class ClassicalCNOT(Gate):
         if sdm.classical[self.bit0] == 1:
             sdm.classical[self.bit1] = 1 - sdm.classical[self.bit1]
 
+
 class ClassicalNOT(Gate):
 
     def __init__(self, bit, time, **kwargs):
@@ -1028,6 +1048,7 @@ class ClassicalNOT(Gate):
     def apply_to(self, sdm):
         sdm.ensure_classical(self.bit)
         sdm.classical[self.bit] = 1 - sdm.classical[self.bit]
+
 
 class Circuit:
 
@@ -1071,15 +1092,14 @@ class Circuit:
         else:
             qubit = Qubit(*args, **kwargs)
 
-
         qubit_names = [qb.name for qb in self.qubits]
 
         if qubit.name in qubit_names:
-            raise ValueError("Trying to add qubit with name {}: a qubit with this name already exists!".format(qubit.name))
+            raise ValueError(
+                "Trying to add qubit with name {}:"
+                " a qubit with this name already exists!".format(qubit.name))
 
         self.qubits.append(qubit)
-
-
 
         return self.qubits[-1]
 
@@ -1109,10 +1129,12 @@ class Circuit:
     def add_subcircuit(self, subcircuit, time=0, name_map=None):
         """Add all gates of another circuit to this circuit.
 
-        The qubit names in the subcircuit are mapped to the qubits in this circuit using `name_map`.
+        The qubit names in the subcircuit are mapped to the qubits in this
+        circuit using `name_map`.
 
         name_map can be a dictionary, a list, or None.
-        If it is a list, it the map is done according to the list subcircuit.gates.
+        If it is a list, it the map is done according to the list
+        subcircuit.gates.
         If it is None, no mapping takes place.
 
         All gate times in the subcircuit are shifted by `time`.
@@ -1151,13 +1173,19 @@ class Circuit:
     def add_waiting_gates(self, tmin=None, tmax=None, only_qubits=None):
         """Add waiting gates to all qubits in the circuit.
 
-        The waiting gates are determined by calling Qubit.make_idling_gate (AmpPhDamping by default).
+        The waiting gates are determined by calling Qubit.make_idling_gate
+        (AmpPhDamping by default).
 
-        If only_qubits is an iterable containing qubit names, gates are only added to those qubits.
+        If only_qubits is an iterable containing qubit names, gates are only
+        added to those qubits.
 
-        The gates are added between all pairs of other gates between tmin and tmax.
-        If tmin or tmax are not specified, they default to the time of the first (last) gate
-        on any of the qubits in the circuit (or in only_qubits, if specified).
+        The gates are added between all pairs of other gates between tmin and
+        tmax. If tmin or tmax are not specified, they default to the time of
+        the first (last) gate on any of the qubits in the circuit (or in
+        only_qubits, if specified).
+
+        tmax and tmin must either be None, a number, or a dictionary of numbers
+        for each qubit.
 
         """
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
@@ -1170,27 +1198,33 @@ class Circuit:
         if tmax is None:
             tmax = all_gates[-1].time
 
+        if not isinstance(tmin, dict):
+            tmin = {qb.name: tmin for qb in self.qubits}
+        if not isinstance(tmax, dict):
+            tmax = {qb.name: tmax for qb in self.qubits}
+
         qubits_to_do = [qb for qb in self.qubits]
         if only_qubits:
-            qubits_to_do = [qb for qb in qubits_to_do if qb.name in only_qubits]
+            qubits_to_do = [qb for qb in qubits_to_do
+                            if qb.name in only_qubits]
 
         for b in qubits_to_do:
             gts = [
                 gate for gate in all_gates if gate.involves_qubit(
-                    str(b)) and tmin <= gate.time <= tmax]
+                    str(b)) and tmin[b.name] <= gate.time <= tmax[b.name]]
 
             if not gts:
-                gate = b.make_idling_gate(tmin, tmax)
+                gate = b.make_idling_gate(tmin[b.name], tmax[b.name])
                 if gate is not None:
                     self.add_gate(gate)
 
             else:
-                if gts[0].time - tmin > 1e-6:
-                    gate = b.make_idling_gate(tmin, gts[0].time)
+                if gts[0].time - tmin[b.name] > 1e-6:
+                    gate = b.make_idling_gate(tmin[b.name], gts[0].time)
                     if gate is not None:
                         self.add_gate(gate)
-                if tmax - gts[-1].time > 1e-6:
-                    gate = b.make_idling_gate(gts[-1].time, tmax)
+                if tmax[b.name] - gts[-1].time > 1e-6:
+                    gate = b.make_idling_gate(gts[-1].time, tmax[b.name])
                     if gate is not None:
                         self.add_gate(gate)
 
@@ -1207,12 +1241,15 @@ class Circuit:
                             self.add_gate(gate)
 
     def order(self):
-        """ Reorder the gates in the circuit so that they are applied in temporal order.
-        If any freedom exists when choosing the order of commuting gates, the order is chosen so that
-        measurement gates are applied "as soon as possible"; this means that when applying to a
-        SparseDM, the measured qubits can be removed, which reduces computational cost.
+        """ Reorder the gates in the circuit so that they are applied in
+        temporal order. If any freedom exists when choosing the order of
+        commuting gates, the order is chosen so that measurement gates are
+        applied "as soon as possible"; this means that when applying to a
+        SparseDM, the measured qubits can be removed, which reduces
+        computational cost.
 
-        This function should always be called after defining the circuit and before applying it.
+        This function should always be called after defining the circuit and
+        before applying it.
 
         See also: Circuit.apply_to
         """
@@ -1239,10 +1276,10 @@ class Circuit:
         self.gates = new_order
 
     def apply_to(self, sdm, apply_all_pending=True):
-        """Apply the gates in the Circuit to a sparsedm.SparseDM density matrix.
-        The gates are applied in the order given in self.gates, which is the order in which they are
-        added to the Circuit. To reorder them to reflect the temporal order,
-        call self.order()
+        """Apply the gates in the Circuit to a sparsedm.SparseDM density
+        matrix.  The gates are applied in the order given in self.gates, which
+        is the order in which they are added to the Circuit. To reorder them to
+        reflect the temporal order, call self.order()
 
         See also: Circuit.order()
         """
@@ -1362,15 +1399,16 @@ class Circuit:
                     in_indices, out_indices, optimize=True)
 
             else:
-                raise ValueError('Sorry, feature not implemented for >2 qubits')
+                raise ValueError(
+                    'Sorry, feature not implemented for >2 qubits')
 
         full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits).T
         return full_PTM
 
 
 def selection_sampler(result=0):
-    """ A sampler always returning the measurement result `result`, and not making any
-    measurement errors. Useful for testing or state preparation.
+    """ A sampler always returning the measurement result `result`, and not
+    making any measurement errors. Useful for testing or state preparation.
 
     See also: Measurement
     """
@@ -1379,8 +1417,9 @@ def selection_sampler(result=0):
 
 
 def uniform_sampler(rng=None, *, state=None, seed=None):
-    """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
-    is defined by the seed; you should never use two samplers with the same seed in one circuit.
+    """A sampler using natural Monte Carlo sampling, and always declaring the
+    correct result. The stream of measurement results is defined by the seed;
+    you should never use two samplers with the same seed in one circuit.
 
     See also: Measurement
     """
@@ -1406,9 +1445,9 @@ def uniform_sampler(rng=None, *, state=None, seed=None):
 
 
 def uniform_noisy_sampler(readout_error, rng=None, *, state=None, seed=None):
-    """A sampler using natural Monte Carlo sampling and including the possibility of
-    declaring the wrong measurement result with probability `readout_error`
-    (now allows asymmetry)
+    """A sampler using natural Monte Carlo sampling and including the
+    possibility of declaring the wrong measurement result with probability
+    `readout_error` (now allows asymmetry)
 
     See also: Measurement
     """
@@ -1448,10 +1487,12 @@ def uniform_noisy_sampler(readout_error, rng=None, *, state=None, seed=None):
 
 
 class BiasedSampler:
-    '''A sampler that returns a uniform choice but with probabilities weighted as p_twiddle=p^alpha/Z,
-    with Z a normalisation constant. Also allows for readout error to be input when the sampling is called.
+    '''A sampler that returns a uniform choice but with probabilities weighted
+    as p_twiddle=p^alpha/Z, with Z a normalisation constant. Also allows for
+    readout error to be input when the sampling is called.
 
-    All the class does is to store the product of all p_twiddles for renormalisation purposes
+    All the class does is to store the product of all p_twiddles for
+    renormalisation purposes
     '''
 
     def __init__(self, readout_error, alpha, rng=None,
@@ -1461,7 +1502,7 @@ class BiasedSampler:
         '''
         if state:
             warnings.warn('`state` keyword argument is deprecated,'
-                        ' please use `rng`', DeprecationWarning)
+                          ' please use `rng`', DeprecationWarning)
             rng = state
         if seed:
             warnings.warn('`seed` keyword argument is deprecated,'
@@ -1480,7 +1521,8 @@ class BiasedSampler:
 
     def send(self, ps):
         '''
-        @readout_error: probability of the state update and classical output disagreeing
+        @readout_error: probability of the state update and classical output
+        disagreeing
         '''
 
         if ps is None:
