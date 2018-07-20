@@ -13,6 +13,7 @@ from . import ptm
 
 import functools
 import copy
+import warnings
 
 
 class Qubit:
@@ -37,10 +38,12 @@ class Qubit:
         assert start_time < end_time
         time = (start_time + end_time) / 2
         duration = end_time - start_time
+
         if self.t1 is np.inf and self.t2 is np.inf:
             return None
         else:
             return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
+
 
 class ClassicalBit(Qubit):
     def __init__(self, name):
@@ -184,8 +187,13 @@ class RotateY(SinglePTMGate):
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
 
-        super().__init__(bit, time, p, **kwargs)
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
 
+        super().__init__(bit, time, p, **kwargs)
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
         self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -196,6 +204,21 @@ class RotateY(SinglePTMGate):
                                                0 else "-", abs(divisor))
         else:
             self.label = r"$R_y(%g)$" % angle
+
+    def adjust(self, angle):
+        p = ptm.rotate_y_ptm(angle)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle,
+                    0,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+        self.ptm = p
+        self.set_labels(angle)
+
 
 
 class Hadamard(SinglePTMGate):
@@ -231,7 +254,14 @@ class RotateX(SinglePTMGate):
         if dephasing_axis:
             p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
 
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+
         super().__init__(bit, time, p, **kwargs)
+
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
 
         self.angle = angle
         multiple_of_pi = angle / np.pi
@@ -243,6 +273,20 @@ class RotateX(SinglePTMGate):
         else:
             self.label = r"$R_x(%g)$" % angle
 
+    def adjust(self, angle):
+        p = ptm.rotate_x_ptm(angle)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle,
+                    0,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+        self.ptm = p
+        self.set_labels(angle)
+
 
 class RotateZ(SinglePTMGate):
 
@@ -253,7 +297,12 @@ class RotateZ(SinglePTMGate):
         if dephasing:
             p = np.dot(p, ptm.dephasing_ptm(dephasing, dephasing, 0))
 
+        self.dephasing = dephasing
+
         super().__init__(bit, time, p, **kwargs)
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
 
         self.angle = angle
         multiple_of_pi = angle / np.pi
@@ -264,6 +313,14 @@ class RotateZ(SinglePTMGate):
             self.label = r"$R_z(\pi/%d)$" % divisor
         else:
             self.label = r"$R_z(%g)$" % angle
+
+    def adjust(self, angle):
+        p = ptm.rotate_z_ptm(angle)
+        if self.dephasing:
+            p = np.dot(p, ptm.dephasing_ptm(self.dephasing, self.dephasing, 0))
+        self.ptm = p
+
+        self.set_labels(angle)
 
 
 class RotateEuler(SinglePTMGate):
@@ -284,6 +341,17 @@ class RotateEuler(SinglePTMGate):
         super().__init__(bit, time, p, **kwargs)
 
         self.label = r"$R(\theta, \phi, \lambda)$"
+
+    def adjust(self, theta, phi, lamda):
+        unitary = np.array(
+            [[np.cos(theta / 2),
+                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+             ])
+
+        p = ptm.single_kraus_to_ptm(unitary)
+        self.ptm = p
 
 
 class IdlingGate:
@@ -477,7 +545,7 @@ class CNOT(TwoPTMGate):
 
 class ISwap(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, time, **kwargs):
+    def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
         """
         ISwap gate, described by the two qubit operator
 
@@ -486,15 +554,38 @@ class ISwap(TwoPTMGate):
         0  i 0 0
         0  0 0 1
         """
-        kraus = np.array([
+        d = np.exp(-dephase_var/2)
+        d4 = np.exp(-dephase_var/8)
+        assert d <= 1
+        assert d >= 0
+        kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, 0, 1j, 0],
-            [0, 1j, 0, 0],
+            [0, 0, 1j*d, 0],
+            [0, 1j*d, 0, 0],
             [0, 0, 0, 1]
         ])
+        kraus1 = 1j*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = 1j*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, -1, 1, 0],
+            [0, 1, -1, 0],
+            [0, 0, 0, 0]
+        ])
 
-        p = ptm.double_kraus_to_ptm(kraus)
-        super().__init__(bit0, bit1, p, time, **kwargs)
+        p1 = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
+
+        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -508,9 +599,10 @@ class ISwap(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class ISwapRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, **kwargs):
+    def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
         """
         ISwap rotation gate, described by the two qubit operator
 
@@ -519,16 +611,45 @@ class ISwapRotation(TwoPTMGate):
         0  i*sin(theta)     cos(theta)      0
         0  0                0               1
         """
-        kraus = np.array([
+        if angle != 0:
+            d = np.exp(-dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-dephase_var * (2*angle/np.pi)**2 / 8)
+        else:
+            d = 1
+            d4 = 1
+        assert d >= 0
+        assert d <= 1
+
+        kraus0 = np.array([
             [1, 0, 0, 0],
-            [0, np.cos(angle), 1j*np.sin(angle), 0],
-            [0, 1j*np.sin(angle), np.cos(angle), 0],
+            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
+            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
             [0, 0, 0, 1]
         ])
-        self.angle = angle
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, -1, 0],
+            [0, -1, 1, 0],
+            [0, 0, 0, 0]
+        ])
 
-        p = ptm.double_kraus_to_ptm(kraus)
-        super().__init__(bit0, bit1, p, time, **kwargs)
+        self.angle = angle
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
+        p1 = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
+        self.dephase_var = dephase_var
+
+        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -541,6 +662,47 @@ class ISwapRotation(TwoPTMGate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
+
+    def adjust(self, angle):
+
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 2)
+            d4 = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 8)
+        else:
+            d = 1
+            d4 = 1
+        assert d >= 0
+        assert d <= 1
+
+        kraus0 = np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
+            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
+            [0, 0, 0, 1]
+        ])
+        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, 1, 0],
+            [0, 1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
+            [0, 0, 0, 0],
+            [0, 1, -1, 0],
+            [0, -1, 1, 0],
+            [0, 0, 0, 0]
+        ])
+
+        self.angle = angle
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
+                                             np.sqrt(1-d4**2)]))
+        p1 = ptm.double_kraus_to_ptm(kraus0) +\
+            ptm.double_kraus_to_ptm(kraus1) +\
+            ptm.double_kraus_to_ptm(kraus2)
+
+        self.two_ptm = p0 @ p1 @ p0
+
 
 class Swap(TwoPTMGate):
 
@@ -576,14 +738,74 @@ class Swap(TwoPTMGate):
         ax.add_line(line)
 
 
+class NoisyCPhase(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
+
+        d = np.exp(-dephase_var / 2)
+        d2 = np.exp(-dephase_var / 4)
+        assert d >= 0
+        assert d <= 1
+
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, -d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0, -np.sqrt(1-d**2)]))
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
+
+        super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
+
+
 class CPhaseRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, **kwargs):
-        p = ptm.double_kraus_to_ptm(np.diag([1, 1, 1, np.exp(1j * angle)]))
+    def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
+
+        if angle != 0:
+            d = np.exp(-dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-dephase_var * (angle/np.pi)**2 / 4)
+        else:
+            d = 1
+            d2 = 1
+        assert d >= 0
+        assert d <= 1
+
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
+                                              np.exp(1j * angle)*d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
+                                             np.exp(1j * angle) *
+                                             np.sqrt(1-d**2)]))
+
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
 
         self.angle = angle
+        self.dephase_var = dephase_var
 
-        super().__init__(bit0, bit1, p, time, **kwargs)
+        super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
+
+    def adjust(self, angle):
+
+        if angle != 0:
+            d = np.exp(-self.dephase_var * (angle/np.pi)**2 / 2)
+            d2 = np.exp(-self.dephase_var * (angle/np.pi)**2 / 4)
+        else:
+            d = 1
+            d2 = 1
+        assert d >= 0
+        assert d <= 1
+
+        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
+                                              np.exp(1j * angle)*d])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
+                                             np.exp(1j * angle) *
+                                             np.sqrt(1-d**2)]))
+
+        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
+            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
+                                             np.sqrt(1-d2**2)]))
+        self.angle = angle
+        self.two_ptm = p0 @ p1
 
 
 class Measurement(Gate):
@@ -639,6 +861,8 @@ class Measurement(Gate):
             self.sampler = uniform_sampler()
         next(self.sampler)
         self.measurements = []
+        self.probabilities = []
+        self.projects = []
 
     def plot_gate(self, ax, coords):
         super().plot_gate(ax, coords)
@@ -675,9 +899,10 @@ class Measurement(Gate):
     def apply_to(self, sdm):
         bit = self.bit
         p0, p1 = sdm.peak_measurement(bit)
+        self.probabilities.append([p0, p1])
 
         declare, project, cond_prob = self.sampler.send((p0, p1))
-
+        self.projects.append(project)
         self.measurements.append(declare)
         if self.output_bit:
             sdm.set_bit(self.output_bit, declare)
@@ -689,20 +914,21 @@ class Measurement(Gate):
 
 class ResetGate(SinglePTMGate):
 
-    def __init__(self, bit, time, state=0, **kwargs):
-        if state == 0:
-            p = ptm.gen_amp_damping_ptm(gamma_down=1, gamma_up=0)
-        if state == 1:
-            p = ptm.gen_amp_damping_ptm(gamma_down=0, gamma_up=1)
+    def __init__(self, bit, time, population=0, *, state=None, **kwargs):
+        if state is not None:
+            warnings.warn('`state` keyword argument is deprecated,'
+                          ' please use `population`', DeprecationWarning)
+            population = state
+        elif population > 0.5:
+            state=1
+        else:
+            state=0
 
+        p = ptm.gen_amp_damping_ptm(gamma_down=1-population,
+                                    gamma_up=population)
         super().__init__(bit, time, p, **kwargs)
         self.state = state
         self.label = "-> {}".format(state)
-        self.is_measurement = True
-
-    def apply_to(self, sdm):
-        super().apply_to(sdm)
-        sdm.project_measurement(self.involved_qubits[-1], self.state)
 
 
 class ConditionalGate(Gate):
@@ -1082,6 +1308,65 @@ class Circuit:
                 ha='center',
                 va='center')
 
+    def make_full_PTM(self, qubit_order, i_really_want_to_do_this=False):
+        '''
+        Generates the PTM of the entire circuit, assuming no measurements.
+        Warning - this is a very badly scaling process, and is currently
+        only performed on a CPU.
+        Assumes that the circuit has been ordered!
+        '''
+        num_qubits = len(self.qubits)
+        if qubit_order is not None:
+            qubits = qubit_order
+        else:
+            qubits = [q.name for q in self.qubits]
+        if num_qubits > 5 and i_really_want_to_do_this is False:
+            raise ValueError('I dont think you want to do this')
+        full_PTM = np.identity(4**(num_qubits)).reshape((4, 4)*num_qubits)
+
+        for gate in self.gates:
+            if gate.is_measurement:
+                raise TypeError('Cannot get the PTM of a measurement')
+            if gate.conditional_bit:
+                raise TypeError('Cannot get the PTM with a conditional gate')
+
+            if len(gate.involved_qubits) == 1:
+                # Single-qubit gate
+                bit = qubits.index(gate.involved_qubits[0])
+                dummy_idx = num_qubits*2
+                in_indices = list(reversed(range(num_qubits*2)))
+                out_indices = list(reversed(range(num_qubits*2)))
+                in_indices[2*num_qubits - bit - 1] = dummy_idx
+                ptm_indices = [bit, dummy_idx]
+                single_ptm = ptm.to_0xyz_basis(gate.ptm)
+                full_PTM = np.einsum(single_ptm, ptm_indices, full_PTM,
+                                     in_indices, out_indices, optimize=True)
+
+            elif len(gate.involved_qubits) == 2:
+                # Two qubit gate
+                bit0 = qubits.index(gate.involved_qubits[0])
+                bit1 = qubits.index(gate.involved_qubits[1])
+
+                two_ptm = ptm.to_0xyz_basis(gate.two_ptm).reshape((4, 4, 4, 4))
+                dummy_idx0, dummy_idx1 = 2*num_qubits, 2*num_qubits + 1
+                out_indices = list(reversed(range(2*num_qubits)))
+                in_indices = list(reversed(range(2*num_qubits)))
+                in_indices[num_qubits*2 - bit0 - 1] = dummy_idx0
+                in_indices[num_qubits*2 - bit1 - 1] = dummy_idx1
+                two_ptm_indices = [
+                    bit1, bit0,
+                    dummy_idx1, dummy_idx0
+                ]
+                full_PTM = np.einsum(
+                    two_ptm, two_ptm_indices, full_PTM,
+                    in_indices, out_indices, optimize=True)
+
+            else:
+                raise ValueError('Sorry, feature not implemented for >2 qubits')
+
+        full_PTM = full_PTM.reshape(4**num_qubits, 4**num_qubits).T
+        return full_PTM
+
 
 def selection_sampler(result=0):
     """ A sampler always returning the measurement result `result`, and not making any
@@ -1093,13 +1378,21 @@ def selection_sampler(result=0):
         yield result, result, 1
 
 
-def uniform_sampler(seed=42):
+def uniform_sampler(rng=None, *, state=None, seed=None):
     """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
     is defined by the seed; you should never use two samplers with the same seed in one circuit.
 
     See also: Measurement
     """
-    rng = np.random.RandomState(seed)
+    if state:
+        warnings.warn('`state` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = state
+    if seed:
+        warnings.warn('`seed` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = seed
+    rng = _ensure_rng(rng)
     primers_nones = yield
     while not primers_nones:
         primers_nones = yield
@@ -1111,13 +1404,25 @@ def uniform_sampler(seed=42):
         else:
             p0, p1 = yield 1, 1, 1
 
-def uniform_noisy_sampler(readout_error, seed=42):
+
+def uniform_noisy_sampler(readout_error, rng=None, *, state=None, seed=None):
     """A sampler using natural Monte Carlo sampling and including the possibility of
-    declaring the wrong measurement result with probability `readout_error` (symmetric for both outcomes).
+    declaring the wrong measurement result with probability `readout_error`
+    (now allows asymmetry)
 
     See also: Measurement
     """
-    rng = np.random.RandomState(seed)
+    if state:
+        warnings.warn('`state` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = state
+    if seed:
+        warnings.warn('`seed` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = seed
+    rng = _ensure_rng(rng)
+    if not type(readout_error) in [list, tuple]:
+        readout_error = [readout_error, readout_error]
     primers_nones = yield
     while not primers_nones:
         primers_nones = yield
@@ -1129,13 +1434,17 @@ def uniform_noisy_sampler(readout_error, seed=42):
         else:
             proj = 1
         r = rng.random_sample()
-        if r < readout_error:
+        if r < readout_error[proj]:
             decl = 1 - proj
-            prob = readout_error
+            prob = readout_error[proj]
         else:
             decl = proj
-            prob = 1 - readout_error
-        p0, p1 = yield decl, proj, prob
+            prob = 1 - readout_error[proj]
+
+        ps = yield decl, proj, prob
+        while not ps:
+            ps = yield
+        p0, p1 = ps
 
 
 class BiasedSampler:
@@ -1145,14 +1454,22 @@ class BiasedSampler:
     All the class does is to store the product of all p_twiddles for renormalisation purposes
     '''
 
-    def __init__(self, readout_error, alpha, seed=42):
+    def __init__(self, readout_error, alpha, rng=None,
+                 *, state=None, seed=None):
         '''
         @alpha: number between 0 and 1 for renormalisation purposes.
         '''
+        if state:
+            warnings.warn('`state` keyword argument is deprecated,'
+                        ' please use `rng`', DeprecationWarning)
+            rng = state
+        if seed:
+            warnings.warn('`seed` keyword argument is deprecated,'
+                          ' please use `rng`', DeprecationWarning)
+            rng = seed
         self.alpha = alpha
         self.p_twiddle = 1
-        self.rng = np.random.RandomState(seed)
-
+        self.rng = _ensure_rng(rng)
         self.readout_error = readout_error
         ro_temp = readout_error ** self.alpha
         self.ro_renormalized = ro_temp / \
@@ -1164,12 +1481,10 @@ class BiasedSampler:
     def send(self, ps):
         '''
         @readout_error: probability of the state update and classical output disagreeing
-        @seed: seed for rng
         '''
 
         if ps is None:
             return None
-
 
         p0, p1 = ps
 
@@ -1195,3 +1510,16 @@ class BiasedSampler:
             prob = 1 - self.readout_error
             self.p_twiddle = self.p_twiddle * (1 - self.ro_renormalized)
         return decl, proj, prob
+
+
+def _ensure_rng(rng):
+    """Takes random number generator (RNG) or seed as input and instantiates
+    and returns RNG, initialized by seed, if it is provided.
+    """
+    if not hasattr(rng, 'random_sample'):
+        if not rng:
+            warnings.warn('No random number generator (or seed) provided, '
+                          'computation will not be reproducible.')
+        # Assuming that we have seed provided instead of RNG
+        rng = np.random.RandomState(seed=rng)
+    return rng
