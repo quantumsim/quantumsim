@@ -44,6 +44,7 @@ class Qubit:
         else:
             return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
 
+
 class ClassicalBit(Qubit):
     def __init__(self, name):
         self.name = name
@@ -1377,20 +1378,21 @@ def selection_sampler(result=0):
         yield result, result, 1
 
 
-def uniform_sampler(state=None, seed=None):
+def uniform_sampler(rng=None, *, state=None, seed=None):
     """A sampler using natural Monte Carlo sampling, and always declaring the correct result. The stream of measurement results
     is defined by the seed; you should never use two samplers with the same seed in one circuit.
 
     See also: Measurement
     """
-
-    if state is None:
-        if seed is None:
-            warnings.warn('No seed specified, running with system time.')
-        rng = np.random.RandomState(seed=seed)
-    else:
+    if state:
+        warnings.warn('`state` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
         rng = state
-
+    if seed:
+        warnings.warn('`seed` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = seed
+    rng = _ensure_rng(rng)
     primers_nones = yield
     while not primers_nones:
         primers_nones = yield
@@ -1403,20 +1405,22 @@ def uniform_sampler(state=None, seed=None):
             p0, p1 = yield 1, 1, 1
 
 
-def uniform_noisy_sampler(readout_error, state=None, seed=None):
+def uniform_noisy_sampler(readout_error, rng=None, *, state=None, seed=None):
     """A sampler using natural Monte Carlo sampling and including the possibility of
     declaring the wrong measurement result with probability `readout_error`
     (now allows asymmetry)
 
     See also: Measurement
     """
-    if state is None:
-        if seed is None:
-            warnings.warn('No seed specified, running with system time.')
-        rng = np.random.RandomState(seed=seed)
-    else:
+    if state:
+        warnings.warn('`state` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
         rng = state
-
+    if seed:
+        warnings.warn('`seed` keyword argument is deprecated,'
+                      ' please use `rng`', DeprecationWarning)
+        rng = seed
+    rng = _ensure_rng(rng)
     if not type(readout_error) in [list, tuple]:
         readout_error = [readout_error, readout_error]
     primers_nones = yield
@@ -1450,20 +1454,22 @@ class BiasedSampler:
     All the class does is to store the product of all p_twiddles for renormalisation purposes
     '''
 
-    def __init__(self, readout_error, alpha, state=None, seed=None):
+    def __init__(self, readout_error, alpha, rng=None,
+                 *, state=None, seed=None):
         '''
         @alpha: number between 0 and 1 for renormalisation purposes.
         '''
+        if state:
+            warnings.warn('`state` keyword argument is deprecated,'
+                        ' please use `rng`', DeprecationWarning)
+            rng = state
+        if seed:
+            warnings.warn('`seed` keyword argument is deprecated,'
+                          ' please use `rng`', DeprecationWarning)
+            rng = seed
         self.alpha = alpha
         self.p_twiddle = 1
-
-        if state is None:
-            if seed is None:
-                warnings.warn('No seed specified, running with system time.')
-            self.rng = np.random.RandomState(seed=seed)
-        else:
-            self.rng = state
-
+        self.rng = _ensure_rng(rng)
         self.readout_error = readout_error
         ro_temp = readout_error ** self.alpha
         self.ro_renormalized = ro_temp / \
@@ -1475,7 +1481,6 @@ class BiasedSampler:
     def send(self, ps):
         '''
         @readout_error: probability of the state update and classical output disagreeing
-        @seed: seed for rng
         '''
 
         if ps is None:
@@ -1505,3 +1510,16 @@ class BiasedSampler:
             prob = 1 - self.readout_error
             self.p_twiddle = self.p_twiddle * (1 - self.ro_renormalized)
         return decl, proj, prob
+
+
+def _ensure_rng(rng):
+    """Takes random number generator (RNG) or seed as input and instantiates
+    and returns RNG, initialized by seed, if it is provided.
+    """
+    if not hasattr(rng, 'random_sample'):
+        if not rng:
+            warnings.warn('No random number generator (or seed) provided, '
+                          'computation will not be reproducible.')
+        # Assuming that we have seed provided instead of RNG
+        rng = np.random.RandomState(seed=rng)
+    return rng
