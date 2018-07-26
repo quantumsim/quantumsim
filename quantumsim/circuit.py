@@ -40,10 +40,10 @@ class Qubit:
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
-        if self.t1 is np.inf and self.t2 is np.inf:
-            return None
-        else:
+        if np.isfinite(self.t1) or np.isfinite(self.t2):
             return AmpPhDamp(self.name, time, duration, self.t1, self.t2)
+        else:
+            return None
 
 
 class ClassicalBit(Qubit):
@@ -381,14 +381,19 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
         See also: Circuit.add_waiting_gates to add these gates automatically.
         """
 
-        assert t2 <= 2 * t1
+        if t1 <= 0:
+            raise RuntimeError("t1 must be positive")
+        if t2 <= 0:
+            raise RuntimeError("t2 must be positive")
+        if t2 > 2 * t1:
+            raise RuntimeError("t2 must not be greater than 2*t1")
 
         self.t1 = t1
         self.t2 = t2
 
         self.duration = duration
 
-        if t2 == 2 * t1:
+        if np.allclose(t2, 2 * t1):
             t_phi = np.inf
         else:
             t_phi = 1 / (1 / t2 - 1 / (2 * t1)) / 2
