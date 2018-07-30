@@ -130,7 +130,9 @@ class OpenqlParser:
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
         time_start = parse_state.time_current
-        if cls._gate_is_measurement(gate_spec):
+        if cls._gate_is_ignored(gate_spec):
+            return None, time_start
+        elif cls._gate_is_measurement(gate_spec):
             seed = parse_state.rng.randint(1 << 32)
             gate = ct.Measurement(
                 qubits[0],
@@ -185,8 +187,14 @@ class OpenqlParser:
         for instr, gate in zip(source, gates):
             self._add_gate(parse_state, circuit,
                            gate_spec=gate, gate_label=instr)
-
+        circuit.add_waiting_gates(tmin=0, tmax=parse_state.time_current)
+        circuit.order()
         return circuit
+
+    @staticmethod
+    def _gate_is_ignored(gate_spec):
+        out = gate_spec['type'] == 'none'
+        return out
 
     @staticmethod
     def _gate_is_measurement(gate_spec):
@@ -218,5 +226,5 @@ class OpenqlParser:
         return out
 
     @staticmethod
-    def _init_parse_state(self, rng=None, time=0):
+    def _init_parse_state(rng=None, time=0):
         return SimpleNamespace(rng=ct._ensure_rng(rng), time_current=time)
