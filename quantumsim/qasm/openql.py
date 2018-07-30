@@ -4,7 +4,6 @@ import numpy as np
 import re
 import warnings
 from itertools import chain
-from types import SimpleNamespace
 
 import quantumsim.circuit as ct
 import quantumsim.ptm as ptm
@@ -38,16 +37,26 @@ class OpenqlParser:
                 'Could not find "instructions" block in config')
 
         self._simulation_settings = self._cfg.get('simulation_settings', None)
+        self._gates_order_table = {
+            'asap': self._gates_order_asap,
+            'alap': self._gates_order_alap,
+        }
 
-    def parse(self, qasm, rng=None, time_start=0.):
-        return list(self.gen_circuits(qasm, rng))
+    def parse(self, qasm, rng=None, *, ordering='ALAP',
+              time_start=None, time_end=None):
+        return list(self.gen_circuits(
+            qasm, rng, ordering=ordering,
+            time_start=time_start, time_end=time_end))
 
-    def gen_circuits(self, qasm, rng=None, time_start=0.):
+    def gen_circuits(self, qasm, rng=None, *, ordering='ALAP',
+                     time_start=None, time_end=None):
         rng = ct._ensure_rng(rng)
         if isinstance(qasm, str):
-            return self._gen_circuits_fn(qasm, rng, time_start)
+            return self._gen_circuits_fn(qasm, rng, ordering,
+                                         time_start, time_end)
         else:
-            return self._gen_circuits(qasm, rng, time_start)
+            return self._gen_circuits(qasm, rng, ordering,
+                                      time_start, time_end)
 
     @staticmethod
     def _gen_circuits_src(fp):
@@ -69,7 +78,7 @@ class OpenqlParser:
         else:
             warnings.warn("Could not find any circuits in the QASM file.")
 
-    def _gen_circuits(self, fp, rng, time_start=0.):
+    def _gen_circuits(self, fp, rng, ordering, time_start, time_end):
         # Getting the initial statement with the number of qubits
         rng = ct._ensure_rng(rng)
         qubits_re = re.compile(r'^\s*qubits\s+(\d+)')
@@ -85,15 +94,15 @@ class OpenqlParser:
             raise QasmError('Number of qubits is not specified')
 
         for title, source in self._gen_circuits_src(fp):
-            # yield self._parse_circuit(title, n_qubits, source, rng)
             # We pass the same rng to avoid correlations between measurements,
             # everything else must be re-initialized
-            parse_state = self._init_parse_state(rng=rng, time=time_start)
-            yield self._parse_circuit(parse_state, title, n_qubits, source)
+            yield self._parse_circuit(title, source, ordering, rng,
+                                      time_start, time_end)
 
-    def _gen_circuits_fn(self, filename, rng, time_start=0):
+    def _gen_circuits_fn(self, filename, rng, ordering, time_start, time_end):
         with open(filename, 'r') as fp:
-            generator = self._gen_circuits(fp, rng, time_start)
+            generator = self._gen_circuits(fp, rng, ordering,
+                                           time_start, time_end)
             for circuit in generator:
                 yield circuit
 
@@ -115,43 +124,32 @@ class OpenqlParser:
             # No simulation settings provided -- assuming ideal qubits
             circuit.add_qubit(qubit_name)
 
-    def _add_gate(self, parse_state, circuit, gate_spec, gate_label):
-        try:
-            gate, time_end = self._gate_spec_to_gate(
-                gate_spec, gate_label, parse_state)
-            circuit.add_gate(gate)
-            parse_state.time_current = time_end
-        except Exception as e:
-            raise ConfigurationError(
-                "Could not construct gate from gate_spec") from e
-
     @classmethod
-    def _gate_spec_to_gate(cls, gate_spec, gate_label, parse_state):
+    def _gate_spec_to_gate(cls, gate_spec, gate_label, rng):
+        """Returns gate with time set to 0. and its duration"""
+
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
-        time_start = parse_state.time_current
         if cls._gate_is_ignored(gate_spec):
-            return None, time_start
+            return None, 0.
         elif cls._gate_is_measurement(gate_spec):
-            seed = parse_state.rng.randint(1 << 32)
+            seed = rng.randint(1 << 32)
             gate = ct.Measurement(
                 qubits[0],
-                time_start+0.5*duration,
+                0.,
                 ct.uniform_sampler(np.random.RandomState(seed=seed))
             )
-            gate.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
-            # return gate
+            gate.label = gate_label
         elif cls._gate_is_single_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
             # TODO: verify if it is not conjugate
             kraus = (m[:, 0] + m[:, 1]*1j).reshape((2, 2))
             gate = ct.SinglePTMGate(
                 qubits[0],
-                time_start+0.5*duration,
+                0.,
                 ptm.single_kraus_to_ptm(kraus)
             )
             gate.label = gate_label
-            # return gate
         elif cls._gate_is_two_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
             # TODO: verify if it is not conjugate
@@ -160,34 +158,36 @@ class OpenqlParser:
                 qubits[0],
                 qubits[1],
                 ptm.double_kraus_to_ptm(kraus),
-                time_start+0.5*duration,
+                0.,
             )
             gate.label = gate_label
-            # return gate
         else:
             raise ConfigurationError(
                 'Could not identify gate type from gate_spec')
 
-        time_end = time_start + duration
-        return gate, time_end
+        return gate, duration
 
-    def _parse_circuit(self, parse_state, title, n_qubits, source):
-        gates = [self._instr[line] for line in source]
-        qubits = set(chain(*(gate['qubits'] for gate in gates)))
-        if len(qubits) > n_qubits:
-            raise QasmError('Too many qubits in circuit .{}: '
-                            '{} declared in the file header, '
-                            '{} actually present.'
-                            .format('a', 2, 3))
-
+    def _parse_circuit(self, title, source, ordering, rng,
+                       time_start, time_end):
+        gate_specs = [self._instr[line] for line in source]
+        qubits = set(chain(*(gs['qubits'] for gs in gate_specs)))
         circuit = ct.Circuit(title)
         for qubit in qubits:
             self._add_qubit(circuit, qubit)
 
-        for instr, gate in zip(source, gates):
-            self._add_gate(parse_state, circuit,
-                           gate_spec=gate, gate_label=instr)
-        circuit.add_waiting_gates(tmin=0, tmax=parse_state.time_current)
+        try:
+            gates, tmin, tmax = self._gates_order_table[ordering.lower()](
+                qubits, gate_specs, source, rng,
+                time_start=time_start, time_end=time_end)
+        except KeyError:
+            raise RuntimeError('Unknow ordering: {}'.format(ordering))
+
+        for gate, instr in zip(gates, source):
+            circuit.add_gate(gate)
+
+        # tmin might be important, tmax is defined by the last gate --
+        # idling gates afterwards are useless
+        circuit.add_waiting_gates(tmin=tmin, tmax=None)
         circuit.order()
         return circuit
 
@@ -225,6 +225,71 @@ class OpenqlParser:
                     'Process matrix is incompatible with number of qubits')
         return out
 
-    @staticmethod
-    def _init_parse_state(rng=None, time=0):
-        return SimpleNamespace(rng=ct._ensure_rng(rng), time_current=time)
+    def _gates_order_alap(self, qubits, gate_specs, gate_labels,
+                          rng, time_start, time_end):
+        rng = ct._ensure_rng(rng)
+        current_times = {qubit: 0. for qubit in qubits}
+        gates = []
+        for spec, label in zip(reversed(gate_specs),
+                               reversed(gate_labels)):
+            gate, duration = self._gate_spec_to_gate(spec, label, rng)
+            # gate is validated already inside `_gate_spec_to_gate`
+            if gate is None:
+                continue
+            gate_time_end = min((current_times[qubit]
+                                 for qubit in spec['qubits']))
+            gate_time_start = gate_time_end - duration
+            gate.time = 0.5*(gate_time_start + gate_time_end)
+            for qubit in spec['qubits']:
+                current_times[qubit] = gate_time_start
+            gates.append(gate)
+
+        gates = list(reversed(gates))
+        time_min = min(current_times.values())
+        if time_start is not None and time_end is not None:
+            raise RuntimeError('Only start or end time of the circuit '
+                               'can be specified')
+        elif time_end is not None:
+            time_shift = time_end
+        else:
+            if time_start is None:
+                time_start = 0.
+            time_shift = time_start - time_min
+
+        if not np.allclose(time_shift, 0.):
+            for gate in gates:
+                gate.time += time_shift
+
+        return gates, time_min + time_shift, time_shift
+
+    def _gates_order_asap(self, qubits, gate_specs, gate_labels,
+                          rng, time_start, time_end):
+        rng = ct._ensure_rng(rng)
+        current_times = {qubit: 0. for qubit in qubits}
+        gates = []
+        for spec, label in zip(gate_specs, gate_labels):
+            gate, duration = self._gate_spec_to_gate(spec, label, rng)
+            # gate is validated already inside `_gate_spec_to_gate`
+            if gate is None:
+                continue
+            gate_time_start = max((current_times[qubit]
+                                   for qubit in spec['qubits']))
+            gate_time_end = gate_time_start + duration
+            gate.time = 0.5*(gate_time_start + gate_time_end)
+            for qubit in spec['qubits']:
+                current_times[qubit] = gate_time_end
+            gates.append(gate)
+
+        time_max = max(current_times.values())
+        if time_start is not None and time_end is not None:
+            raise RuntimeError('Only start or end time of the circuit '
+                               'can be specified')
+        elif time_end is None:
+            time_shift = time_start or 0.
+        else:
+            time_shift = time_end - time_max
+
+        if not np.allclose(time_shift, 0.):
+            for gate in gates:
+                gate.time += time_shift
+        return gates, time_shift, time_max + time_shift
