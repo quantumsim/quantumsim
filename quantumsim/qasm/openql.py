@@ -4,6 +4,7 @@ import numpy as np
 import re
 import warnings
 from itertools import chain
+from types import SimpleNamespace
 
 import quantumsim.circuit as ct
 import quantumsim.ptm as ptm
@@ -38,15 +39,15 @@ class OpenqlParser:
 
         self._simulation_settings = self._cfg.get('simulation_settings', None)
 
-    def parse(self, qasm, rng=None):
+    def parse(self, qasm, rng=None, time_start=0.):
         return list(self.gen_circuits(qasm, rng))
 
-    def gen_circuits(self, qasm, rng=None):
+    def gen_circuits(self, qasm, rng=None, time_start=0.):
         rng = ct._ensure_rng(rng)
         if isinstance(qasm, str):
-            return self._gen_circuits_fn(qasm, rng)
+            return self._gen_circuits_fn(qasm, rng, time_start)
         else:
-            return self._gen_circuits(qasm, rng)
+            return self._gen_circuits(qasm, rng, time_start)
 
     @staticmethod
     def _gen_circuits_src(fp):
@@ -68,8 +69,9 @@ class OpenqlParser:
         else:
             warnings.warn("Could not find any circuits in the QASM file.")
 
-    def _gen_circuits(self, fp, rng):
+    def _gen_circuits(self, fp, rng, time_start=0.):
         # Getting the initial statement with the number of qubits
+        rng = ct._ensure_rng(rng)
         qubits_re = re.compile(r'^\s*qubits\s+(\d+)')
         n_qubits = None
 
@@ -83,11 +85,15 @@ class OpenqlParser:
             raise QasmError('Number of qubits is not specified')
 
         for title, source in self._gen_circuits_src(fp):
-            yield self._parse_circuit(title, n_qubits, source, rng)
+            # yield self._parse_circuit(title, n_qubits, source, rng)
+            # We pass the same rng to avoid correlations between measurements,
+            # everything else must be re-initialized
+            parse_state = self._init_parse_state(rng=rng, time=time_start)
+            yield self._parse_circuit(parse_state, title, n_qubits, source)
 
-    def _gen_circuits_fn(self, filename, rng):
+    def _gen_circuits_fn(self, filename, rng, time_start=0):
         with open(filename, 'r') as fp:
-            generator = self._gen_circuits(fp, rng)
+            generator = self._gen_circuits(fp, rng, time_start)
             for circuit in generator:
                 yield circuit
 
@@ -109,52 +115,61 @@ class OpenqlParser:
             # No simulation settings provided -- assuming ideal qubits
             circuit.add_qubit(qubit_name)
 
-    def _add_gate(self, circuit, label, gate_spec, rng):
-        time = 0   # TODO !!!
+    def _add_gate(self, parse_state, circuit, gate_spec, gate_label):
         try:
-            gate = self._gate_spec_to_gate(gate_spec, time, label, rng)
+            gate, time_end = self._gate_spec_to_gate(
+                gate_spec, gate_label, parse_state)
             circuit.add_gate(gate)
+            parse_state.time_current = time_end
         except Exception as e:
             raise ConfigurationError(
                 "Could not construct gate from gate_spec") from e
 
-    def _gate_spec_to_gate(self, gate_spec, time, label, rng):
+    @classmethod
+    def _gate_spec_to_gate(cls, gate_spec, gate_label, parse_state):
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
-        if self._gate_is_measurement(gate_spec):
-            seed = rng.randint(1<<32)
+        time_start = parse_state.time_current
+        if cls._gate_is_measurement(gate_spec):
+            seed = parse_state.rng.randint(1 << 32)
             gate = ct.Measurement(
                 qubits[0],
-                time+0.5*duration,
+                time_start+0.5*duration,
                 ct.uniform_sampler(np.random.RandomState(seed=seed))
             )
             gate.label = r"$\circ\!\!\!\!\!\!\!\nearrow$"
-            return gate
-        elif self._gate_is_single_qubit(gate_spec):
+            # return gate
+        elif cls._gate_is_single_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
-            kraus = (m[:, 0] + m[:, 1]*1j).reshape((2, 2)) # TODO: verify if it is not conjugate
+            # TODO: verify if it is not conjugate
+            kraus = (m[:, 0] + m[:, 1]*1j).reshape((2, 2))
             gate = ct.SinglePTMGate(
                 qubits[0],
-                time+0.5*duration,
+                time_start+0.5*duration,
                 ptm.single_kraus_to_ptm(kraus)
             )
-            gate.label = label
-            return gate
-        elif self._gate_is_two_qubit(gate_spec):
+            gate.label = gate_label
+            # return gate
+        elif cls._gate_is_two_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
-            kraus = (m[:, 0] + m[:, 1]*1j).reshape((4, 4)) # TODO: verify if it is not conjugate
-            return ct.TwoPTMGate(
+            # TODO: verify if it is not conjugate
+            kraus = (m[:, 0] + m[:, 1]*1j).reshape((4, 4))
+            gate = ct.TwoPTMGate(
                 qubits[0],
                 qubits[1],
                 ptm.double_kraus_to_ptm(kraus),
-                time+0.5*duration,
+                time_start+0.5*duration,
             )
-            gate.label = label
-            return gate
+            gate.label = gate_label
+            # return gate
         else:
-            raise ConfigurationError('Could not identify gate type from gate_spec')
+            raise ConfigurationError(
+                'Could not identify gate type from gate_spec')
 
-    def _parse_circuit(self, title, n_qubits, source, rng):
+        time_end = time_start + duration
+        return gate, time_end
+
+    def _parse_circuit(self, parse_state, title, n_qubits, source):
         gates = [self._instr[line] for line in source]
         qubits = set(chain(*(gate['qubits'] for gate in gates)))
         if len(qubits) > n_qubits:
@@ -168,7 +183,8 @@ class OpenqlParser:
             self._add_qubit(circuit, qubit)
 
         for instr, gate in zip(source, gates):
-            self._add_gate(circuit, instr, gate, rng)
+            self._add_gate(parse_state, circuit,
+                           gate_spec=gate, gate_label=instr)
 
         return circuit
 
@@ -177,21 +193,30 @@ class OpenqlParser:
         out = gate_spec['type'] == 'readout'
         if out:
             if len(gate_spec['qubits']) != 1:
-                raise NotSupportedError('Only single-qubit measurements are supported')
+                raise NotSupportedError(
+                    'Only single-qubit measurements are supported')
         return out
 
     @staticmethod
     def _gate_is_single_qubit(gate_spec):
-        out = (gate_spec['type'] != 'readout') and (len(gate_spec['qubits']) == 1)
+        out = (gate_spec['type'] != 'readout') and \
+              (len(gate_spec['qubits']) == 1)
         if out:
             if len(gate_spec['matrix']) != 4:
-                raise ConfigurationError('Process matrix is incompatible with number of qubits')
+                raise ConfigurationError(
+                    'Process matrix is incompatible with number of qubits')
         return out
 
     @staticmethod
     def _gate_is_two_qubit(gate_spec):
-        out = (gate_spec['type'] != 'readout') and (len(gate_spec['qubits']) == 2)
+        out = (gate_spec['type'] != 'readout') and \
+              (len(gate_spec['qubits']) == 2)
         if out:
             if len(gate_spec['matrix']) != 16:
-                raise ConfigurationError('Process matrix is incompatible with number of qubits')
+                raise ConfigurationError(
+                    'Process matrix is incompatible with number of qubits')
         return out
+
+    @staticmethod
+    def _init_parse_state(self, rng=None, time=0):
+        return SimpleNamespace(rng=ct._ensure_rng(rng), time_current=time)
