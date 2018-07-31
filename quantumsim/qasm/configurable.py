@@ -21,7 +21,7 @@ class NotSupportedError(RuntimeError):
     pass
 
 
-class OpenqlParser:
+class ConfigurableParser:
 
     def __init__(self, config):
         if isinstance(config, str):

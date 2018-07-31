@@ -1,2 +1,2 @@
 from .universal import QASMParser
-from .openql import OpenqlParser
+from .configurable import ConfigurableParser
