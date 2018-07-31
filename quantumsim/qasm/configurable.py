@@ -120,8 +120,10 @@ class ConfigurableParser:
 
     def _add_qubit(self, circuit, qubit_name):
         if self._simulation_settings:
-            params = copy.deepcopy(self._simulation_settings.get(qubit_name))
-            if not params:
+            try:
+                params = copy.deepcopy(
+                    self._simulation_settings['error_models'][qubit_name])
+            except KeyError:
                 raise ConfigurationError(
                     'Could not find simulation settings for qubit {}'
                     .format(qubit_name))
