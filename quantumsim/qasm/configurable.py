@@ -23,12 +23,24 @@ class NotSupportedError(RuntimeError):
 
 class ConfigurableParser:
 
-    def __init__(self, config):
-        if isinstance(config, str):
-            with open(config, 'r') as c:
-                self._cfg = json.load(c)
-        else:
-            self._cfg = config
+    def __init__(self, *args):
+        if len(args) == 0:
+            raise ConfigurationError('No config files provided')
+
+        self._cfg = {}
+        for i, config in enumerate(args):
+            if isinstance(config, str):
+                with open(config, 'r') as c:
+                    cfg = json.load(c)
+            else:
+                # Assuming dictionary
+                cfg = config
+            try:
+                self._cfg.update(cfg)
+            except TypeError:
+                raise ConfigurationError(
+                    'Could not cast config entry number {} to dictioary'
+                    .format(i))
 
         try:
             self._instr = self._cfg['instructions']
