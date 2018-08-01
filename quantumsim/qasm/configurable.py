@@ -1,4 +1,3 @@
-import copy
 import json
 import numpy as np
 import re
@@ -121,15 +120,16 @@ class ConfigurableParser:
     def _add_qubit(self, circuit, qubit_name):
         if self._simulation_settings:
             try:
-                params = copy.deepcopy(
-                    self._simulation_settings['error_models'][qubit_name])
+                params = self._simulation_settings['error_models'][qubit_name]
             except KeyError:
                 raise ConfigurationError(
                     'Could not find simulation settings for qubit {}'
                     .format(qubit_name))
-            em = params.pop('error_model', None)
+            em = params.get('error_model', None)
             if em == 't1t2':
-                circuit.add_qubit(qubit_name, **params)
+                circuit.add_qubit(qubit_name,
+                                  t1=params.get('t1', np.inf),
+                                  t2=params.get('t2', np.inf))
             else:
                 raise ConfigurationError(
                     'Unknown error model for qubit "{}": "{}"'
@@ -138,23 +138,34 @@ class ConfigurableParser:
             # No simulation settings provided -- assuming ideal qubits
             circuit.add_qubit(qubit_name)
 
-    @classmethod
-    def _gate_spec_to_gate(cls, gate_spec, gate_label, rng):
+    def _gate_spec_to_gate(self, gate_spec, gate_label, rng):
         """Returns gate with time set to 0. and its duration"""
 
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
-        if cls._gate_is_ignored(gate_spec):
+        if self._gate_is_ignored(gate_spec):
             return None, 0.
-        elif cls._gate_is_measurement(gate_spec):
-            seed = rng.randint(1 << 32)
-            gate = ct.Measurement(
-                qubits[0],
-                0.,
-                ct.uniform_sampler(np.random.RandomState(seed=seed))
-            )
-            gate.label = gate_label
-        elif cls._gate_is_single_qubit(gate_spec):
+        elif self._gate_is_measurement(gate_spec):
+            # FIXME VO: To comply with Brian's code, I insert here
+            # ButterflyGate. I suppose this is not as this should be, need to
+            # consult and get this correctly.
+            if self._simulation_settings:
+                qubit_name = qubits[0]
+                try:
+                    params = \
+                        self._simulation_settings['error_models'][qubit_name]
+                except KeyError:
+                    raise ConfigurationError(
+                        'Could not find simulation settings for qubit {}'
+                        .format(qubit_name))
+                p_exc = params['frac1_0']
+                p_dec = 1 - params['frac1_1']
+                gate = ct.ButterflyGate(qubits[0], 0.,
+                                        p_exc=p_exc, p_dec=p_dec)
+                gate.label = gate_label
+            else:
+                gate = None
+        elif self._gate_is_single_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
             # TODO: verify if it is not conjugate
             kraus = (m[:, 0] + m[:, 1]*1j).reshape((2, 2))
@@ -164,7 +175,7 @@ class ConfigurableParser:
                 ptm.single_kraus_to_ptm(kraus)
             )
             gate.label = gate_label
-        elif cls._gate_is_two_qubit(gate_spec):
+        elif self._gate_is_two_qubit(gate_spec):
             m = np.array(gate_spec['matrix'], dtype=float)
             # TODO: verify if it is not conjugate
             kraus = (m[:, 0] + m[:, 1]*1j).reshape((4, 4))
@@ -189,14 +200,19 @@ class ConfigurableParser:
         for qubit in qubits:
             self._add_qubit(circuit, qubit)
 
-        try:
-            gates, tmin, tmax = self._gates_order_table[ordering.lower()](
-                qubits, gate_specs, source, rng,
-                time_start=time_start, time_end=time_end)
-        except KeyError:
-            raise RuntimeError('Unknow ordering: {}'.format(ordering))
+        # FIXME Here we filter out prepz gates, based on name. Generally this
+        # should be done, based on gate_spec, in the method _gate_is_ignored
+        _source = [s for s in source if not s.startswith('prepz')]
 
-        for gate, instr in zip(gates, source):
+        try:
+            order_func = self._gates_order_table[ordering.lower()]
+        except KeyError:
+            raise RuntimeError('Unknown ordering: {}'.format(ordering))
+        gates, tmin, tmax = order_func(
+            qubits, gate_specs, _source, rng,
+            time_start=time_start, time_end=time_end)
+
+        for gate, instr in zip(gates, _source):
             circuit.add_gate(gate)
 
         # tmin might be important, tmax is defined by the last gate --
