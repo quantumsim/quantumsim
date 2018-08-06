@@ -4,8 +4,8 @@ import re
 import warnings
 from itertools import chain
 
-import quantumsim.circuit as ct
-import quantumsim.ptm as ptm
+from .. import circuit as ct
+from .. import ptm
 
 
 class ConfigurationError(RuntimeError):
