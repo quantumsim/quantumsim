@@ -140,7 +140,6 @@ class ConfigurableParser:
 
     def _gate_spec_to_gate(self, gate_spec, gate_label, rng):
         """Returns gate with time set to 0. and its duration"""
-
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
         if self._gate_is_ignored(gate_spec):
@@ -328,5 +327,9 @@ class ConfigurableParser:
             # FIXME Here we filter out prepz gates, based on name. Generally
             # this should be done, based on gate_spec, in the method
             # _gate_is_ignored, but it does not get any signature of it yet
-            if not s.startswith('prepz'):
+            if s.startswith('prepz'):
+                continue
+            elif s in self._instr.keys():
                 yield s
+            else:
+                raise QasmError("Unknown QASM instruction: {}".format(s))
