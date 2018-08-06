@@ -194,25 +194,24 @@ class ConfigurableParser:
 
     def _parse_circuit(self, title, source, ordering, rng,
                        time_start, time_end):
-        gate_specs = [self._instr[line] for line in source]
+        source_decomposed = list(self._expand_decompositions(source))
+        gate_specs = [self._instr[line] for line in source_decomposed]
+        # Here we get all qubits, that actually participate in circuit
         qubits = set(chain(*(gs['qubits'] for gs in gate_specs)))
         circuit = ct.Circuit(title)
         for qubit in qubits:
             self._add_qubit(circuit, qubit)
-
-        # FIXME Here we filter out prepz gates, based on name. Generally this
-        # should be done, based on gate_spec, in the method _gate_is_ignored
-        _source = [s for s in source if not s.startswith('prepz')]
 
         try:
             order_func = self._gates_order_table[ordering.lower()]
         except KeyError:
             raise RuntimeError('Unknown ordering: {}'.format(ordering))
         gates, tmin, tmax = order_func(
-            qubits, gate_specs, _source, rng,
+            qubits=qubits, gate_specs=gate_specs,
+            gate_labels=source_decomposed, rng=rng,
             time_start=time_start, time_end=time_end)
 
-        for gate, instr in zip(gates, _source):
+        for gate in gates:
             circuit.add_gate(gate)
 
         # tmin might be important, tmax is defined by the last gate --
@@ -323,3 +322,11 @@ class ConfigurableParser:
             for gate in gates:
                 gate.time += time_shift
         return gates, time_shift, time_max + time_shift
+
+    def _expand_decompositions(self, source):
+        for s in source:
+            # FIXME Here we filter out prepz gates, based on name. Generally
+            # this should be done, based on gate_spec, in the method
+            # _gate_is_ignored, but it does not get any signature of it yet
+            if not s.startswith('prepz'):
+                yield s
