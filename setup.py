@@ -13,7 +13,10 @@ setup(
     author_email='brianzi@physik.fu-berlin.de',
     packages=find_packages('.'),
     ext_package='quantumsim',
-    data_files=[('pycudakernels', ['quantumsim/primitives.cu'])],
+    package_data={
+        # all Cuda files we can find
+        '': '*.cu',
+    },
     install_requires=[
         "pytools",
         "numpy>=1.12",
