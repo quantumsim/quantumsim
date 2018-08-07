@@ -20,13 +20,56 @@ class NotSupportedError(RuntimeError):
     pass
 
 
+class Decomposer:
+    """Instances of this class are callable objects, that take a QASM
+    instruction as input and return its expansion, according to definition in
+    `config['gate_decomposition']`.
+    """
+    _arg_matcher = re.compile(r"\%(\d+)")
+
+    def __init__(self, alias, expansion):
+        s = alias.strip()
+        arg_nums = self._arg_matcher.findall(s)
+        # This RE should match provided alias (for example 'x q0,q1' for
+        # alias 'x %0,%1' and, if match is successful, return ('q0', 'q1')
+        # tuple.
+        self._matcher_re = re.compile(
+            r'^\s*{}\s*$'.format(self._arg_matcher.sub(r'(\\w+)', s)))
+        if not len(arg_nums) == len(set(arg_nums)):
+            raise ConfigurationError(
+                'Alias has repeated "%n"-argument, that is not supported.')
+        # For example, expansion for `'x %0,%1'` is
+        # `['h %0', 'h %1', 'cn %1,%0']`. Then, self._format_strings should be
+        # `['h {0}', 'h {1}, 'cn {1},{0}'] to return proper commands after
+        # formatting with tuple, parsed by self._matcher_re.
+        self._format_strings = []
+        for instr in expansion:
+            fs = str(instr)
+            for i, k in enumerate(arg_nums):
+                fs = re.sub(
+                    r"\%{id}\b".format(id=k), r'{{{}}}'.format(i), fs)
+            self._format_strings.append(fs)
+
+    def _match(self, instr):
+        return self._matcher_re.match(instr) is not None
+
+    def __call__(self, instr):
+        match = self._matcher_re.match(instr)
+        if match is not None:
+            values = match.groups()
+            return [expander.format(*values)
+                    for expander in self._format_strings]
+        else:
+            return None
+
+
 class ConfigurableParser:
 
     def __init__(self, *args):
         if len(args) == 0:
             raise ConfigurationError('No config files provided')
 
-        self._cfg = {}
+        configuration = {}
         for i, config in enumerate(args):
             if isinstance(config, str):
                 with open(config, 'r') as c:
@@ -35,19 +78,24 @@ class ConfigurableParser:
                 # Assuming dictionary
                 cfg = config
             try:
-                self._cfg.update(cfg)
+                configuration.update(cfg)
             except TypeError:
                 raise ConfigurationError(
                     'Could not cast config entry number {} to dictioary'
                     .format(i))
 
         try:
-            self._instr = self._cfg['instructions']
+            self._instructions = configuration['instructions']
         except KeyError:
             raise ConfigurationError(
                 'Could not find "instructions" block in config')
 
-        self._simulation_settings = self._cfg.get('simulation_settings', None)
+        decompositions = configuration.get('gate_decomposition', {})
+        self._decomposers = {Decomposer(al, dec)
+                             for al, dec in decompositions.items()}
+
+        self._simulation_settings = configuration.get('simulation_settings',
+                                                      None)
         self._gates_order_table = {
             'asap': self._gates_order_asap,
             'alap': self._gates_order_alap,
@@ -194,7 +242,7 @@ class ConfigurableParser:
     def _parse_circuit(self, title, source, ordering, rng,
                        time_start, time_end):
         source_decomposed = list(self._expand_decompositions(source))
-        gate_specs = [self._instr[line] for line in source_decomposed]
+        gate_specs = [self._instructions[line] for line in source_decomposed]
         # Here we get all qubits, that actually participate in circuit
         qubits = set(chain(*(gs['qubits'] for gs in gate_specs)))
         circuit = ct.Circuit(title)
@@ -323,13 +371,39 @@ class ConfigurableParser:
         return gates, time_shift, time_max + time_shift
 
     def _expand_decompositions(self, source):
+        """Returns a generator of instructions from `source` (can be also a
+        generator), expanding all aliases, specified in configuration in
+        "gate_decompositions" field, so that we have only instructions from
+        "instructions" field of configuration. Raises `QasmError`, if this is
+        impossible.
+        """
         for s in source:
             # FIXME Here we filter out prepz gates, based on name. Generally
             # this should be done, based on gate_spec, in the method
-            # _gate_is_ignored, but it does not get any signature of it yet
+            # _gate_is_ignored, but it does not get any signature of it yet.
             if s.startswith('prepz'):
                 continue
-            elif s in self._instr.keys():
+            elif s in self._instructions.keys():
                 yield s
-            else:
-                raise QasmError("Unknown QASM instruction: {}".format(s))
+                continue
+            # trying to decompose instruction
+            maybe_decomposed = self._try_decompose(s)
+            if maybe_decomposed is not None:
+                # These may be also aliases, so we call here the same
+                # function recursively.
+                # FIXME Would be nice to insert here some protection
+                # against infinite recursion.
+                for s1 in self._expand_decompositions(maybe_decomposed):
+                    yield s1
+                continue
+            raise QasmError("Unknown QASM instruction: {}".format(s))
+
+    def _try_decompose(self, instr):
+        """If instruction matches alias, this method returns expantion of
+        instruction with this alias. If it does not match, it returns `None`.
+        """
+        for decomposer in self._decomposers:
+            result = decomposer(instr)
+            if result is not None:
+                return result
+        return None
