@@ -1,0 +1,10 @@
+image: quantumsim/testing
+
+stages:
+  - test
+
+run tests:
+  stage: test
+  script:
+    - python3 setup.py install
+    - py.test
