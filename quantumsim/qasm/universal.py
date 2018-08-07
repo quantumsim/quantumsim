@@ -1,5 +1,5 @@
 import parsimonious
-import quantumsim.circuit as ct
+from .. import circuit as ct
 import numpy as np
 import functools
 
