@@ -1,10 +1,47 @@
 image: quantumsim/testing
 
 stages:
+  - build
   - test
+  - deploy
+
+build HTML documentation:
+  stage: build
+  script:
+    - python3 setup.py install
+    - make -C doc html
+  artifacts:
+    paths:
+      - doc/build/html
+    expire_in: 1 hour
 
 run tests:
   stage: test
   script:
     - python3 setup.py install
     - py.test
+
+check for broken links in doc:
+  stage: test
+  script:
+    - make -C doc linkcheck
+  allow_failure: true
+
+upload documentation to docs repo:
+  stage: deploy
+  only:
+    # TODO Replace to master, when tested
+    - ci@quantumsim/quantumsim
+  script:
+    - mkdir -p ~/.ssh && touch ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+    - echo "${QUANTUMSIM_DOC_DEPLOY_KEY}" | base64 -d > ~/.ssh/id_rsa
+    - cd doc/build/html
+    - git init
+    - git config --local user.name "Quantumsim CI Worker"
+    - git config --local user.email "quantumsim@nomail"
+    - git remote add docs_deploy_origin "${QUANTUMSIM_DOC_GIT_URL}"
+    - git add .
+    - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
+    - git push --force docs_deploy_origin master
+
+
