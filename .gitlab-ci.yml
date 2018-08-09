@@ -4,6 +4,7 @@ stages:
   - build
   - test
   - deploy
+  - finalize
 
 build HTML documentation:
   stage: build
@@ -44,4 +45,11 @@ upload documentation to docs repo:
     - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
     - git push --force docs_deploy_origin master
 
-
+trigger website rebuild:
+  stage: finalize
+  only:
+    - ci@quantumsim/quantumsim
+  script:
+    - curl --request POST --form token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}
+           --form ref=master
+           ${QUANTUMSIM_GITLAB_URL}/api/v4/projects/${QUANTUMSIM_WEBSITE_PROJECTID}/trigger/pipeline
