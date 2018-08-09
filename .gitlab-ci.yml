@@ -32,7 +32,7 @@ upload documentation to docs repo:
   stage: deploy
   only:
     # TODO Replace to master, when tested
-    - ci@quantumsim/quantumsim
+    - master@quantumsim/quantumsim
   script:
     - mkdir -p ~/.ssh && touch ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
     - echo "${QUANTUMSIM_DOC_DEPLOY_KEY}" | base64 -d > ~/.ssh/id_rsa
@@ -48,7 +48,7 @@ upload documentation to docs repo:
 trigger website rebuild:
   stage: finalize
   only:
-    - ci@quantumsim/quantumsim
+    - master@quantumsim/quantumsim
   script:
     - curl --request POST --form token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}
            --form ref=master
