@@ -1,4 +1,4 @@
-/*This file is part of quantumsim. (https://github.com/quantumsim/quantumsim)*/
+/*This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)*/
 /*(c) 2016 Brian Tarasinski*/
 /*Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt*/
 

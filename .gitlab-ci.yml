@@ -31,7 +31,6 @@ check for broken links in doc:
 upload documentation to docs repo:
   stage: deploy
   only:
-    # TODO Replace to master, when tested
     - master@quantumsim/quantumsim
   script:
     - mkdir -p ~/.ssh && touch ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
