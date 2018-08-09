@@ -64,6 +64,74 @@ class Decomposer:
 
 
 class ConfigurableParser:
+    """Parser for QASM files, that uses OpenQL-compatible JSON files for
+    defining QASM grammar.
+
+    Mandatory configuration should have the following JSON structure
+    (or corresponding to it data structure)::
+
+        {
+          "instructions": {
+            "i q0": {
+              "duration": 20,
+              "qubits": ["q0"],
+              "matrix": [
+                  [1.0, 0.0], [0.0, 0.0],
+                  [0.0, 0.0], [1.0, 0.0]
+              ],
+            }
+          }
+        }
+
+    Here `"i q0"` is an actual QASM instruction, `"duration"` is the duration
+    of a corresponding gate in arbitrary time units, `"qubits"` is a list of
+    qubits, `"matrix"` is a Kraus operator for a correspondent gate, where all
+    the lines are concatenated and each number `a` is represented as
+    `[Re(a), Im(a)]`. Same instructions for different qubits need to be
+    specifies separately.
+
+    Additionally, one can specify the following entries::
+
+        {
+          "gate_decomposition": {
+            "cnot %0,%1": [
+              "ry90 %0",
+              "cz %0,%1",
+              "ry90 %1"
+            ]
+          },
+          "simulation_settings": {
+            "error_models": {
+              "q0": {
+                "error_model": "t1t2",
+                "t1": 30000000.0,
+                "t2": 10000000.0,
+                "frac1_0": 0.0001,
+                "frac1_1": 0.9999
+              }
+            }
+          }
+        }
+
+    `gate_decomposition` defines parametrized gate decomposition,
+    `"simulation_settings"` defines error models for different qubits.
+    Currently, only "t1t2" is supported.
+    If `"simulation_settings"` is not defined in configuration, qubits are
+    considered to be ideal.
+
+    Parameters
+    ----------
+
+    cfg1, cfg2, ... : strings or dictionaries
+        One or more configuration files. If string is provided, it is
+        interpreted as a filename of a JSON file and dictionary is parsed out
+        of it. Each next config overrides items, defined in previous config.
+
+    Raises
+    ------
+    ConfigurationError
+        If the configuration is wrong or insufficient.
+    """
 
     def __init__(self, *args):
         if len(args) == 0:
@@ -103,22 +171,76 @@ class ConfigurableParser:
 
     def parse(self, qasm, rng=None, *, ordering='ALAP',
               time_start=None, time_end=None):
+        """Parses QASM to the list of circuits.
+
+        Parameters
+        ----------
+        qasm : str or iterable
+            Filename or iterator over strings
+        rng : numpy.random.RandomState, int or None
+            Random number generator or seed to initialize a new one.
+            If None is specified, calculations will not be reproducible.
+        ordering: str
+            How to order gates in time in circuit.
+            Currently supported options are `'ALAP'` (as late as possible,
+            default) or `'ASAP'` (as soon as possible).
+        time_start: float or None
+            Beginning time for the circuits.
+            Mutually exclusive with `time_end`.
+            If both are None, defaults to 0.
+        time_end: float or None
+            Ending time for the circuits.
+            Mutually exclusive with `time_start`.
+            If both are None, defaults to 0.
+        """
         return list(self.gen_circuits(
             qasm, rng, ordering=ordering,
             time_start=time_start, time_end=time_end))
 
     def gen_circuits(self, qasm, rng=None, *, ordering='ALAP',
                      time_start=None, time_end=None):
+        """Returns a generator over the circuits, defined in QASM.
+        Circuits are constructed lazily.
+
+        Parameters
+        ----------
+        qasm : str or iterable
+            Filename or iterator over strings
+        rng : numpy.random.RandomState, int or None
+            Random number generator or seed to initialize a new one.
+            If None is specified, calculations will not be reproducible.
+        ordering: str
+            How to order gates in time in circuit.
+            Currently supported options are `'ALAP'` (as late as possible,
+            default) or `'ASAP'` (as soon as possible).
+        time_start: float or None
+            Beginning time for the circuits.
+            Mutually exclusive with `time_end`.
+            If both are None, defaults to 0.
+        time_end: float or None
+            Ending time for the circuits.
+            Mutually exclusive with `time_start`.
+            If both are None, defaults to 0.
+        """
         rng = ct._ensure_rng(rng)
         if isinstance(qasm, str):
             return self._gen_circuits_fn(qasm, rng, ordering,
                                          time_start, time_end)
         else:
-            return self._gen_circuits(qasm, rng, ordering,
-                                      time_start, time_end)
+            return self._gen_circuits_fp(qasm, rng, ordering,
+                                         time_start, time_end)
 
     @staticmethod
     def _gen_circuits_src(fp):
+        """Returns a generator over the circuits, that generates
+        `(title, [op1, op2, ...])`
+        (circuit title and circuit operations, QASM strings)
+
+        Parameters
+        ----------
+        fp: iterable
+            Generator of strings
+        """
         circuit_title = None
         circuit_src = []
         for line_full in fp:
@@ -137,7 +259,10 @@ class ConfigurableParser:
         else:
             warnings.warn("Could not find any circuits in the QASM file.")
 
-    def _gen_circuits(self, fp, rng, ordering, time_start, time_end):
+    def _gen_circuits_fp(self, fp, rng, ordering, time_start, time_end):
+        """Returns a generator over the circuits, provided iterator or
+        generator of strings `fp`.
+        """
         # Getting the initial statement with the number of qubits
         rng = ct._ensure_rng(rng)
         qubits_re = re.compile(r'^\s*qubits\s+(\d+)')
@@ -158,14 +283,17 @@ class ConfigurableParser:
             yield self._parse_circuit(title, source, ordering, rng,
                                       time_start, time_end)
 
-    def _gen_circuits_fn(self, filename, rng, ordering, time_start, time_end):
-        with open(filename, 'r') as fp:
-            generator = self._gen_circuits(fp, rng, ordering,
-                                           time_start, time_end)
+    def _gen_circuits_fn(self, fn, rng, ordering, time_start, time_end):
+        """Returns a generator over the circuits, provided QASM filename `fn`.
+        """
+        with open(fn, 'r') as fp:
+            generator = self._gen_circuits_fp(fp, rng, ordering,
+                                              time_start, time_end)
             for circuit in generator:
                 yield circuit
 
     def _add_qubit(self, circuit, qubit_name):
+        """Adds qubit `qubit_name` to `circuit`."""
         if self._simulation_settings:
             try:
                 params = self._simulation_settings['error_models'][qubit_name]
@@ -187,7 +315,11 @@ class ConfigurableParser:
             circuit.add_qubit(qubit_name)
 
     def _gate_spec_to_gate(self, gate_spec, gate_label, rng):
-        """Returns gate with time set to 0. and its duration"""
+        """Returns a tuple of gate with its starting time set to 0 and gate's
+        duration"""
+        # TODO After fixing https://gitlab.com/quantumsim/quantumsim/issues/7
+        # this should be refactored, since duration will be bundled into the
+        # gate object itself.
         duration = gate_spec['duration']
         qubits = gate_spec['qubits']
         if self._gate_is_ignored(gate_spec):
@@ -241,6 +373,9 @@ class ConfigurableParser:
 
     def _parse_circuit(self, title, source, ordering, rng,
                        time_start, time_end):
+        """Parces circuit, defined by set of instructions `source`,
+        to a Quantumsim circuit.
+        """
         source_decomposed = list(self._expand_decompositions(source))
         gate_specs = [self._instructions[line] for line in source_decomposed]
         # Here we get all qubits, that actually participate in circuit
@@ -303,6 +438,10 @@ class ConfigurableParser:
 
     def _gates_order_alap(self, qubits, gate_specs, gate_labels,
                           rng, time_start, time_end):
+        """Gets list of gate specifications (as parsed from configuration) and
+        returns list of gates constructed, scheduling each gate as late
+        as possible.
+        """
         rng = ct._ensure_rng(rng)
         current_times = {qubit: 0. for qubit in qubits}
         gates = []
@@ -340,6 +479,10 @@ class ConfigurableParser:
 
     def _gates_order_asap(self, qubits, gate_specs, gate_labels,
                           rng, time_start, time_end):
+        """Gets list of gate specifications (as parsed from configuration) and
+        returns list of gates constructed, scheduling each gate as soon
+        as possible.
+        """
         rng = ct._ensure_rng(rng)
         current_times = {qubit: 0. for qubit in qubits}
         gates = []
@@ -399,7 +542,7 @@ class ConfigurableParser:
             raise QasmError("Unknown QASM instruction: {}".format(s))
 
     def _try_decompose(self, instr):
-        """If instruction matches alias, this method returns expantion of
+        """If instruction matches alias, this method returns expansion of
         instruction with this alias. If it does not match, it returns `None`.
         """
         for decomposer in self._decomposers:
