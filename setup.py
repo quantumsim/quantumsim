@@ -14,8 +14,8 @@ setup(
     packages=find_packages('.'),
     ext_package='quantumsim',
     package_data={
-        # all Cuda files we can find
-        '': '*.cu',
+        # all Cuda and json files we can find
+        '': ['*.cu', '*.json'],
     },
     install_requires=[
         "pytools",

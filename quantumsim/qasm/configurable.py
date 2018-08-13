@@ -75,9 +75,11 @@ class ConfigurableParser:
             "i q0": {
               "duration": 20,
               "qubits": ["q0"],
-              "matrix": [
+              "kraus_repr": [
+                [
                   [1.0, 0.0], [0.0, 0.0],
                   [0.0, 0.0], [1.0, 0.0]
+                ]
               ],
             }
           }
@@ -85,10 +87,10 @@ class ConfigurableParser:
 
     Here `"i q0"` is an actual QASM instruction, `"duration"` is the duration
     of a corresponding gate in arbitrary time units, `"qubits"` is a list of
-    qubits, `"matrix"` is a Kraus operator for a correspondent gate, where all
-    the lines are concatenated and each number `a` is represented as
-    `[Re(a), Im(a)]`. Same instructions for different qubits need to be
-    specifies separately.
+    qubits, `"kraus_repr"` is a list of Kraus operator for a correspondent
+    gate. Each Kraus operator is represented as a matrix, that has concatenated
+    strings and each its number `a` is represented as `[Re(a), Im(a)]`.
+    Same instructions for different qubits need to be specifies separately.
 
     Additionally, one can specify the following entries::
 
@@ -345,23 +347,23 @@ class ConfigurableParser:
             else:
                 gate = None
         elif self._gate_is_single_qubit(gate_spec):
-            m = np.array(gate_spec['matrix'], dtype=float)
-            # TODO: verify if it is not conjugate
-            kraus = (m[:, 0] + m[:, 1]*1j).reshape((2, 2))
+            kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
+            kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((2, 2)) for m in kr_spec]
+            ptm_list = [ptm.single_kraus_to_ptm(kr) for kr in kr_list]
             gate = ct.SinglePTMGate(
                 qubits[0],
                 0.,
-                ptm.single_kraus_to_ptm(kraus)
+                np.sum(ptm_list, axis=0),
             )
             gate.label = gate_label
         elif self._gate_is_two_qubit(gate_spec):
-            m = np.array(gate_spec['matrix'], dtype=float)
-            # TODO: verify if it is not conjugate
-            kraus = (m[:, 0] + m[:, 1]*1j).reshape((4, 4))
+            kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
+            kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((4, 4)) for m in kr_spec]
+            ptm_list = [ptm.double_kraus_to_ptm(kr) for kr in kr_list]
             gate = ct.TwoPTMGate(
                 qubits[0],
                 qubits[1],
-                ptm.double_kraus_to_ptm(kraus),
+                np.sum(ptm_list, axis=0),
                 0.,
             )
             gate.label = gate_label
@@ -421,9 +423,11 @@ class ConfigurableParser:
         out = (gate_spec['type'] != 'readout') and \
               (len(gate_spec['qubits']) == 1)
         if out:
-            if len(gate_spec['matrix']) != 4:
-                raise ConfigurationError(
-                    'Process matrix is incompatible with number of qubits')
+            for k in gate_spec['kraus_repr']:
+                if len(k) != 4:
+                    raise ConfigurationError(
+                        'Process` Kraus representation is incompatible with'
+                        ' number of qubits')
         return out
 
     @staticmethod
@@ -431,9 +435,11 @@ class ConfigurableParser:
         out = (gate_spec['type'] != 'readout') and \
               (len(gate_spec['qubits']) == 2)
         if out:
-            if len(gate_spec['matrix']) != 16:
-                raise ConfigurationError(
-                    'Process matrix is incompatible with number of qubits')
+            for k in gate_spec['kraus_repr']:
+                if len(k) != 16:
+                    raise ConfigurationError(
+                        'Process` Kraus representation is incompatible with'
+                        ' number of qubits')
         return out
 
     def _gates_order_alap(self, qubits, gate_specs, gate_labels,
