@@ -106,7 +106,7 @@ def test_three_qbit_clean_qasm():
 
     c.order()
 
-    assert len(c.gates) == 37
+    assert len(c.gates) == 29
 
     sdm = sparsedm.SparseDM(qubit_names)
 

@@ -402,7 +402,8 @@ class ConfigurableParser:
 
         # tmin might be important, tmax is defined by the last gate --
         # idling gates afterwards are useless
-        circuit.add_waiting_gates(tmin=tmin, tmax=None)
+        # circuit.add_waiting_gates(tmin=tmin, tmax=None)
+        circuit.add_waiting_gates(tmin=0, tmax=None)
         circuit.order()
         return circuit
 
