@@ -343,9 +343,9 @@ class ConfigurableParser:
                 gate = ct.ButterflyGate(qubits[0], 0.,
                                         p_exc=p_exc, p_dec=p_dec)
                 gate.label = gate_label
-                duration = 0.
             else:
                 gate = None
+            duration = 0.
         elif self._gate_is_single_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
             kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((2, 2)) for m in kr_spec]
