@@ -322,7 +322,6 @@ class ConfigurableParser:
         # TODO After fixing https://gitlab.com/quantumsim/quantumsim/issues/7
         # this should be refactored, since duration will be bundled into the
         # gate object itself.
-        duration = gate_spec['duration']
         qubits = gate_spec['qubits']
         if self._gate_is_ignored(gate_spec):
             return None, 0.
@@ -344,6 +343,7 @@ class ConfigurableParser:
                 gate = ct.ButterflyGate(qubits[0], 0.,
                                         p_exc=p_exc, p_dec=p_dec)
                 gate.label = gate_label
+                duration = 0.
             else:
                 gate = None
         elif self._gate_is_single_qubit(gate_spec):
@@ -356,6 +356,7 @@ class ConfigurableParser:
                 np.sum(ptm_list, axis=0),
             )
             gate.label = gate_label
+            duration = gate_spec['duration']
         elif self._gate_is_two_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
             kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((4, 4)) for m in kr_spec]
@@ -367,6 +368,7 @@ class ConfigurableParser:
                 0.,
             )
             gate.label = gate_label
+            duration = gate_spec['duration']
         else:
             raise ConfigurationError(
                 'Could not identify gate type from gate_spec')
