@@ -95,18 +95,13 @@ def amp_ph_damping_ptm(gamma, lamda):
 def gen_amp_damping_ptm(gamma_down, gamma_up):
     """Return a 4x4 Pauli transfer matrix  representing amplitude damping including an excitation rate gamma_up.
     """
-
     gamma = gamma_up + gamma_down
-    p = gamma_down/(gamma_down+gamma_up)
-
-
     ptm = np.array([
         [1, 0, 0, 0],
         [0, np.sqrt((1 - gamma)), 0, 0],
         [0, 0, np.sqrt((1 - gamma)), 0],
-        [(2*p - 1)*gamma, 0, 0, 1 - gamma]]
+        [2*gamma_down - gamma, 0, 0, 1 - gamma]]
     )
-
     return to_0xy1_basis(ptm)
 
 def dephasing_ptm(px, py, pz):
