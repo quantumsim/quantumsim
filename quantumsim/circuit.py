@@ -566,6 +566,41 @@ class CNOT(TwoPTMGate):
 
 class ISwap(TwoPTMGate):
 
+    def __init__(self, bit0, bit1, time, **kwargs):
+        """
+        ISwap gate, described by the two qubit operator
+
+        1  0 0 0
+        0  0 i 0
+        0  i 0 0
+        0  0 0 1
+        """
+
+        kraus0 = np.array([
+            [1, 0, 0, 0],
+            [0, 0, 1j, 0],
+            [0, 1j, 0, 0],
+            [0, 0, 0, 1]
+        ])
+
+        p_iswap = ptm.double_kraus_to_ptm(kraus0)
+
+        super().__init__(bit0, bit1, p_iswap, time, **kwargs)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]),
+                   marker="x", s=80, color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+class ISwapNoisy(TwoPTMGate):
+
     def __init__(self, bit0, bit1, time, dephase_var=0, **kwargs):
         """
         ISwap gate, described by the two qubit operator
@@ -606,7 +641,9 @@ class ISwap(TwoPTMGate):
             ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
                                              np.sqrt(1-d4**2)]))
 
-        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
+        p_iswap_noisy = p0 @ p1 @ p0
+
+        super().__init__(bit0, bit1, p_iswap_noisy, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -620,10 +657,9 @@ class ISwap(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
-
 class ISwapRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
+    def __init__(self, bit0, bit1, angle, time, t2_enh=None, **kwargs):
         """
         ISwap rotation gate, described by the two qubit operator
 
@@ -632,45 +668,47 @@ class ISwapRotation(TwoPTMGate):
         0  i*sin(theta)     cos(theta)      0
         0  0                0               1
         """
-        if angle != 0:
-            d = np.exp(-dephase_var * (2*angle/np.pi)**2 / 2)
-            d4 = np.exp(-dephase_var * (2*angle/np.pi)**2 / 8)
-        else:
-            d = 1
-            d4 = 1
-        assert d >= 0
-        assert d <= 1
-
-        kraus0 = np.array([
-            [1, 0, 0, 0],
-            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
-            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
-            [0, 0, 0, 1]
-        ])
-        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 1, 1, 0],
-            [0, 0, 0, 0]
-        ])
-        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, -1, 0],
-            [0, -1, 1, 0],
-            [0, 0, 0, 0]
-        ])
 
         self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
-                                             np.sqrt(1-d4**2)]))
-        p1 = ptm.double_kraus_to_ptm(kraus0) +\
-            ptm.double_kraus_to_ptm(kraus1) +\
-            ptm.double_kraus_to_ptm(kraus2)
+        if t2_enh is None:
+            d_var=0
+        else:
+            d_var = 1 - np.exp(-time/t2_enh) #d_var is the width of the gaussia squared
+        assert d_var>=0
+        assert d_var<=1
 
-        self.dephase_var = dephase_var
+        c = np.cos(angle) * np.exp(-d_var/2)
+        cc = 0.5*(1+np.exp(-2*d_var)*(np.cos(angle)**2))
+        s = np.sin(angle) * np.exp(-d_var/2)
+        ss = 0.5*(1-np.exp(-2*d_var)*(np.sin(angle)**2))
+        sc = np.exp(-2*d_var)*np.sin(angle)*np.cos(angle)
 
-        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
+        p_iswap = np.array([
+            [1,  0, 0,   0, 0, 0,   0,  0,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  c, 0,   0, 0, 0,   0,  0,  0,   0, 0, s,   0, 0,  0, 0],
+            [0,  0, c,   0, 0, 0,   0, -s,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,  cc, 0, 0, -sc,  0,  0,  sc, 0, 0,  ss, 0,  0, 0],
+            [0,  0, 0,   0, c, 0,   0,  0,  0,   0, 0, 0,   0, 0, -s, 0],
+            [0,  0, 0,   0, 0, 1,   0,  0,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,  sc, 0, 0,  cc,  0,  0,  ss, 0, 0, -sc, 0,  0, 0],
+            [0,  0, s,   0, 0, 0,   0,  c,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  c,   0, 0, 0,   0, s,  0, 0],
+            [0,  0, 0, -sc, 0, 0,  ss,  0,  0,  cc, 0, 0,  sc, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  0,   0, 1, 0,   0, 0,  0, 0],
+            [0, -s, 0,   0, 0, 0,   0,  0,  0,   0, 0, c,   0, 0,  0, 0],
+            [0,  0, 0,  ss, 0, 0,  sc,  0,  0, -sc, 0, 0,  cc, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0, -s,   0, 0, 0,   0, c,  0, 0],
+            [0,  0, 0,   0, s, 0,   0,  0,  0,   0, 0, 0,   0, 0,  c, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  0,   0, 0, 0,   0, 0,  0, 1]
+            ])
+
+        p_iswap_0xy1=ptm.to_0xy1_basis(p_iswap)
+
+        self.d_var = d_var
+        self.t2_enh=t2_enh
+        self.time=time
+
+        super().__init__(bit0, bit1, p_iswap_0xy1, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -686,43 +724,42 @@ class ISwapRotation(TwoPTMGate):
 
     def adjust(self, angle):
 
-        if angle != 0:
-            d = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 2)
-            d4 = np.exp(-self.dephase_var * (2*angle/np.pi)**2 / 8)
-        else:
-            d = 1
-            d4 = 1
-        assert d >= 0
-        assert d <= 1
-
-        kraus0 = np.array([
-            [1, 0, 0, 0],
-            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
-            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
-            [0, 0, 0, 1]
-        ])
-        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 1, 1, 0],
-            [0, 0, 0, 0]
-        ])
-        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, -1, 0],
-            [0, -1, 1, 0],
-            [0, 0, 0, 0]
-        ])
-
         self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
-                                             np.sqrt(1-d4**2)]))
-        p1 = ptm.double_kraus_to_ptm(kraus0) +\
-            ptm.double_kraus_to_ptm(kraus1) +\
-            ptm.double_kraus_to_ptm(kraus2)
 
-        self.two_ptm = p0 @ p1 @ p0
+        if self.t2_enh is None:
+            d_var=0
+        else:
+            d_var = 1 - np.exp(-self.time/self.t2_enh) #d_var is the width of the gaussia squared
+        assert d_var>=0
+        assert d_var<=1
+
+        c = np.cos(angle) * np.exp(-d_var/2)
+        cc = 0.5*(1+np.exp(-2*d_var)*(np.cos(angle)**2))
+        s = np.sin(angle) * np.exp(-d_var/2)
+        ss = 0.5*(1-np.exp(-2*d_var)*(np.sin(angle)**2))
+        sc = np.exp(-2*d_var)*np.sin(angle)*np.cos(angle)
+
+        p_iswap = np.array([
+            [1,  0, 0,   0, 0, 0,   0,  0,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  c, 0,   0, 0, 0,   0,  0,  0,   0, 0, s,   0, 0,  0, 0],
+            [0,  0, c,   0, 0, 0,   0, -s,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,  cc, 0, 0, -sc,  0,  0,  sc, 0, 0,  ss, 0,  0, 0],
+            [0,  0, 0,   0, c, 0,   0,  0,  0,   0, 0, 0,   0, 0, -s, 0],
+            [0,  0, 0,   0, 0, 1,   0,  0,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,  sc, 0, 0,  cc,  0,  0,  ss, 0, 0, -sc, 0,  0, 0],
+            [0,  0, s,   0, 0, 0,   0,  c,  0,   0, 0, 0,   0, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  c,   0, 0, 0,   0, s,  0, 0],
+            [0,  0, 0, -sc, 0, 0,  ss,  0,  0,  cc, 0, 0,  sc, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  0,   0, 1, 0,   0, 0,  0, 0],
+            [0, -s, 0,   0, 0, 0,   0,  0,  0,   0, 0, c,   0, 0,  0, 0],
+            [0,  0, 0,  ss, 0, 0,  sc,  0,  0, -sc, 0, 0,  cc, 0,  0, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0, -s,   0, 0, 0,   0, c,  0, 0],
+            [0,  0, 0,   0, s, 0,   0,  0,  0,   0, 0, 0,   0, 0,  c, 0],
+            [0,  0, 0,   0, 0, 0,   0,  0,  0,   0, 0, 0,   0, 0,  0, 1]
+            ])
+        p_iswap_0xy1=ptm.to_0xy1_basis(p_iswap)
+        self.d_var=d_var
+        self.two_ptm = p_iswap_0xy1
 
 
 class Swap(TwoPTMGate):
