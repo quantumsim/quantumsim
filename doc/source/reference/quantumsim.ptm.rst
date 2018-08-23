@@ -1,4 +1,3 @@
-
 :mod:`quantumsim.ptm` -- Pauli transfer matrix routines
 =======================================================
 
@@ -7,6 +6,7 @@
 .. autosummary::
    :toctree: generated/
 
+   switch_basis
    to_0xy1_basis
    to_0xyz_basis
    hadamard_ptm

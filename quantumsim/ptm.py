@@ -19,17 +19,61 @@ single_tensor = np.array([[[1, 0], [0, 0]],
 double_tensor = np.kron(single_tensor, single_tensor)
 
 
+def switch_basis(ptm):
+    """Switches basis of PTM between ixyz and 0xy1 basis.
+
+    Parameters
+    ----------
+    ptm : array_like
+        Transfer matrix in 0xy1 or ixyz basis. [1]_ Must be 4x4 for a single-qubit
+        PTM and or 16x16 for two-qubit PTM.
+
+    Returns
+    -------
+    ndarray
+        Transfer matrix in another basis
+
+    References
+    ----------
+    .. [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography,
+        http://arxiv.org/abs/1509.02921v1
+    """
+    if ptm.shape == (4, 4):
+        trans_mat = basis_transformation_matrix
+        return np.dot(trans_mat, np.dot(ptm, trans_mat))
+    elif ptm.shape == (16, 16):
+        trans_mat = np.kron(basis_transformation_matrix,
+                            basis_transformation_matrix)
+        return np.dot(trans_mat, np.dot(ptm, trans_mat))
+    else:
+        raise ValueError(
+            "Dimensions wrong, must be one- or two Pauli transfer matrix ")
+
+
 def to_0xy1_basis(ptm):
-    """Transform a Pauli transfer in the "usual" basis (0xyz) [1],
+    """Transform a Pauli transfer in the "usual" basis (ixyz) [1]_,
     to the 0xy1 basis which is required by sparsesdm.apply_ptm.
 
-    ptm: The input transfer matrix in 0xyz basis. Can be 4x4, 4x3 or 3x3 matrix of real numbers.
+    Parameters
+    ----------
+    ptm : array_like
+        The input transfer matrix in 0xyz basis.  Can be 4x4, 4x3 or 3x3 matrix
+        of real numbers.
 
-         If 4x4, the first row must be (1,0,0,0). If 4x3, this row is considered to be omitted.
-         If 3x3, the transformation is assumed to be unitary, thus it is assumed that
-         the first column is also (1,0,0,0) and was omitted.
+        If 4x4, the first row must be (1,0,0,0). If 4x3, this row is
+        considered to be omitted.  If 3x3, the transformation is assumed to be
+        unitary, thus it is assumed that the first column is also (1,0,0,0)
+        and was omitted.
 
-    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    Returns
+    -------
+    ndarray
+        Transfer matrix in 0xy1 basis
+
+    References
+    ----------
+    .. [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography,
+        http://arxiv.org/abs/1509.02921v1
     """
 
     ptm = np.array(ptm)
@@ -40,33 +84,37 @@ def to_0xy1_basis(ptm):
     if ptm.shape == (3, 4):
         ptm = np.vstack(([1, 0, 0, 0], ptm))
 
-    assert ptm.shape == (4, 4)
-    assert np.allclose(ptm[0, :], [1, 0, 0, 0])
-    return np.dot(
-        basis_transformation_matrix, np.dot(
-            ptm, basis_transformation_matrix))
+    assert ((ptm.shape == (4, 4) or ptm.shape == (16, 16)) and
+            np.allclose(ptm[0, 0], 1) and np.allclose(ptm[0, 1:], 0))
+    return switch_basis(ptm)
 
 
 def to_0xyz_basis(ptm):
-    """Transform a Pauli transfer in the 0xy1 basis [1],
-    to the the usual 0xyz. The inverse of to_0xy1_basis.
+    """Transform a Pauli transfer in the 0xy1 basis [1]_,
+    to the the usual ixyz. The inverse of to_0xy1_basis.
 
-    ptm: The input transfer matrix in 0xy1 basis. Must be 4x4.
+    Parameters
+    ----------
+    ptm : array_like
+        Transfer matrix in 0xy1 or basis. Must be 4x4 for a single-qubit PTM
+        and or 16x16 for two-qubit PTM.
 
-    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    Returns
+    -------
+    ndarray
+        Transfer matrix in 0xy1 basis
+
+    References
+    ----------
+    .. [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography,
+        http://arxiv.org/abs/1509.02921v1
     """
 
     ptm = np.array(ptm)
-    if ptm.shape == (4, 4):
-        trans_mat = basis_transformation_matrix
-        return np.dot(trans_mat, np.dot(ptm, trans_mat))
-    elif ptm.shape == (16, 16):
-        trans_mat = np.kron(basis_transformation_matrix, basis_transformation_matrix)
-        return np.dot(trans_mat, np.dot(ptm, trans_mat))
-    else:
-        raise ValueError("Dimensions wrong, must be one- or two Pauli transfer matrix ")
-
-
+    out = switch_basis(ptm)
+    assert ((out.shape == (4, 4) or out.shape == (16, 16)) and
+            np.allclose(out[0, 0], 1) and np.allclose(out[0, 1:], 0))
+    return out
 
 
 def hadamard_ptm():
