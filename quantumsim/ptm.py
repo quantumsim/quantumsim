@@ -19,7 +19,7 @@ single_tensor = np.array([[[1, 0], [0, 0]],
 double_tensor = np.kron(single_tensor, single_tensor)
 
 
-def switch_basis(ptm):
+def _switch_basis(ptm):
     """Switches basis of PTM between ixyz and 0xy1 basis.
 
     Parameters
@@ -86,7 +86,7 @@ def to_0xy1_basis(ptm):
 
     assert ((ptm.shape == (4, 4) or ptm.shape == (16, 16)) and
             np.allclose(ptm[0, 0], 1) and np.allclose(ptm[0, 1:], 0))
-    return switch_basis(ptm)
+    return _switch_basis(ptm)
 
 
 def to_0xyz_basis(ptm):
@@ -111,7 +111,7 @@ def to_0xyz_basis(ptm):
     """
 
     ptm = np.array(ptm)
-    out = switch_basis(ptm)
+    out = _switch_basis(ptm)
     assert ((out.shape == (4, 4) or out.shape == (16, 16)) and
             np.allclose(out[0, 0], 1) and np.allclose(out[0, 1:], 0))
     return out
