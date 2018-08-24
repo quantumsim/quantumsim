@@ -1,19 +1,22 @@
 import quantumsim.ptm as ptm
 import numpy as np
+from scipy.stats import unitary_group
 
 
 # some states in 0xy1 basis
 ground_state = np.array([1, 0, 0, 0])
 excited_state = np.array([0, 0, 0, 1])
 
-rng = np.random.RandomState()
+rng = np.random.RandomState(42)
+
 
 def random_state():
     a = rng.rand(4)
 
     a /= a[0] + a[3]
 
-    return a 
+    return a
+
 
 class TestPTMBasisConversion:
     def test_convert_unity(self):
@@ -25,7 +28,7 @@ class TestPTMBasisConversion:
         ptm_hadamard_0xy1_should_be = np.array(
                 [[0.5, s2, 0, 0.5],
                  [s2, 0, 0, -s2],
-                 [0,0,-1, 0],
+                 [0, 0, -1, 0],
                  [0.5, -s2, 0, 0.5]]
                 )
 
@@ -49,6 +52,19 @@ class TestPTMBasisConversion:
         print(p)
 
         assert np.allclose(p, ptm.to_0xyz_basis(ptm.to_0xy1_basis(p)))
+
+    def test_random_singlequbit(self):
+        for i in range(10):
+            kraus = unitary_group.rvs(2, random_state=rng)
+            p = ptm.single_kraus_to_ptm(kraus)
+            assert np.allclose(ptm.to_0xy1_basis(ptm.to_0xyz_basis(p)), p)
+
+    def test_random_twoqubit(self):
+        for i in range(10):
+            kraus = unitary_group.rvs(4, random_state=rng)
+            p = ptm.double_kraus_to_ptm(kraus)
+            assert np.allclose(ptm.to_0xy1_basis(ptm.to_0xyz_basis(p)), p)
+
 
 class TestRotations:
     def test_xyz(self):
@@ -90,7 +106,7 @@ class TestRotations:
         assert np.allclose(state, ground_state)
 
     def test_xyx_ground_state(self):
-        
+
         state = ground_state
 
         state = ptm.rotate_x_ptm(np.pi/2).dot(state)
@@ -115,7 +131,7 @@ class TestGenAmpDamping:
     def test_equal_to_amp_damping(self):
         p1 = ptm.amp_ph_damping_ptm(gamma=0.42, lamda=0)
         p2 = ptm.gen_amp_damping_ptm(gamma_down=0.42, gamma_up=0)
-        
+
         assert np.allclose(p1, p2)
 
 
@@ -129,7 +145,7 @@ class TestGenAmpDamping:
 
 
 class TestKrausToPTM:
-    
+
     def test_multiplicative_one_qubit(self):
         a = np.random.random((2,2))
         b = np.random.random((2,2))
