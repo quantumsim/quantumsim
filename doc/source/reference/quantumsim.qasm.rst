@@ -7,4 +7,5 @@
 .. autosummary::
    :toctree: generated/
 
+   ConfigurableParser
    QASMParser

@@ -1,8 +1,25 @@
 import quantumsim.circuit as circuit
 import quantumsim.sparsedm as sparsedm
+import quantumsim.qasm as qasm
 import numpy as np
 
+import os
 import pytest
+
+
+threequbit_qasm = """
+qubits 5
+
+.threequbit
+  h q1
+  h q3
+  cz q1,q2
+  cz q3,q4
+  cz q1,q0
+  cz q3,q2
+  h q1
+  h q3
+"""
 
 
 def test_three_qbit_clean():
@@ -28,9 +45,11 @@ def test_three_qbit_clean():
     c.add_hadamard("A1", time=300)
     c.add_hadamard("A2", time=300)
 
-    m1 = circuit.Measurement("A1", time=350, sampler=None)
+    with pytest.warns(UserWarning):
+        m1 = circuit.Measurement("A1", time=350, sampler=None)
     c.add_gate(m1)
-    m2 = circuit.Measurement("A2", time=350, sampler=None)
+    with pytest.warns(UserWarning):
+        m2 = circuit.Measurement("A2", time=350, sampler=None)
     c.add_gate(m2)
 
     c.add_waiting_gates(tmin=0, tmax=1500)
@@ -62,6 +81,55 @@ def test_three_qbit_clean():
     assert m1.measurements == [1] * 100
     assert m2.measurements == [0, 1] * 50
 
+
+def test_three_qbit_clean_qasm():
+    config_qasm = os.path.join(os.path.dirname(__file__),
+                                'config_qasm_5q.json')
+    config_sim = os.path.join(os.path.dirname(__file__),
+                                'config_simulator.json')
+    parser = qasm.ConfigurableParser(config_qasm, config_sim)
+    with pytest.warns(UserWarning):
+        circuits = parser.parse(threequbit_qasm.split('\n'))
+    assert len(circuits) == 1
+    c = circuits[0]
+
+    qubit_names = ["q0", "q1", "q2", "q3", "q4"]
+
+    with pytest.warns(UserWarning):
+        m1 = circuit.Measurement("q1", time=400, sampler=None)
+    c.add_gate(m1)
+    with pytest.warns(UserWarning):
+        m2 = circuit.Measurement("q3", time=400, sampler=None)
+    c.add_gate(m2)
+
+    c.add_waiting_gates(tmin=0, tmax=1500)
+
+    c.order()
+
+    assert len(c.gates) == 29
+
+    sdm = sparsedm.SparseDM(qubit_names)
+
+    for bit in sdm.classical:
+        sdm.classical[bit] = 1
+
+    sdm.classical["q4"] = 0
+
+    assert sdm.classical == {'q1': 1, 'q3': 1, 'q4': 0, 'q0': 1, 'q2': 1}
+
+    for i in range(100):
+        c.apply_to(sdm)
+
+    assert len(m1.measurements) == 100
+    assert len(m2.measurements) == 100
+
+    assert sdm.classical == {}
+
+    # in a clean run, we expect just one possible path
+    assert np.allclose(sdm.trace(), 1)
+
+    assert m1.measurements == [1] * 100
+    assert m2.measurements == [0, 1] * 50
 
 def test_noisy_measurement_sampler():
     c = circuit.Circuit()

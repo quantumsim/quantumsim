@@ -1,3 +1,8 @@
+# This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
+# (c) 2016 Brian Tarasinski
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
+
 import numpy as np
 import collections
 
@@ -181,17 +186,13 @@ def gen_amp_damping_ptm(gamma_down, gamma_up):
     ----------
     .. [1] TODO
     """
-
     gamma = gamma_up + gamma_down
-    p = gamma_down / (gamma_down + gamma_up)
-
     ptm = np.array([
         [1, 0, 0, 0],
         [0, np.sqrt((1 - gamma)), 0, 0],
         [0, 0, np.sqrt((1 - gamma)), 0],
-        [(2 * p - 1) * gamma, 0, 0, 1 - gamma]]
+        [2*gamma_down - gamma, 0, 0, 1 - gamma]]
     )
-
     return to_0xy1_basis(ptm)
 
 

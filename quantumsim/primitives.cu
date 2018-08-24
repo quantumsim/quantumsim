@@ -1,8 +1,8 @@
-/*This file is part of quantumsim. (https://github.com/brianzi/quantumsim)*/
+/*This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)*/
 /*(c) 2016 Brian Tarasinski*/
-/*Distributed under the GNU GPLv3. See LICENSE.txt or https://www.gnu.org/licenses/gpl.txt*/
+/*Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt*/
 
-#include <cuda.h> 
+#include <cuda.h>
 
 //kernel to transform to pauli basis (up, x, y, down)
 //to be run on a complete complex density matrix, once for each bit
@@ -39,8 +39,8 @@ __global__ void bit_to_pauli_basis(double *complex_dm, unsigned int mask, unsign
 
 //pauli_reshuffle
 //this function collects the values from a complex density matrix in (0, x, iy, 1) basis
-//and collects the real or values only; furthermore it rearranges the address bit order 
-//from (d_state_bits, d_state_bits) to 
+//and collects the real or values only; furthermore it rearranges the address bit order
+//from (d_state_bits, d_state_bits) to
 // (alpha_d, alpha_d-1, ..., alpha_0) where alpha = (00, 01, 10, 11) for 0, x, y, 1
 //if direction = 0, the copy is performed from complex to real, otherwise from real to complex
 __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned int no_qubits, unsigned int direction) {
@@ -75,10 +75,10 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 
     //the adress in pauli basis is obtained by interleaving
     unsigned int addr_real = 0;
-    for (int i = 0; i < 16; i++) { 
+    for (int i = 0; i < 16; i++) {
           addr_real |= (x & 1U << i) << i | (y & 1U << i) << (i + 1);
     }
-    
+
 
     if(direction == 0) {
         real_dm[addr_real] = ((py==3 || py==2)? -1 : 1)*complex_dm[addr_complex];
@@ -232,8 +232,8 @@ __global__ void two_qubit_ptm(double *dm, double *ptm_g, unsigned int bit0, unsi
     extern __shared__ double ptm[];
     double *data = &ptm[256]; //need blockDim.x double floats
 
-    // the lowest to bits of x are used to address bit0, the next two are used to address bit1 
-    // global address = <- pos = 
+    // the lowest to bits of x are used to address bit0, the next two are used to address bit1
+    // global address = <- pos =
     // aaaxxbbbbyycccc  <- aaabbbbccccxxyy
 
     int higher_bit = max(bit0, bit1);
@@ -243,11 +243,11 @@ __global__ void two_qubit_ptm(double *dm, double *ptm_g, unsigned int bit0, unsi
     int low_mask  = ~(high_mask | mid_mask) & (~0xf);  //c mask
 
     int pos = high_x | x;
-    int global_from = 
-              (pos & high_mask) 
+    int global_from =
+              (pos & high_mask)
             | ((pos & mid_mask) >> 2)
             | ((pos & low_mask) >> 4)
-            | ((pos & 0x3) << (2 * bit0))  
+            | ((pos & 0x3) << (2 * bit0))
             | (((pos & 0xc) >>2)  << (2 * bit1));
 
     //fetch ptm to shared memmory
@@ -340,7 +340,7 @@ __global__ void multitake(const double * __restrict__ in,
 
 
 //get_diagonal kernel
-//copy the diagonal elements to out, in order to do effective 
+//copy the diagonal elements to out, in order to do effective
 //calculation of subtraces.
 //run over a 1x9 grid!
 __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
@@ -348,7 +348,7 @@ __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
 
     if (x >= (1 << no_qubits)) return;
     unsigned int addr_real = 0;
-    for (int i = 0; i < 16; i++) { 
+    for (int i = 0; i < 16; i++) {
           addr_real |= (x & 1U << i) << i | (x & 1U << i) << (i + 1);
     }
     out[x] = dm9[addr_real];
@@ -358,7 +358,7 @@ __global__ void get_diag(double *dm9, double *out, unsigned int no_qubits) {
 //shared memory: 2**no_qubits doubles
 //if bit is positive or zero, diag[0] and diag[1] will hold the partial traces of this bit being one/zero (!note the switch)
 //if bit is -1, diag[0] will hold the full trace.
-__global__ void trace(double *diag, int bit) { 
+__global__ void trace(double *diag, int bit) {
     unsigned int x = threadIdx.x;
     unsigned int mask = 0;
 
@@ -368,17 +368,17 @@ __global__ void trace(double *diag, int bit) {
 
     extern __shared__ double s_diag[];
     s_diag[x] = diag[x];
-    __syncthreads(); 
+    __syncthreads();
 
     double a;
 
     for(unsigned int i=1; i < blockDim.x; i <<= 1) {
-        if(i != mask && i <= x) { 
+        if(i != mask && i <= x) {
             a = s_diag[x-i];
-        
+
         }
         __syncthreads();
-        if(i != mask && i <= x) { 
+        if(i != mask && i <= x) {
             s_diag[x] += a;
         }
         __syncthreads();
@@ -406,11 +406,11 @@ __global__ void swap(double *dm, unsigned int bit1, unsigned int bit2, unsigned 
 
     unsigned int bit1_mask = (0x3 << (2*bit1));
     unsigned int bit2_mask = (0x3 << (2*bit2));
-    
+
     unsigned int addr2 = ( addr & ~(bit1_mask | bit2_mask)) |
         ((addr & bit1_mask) << (2*(bit2 - bit1))) |
         ((addr & bit2_mask) >> (2*(bit2 - bit1)));
-   
+
     double t;
     if (addr > addr2) {
         t = dm[addr2];
