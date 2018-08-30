@@ -677,19 +677,19 @@ class ISwapRotation(TwoPTMGate):
         if t2_enh is None:
             d_var=0
             c = np.cos(angle)
-            cc = 0.5*(1+(np.cos(2*angle)))
+            cc = 0.5 * (1 + np.cos(2*angle))
             s = np.sin(angle)
-            ss = 0.5*(1-(np.cos(2*angle)))
-            sc = np.sin(angle)*np.cos(angle)
+            ss = 0.5 * ( 1 - np.cos(2*angle))
+            sc = np.sin(angle) * np.cos(angle)
         else:
-            d_var = (1 - np.exp(-interaction_time/(2*t2_enh))) #d_var is the width of the gaussia squared
+            d_var = 1 - np.exp(-interaction_time/t2_enh) #d_var is the width of the gaussia squared
             c = np.cos(angle) * np.exp(-d_var/2)
-            cc = 0.5*(1+np.exp(-2*d_var)*(np.cos(2*angle)))
+            cc = 0.5 * (1 + np.exp(-2*d_var) * np.cos(2*angle))
             s = np.sin(angle) * np.exp(-d_var/2)
-            ss = 0.5*(1-np.exp(-2*d_var)*(np.cos(2*angle)))
-            sc = np.exp(-2*d_var)*np.sin(angle)*np.cos(angle)
-        assert d_var>=0
-        assert d_var<=1
+            ss = 0.5 * (1 - np.exp(-2*d_var) * np.cos(2*angle))
+            sc = np.exp(-2*d_var) * np.sin(angle) * np.cos(angle)
+        assert d_var >= 0
+        assert d_var <= 1
 
         p_iswap = np.array([
             [1, 0,  0,   0, 0, 0,   0,  0,  0,   0, 0,  0,   0, 0,  0, 0],
@@ -711,9 +711,9 @@ class ISwapRotation(TwoPTMGate):
             ])
 
         self.d_var = d_var
-        self.t2_enh=t2_enh
-        self.interaction_time=interaction_time
-        self.time=time
+        self.t2_enh = t2_enh
+        self.interaction_time = interaction_time
+        self.time = time
 
         super().__init__(bit0, bit1, ptm.to_0xy1_basis(p_iswap), time, **kwargs)
 
@@ -735,18 +735,18 @@ class ISwapRotation(TwoPTMGate):
 
         if self.t2_enh is None:
             c = np.cos(angle)
-            cc = 0.5*(1+(np.cos(2*angle)))
+            cc = 0.5 * (1 + np.cos(2*angle))
             s = np.sin(angle)
-            ss = 0.5*(1-(np.cos(2*angle)))
-            sc = np.sin(angle)*np.cos(angle)
+            ss = 0.5 * ( 1 - np.cos(2*angle))
+            sc = np.sin(angle) * np.cos(angle)
         else:
             c = np.cos(angle) * np.exp(-self.d_var/2)
-            cc = 0.5*(1+np.exp(-2*self.d_var)*(np.cos(2*angle)))
+            cc = 0.5 * (1 + np.exp(-2 * self.d_var) * np.cos(2*angle))
             s = np.sin(angle) * np.exp(-self.d_var/2)
-            ss = 0.5*(1-np.exp(-2*self.d_var)*(np.cos(2*angle)))
-            sc = np.exp(-2*self.d_var)*np.sin(angle)*np.cos(angle)
-        assert self.d_var>=0
-        assert self.d_var<=1
+            ss = 0.5 * (1 - np.exp(-2 * self.d_var) * np.cos(2*angle))
+            sc = np.exp(-2*self.d_var) * np.sin(angle) * np.cos(angle)
+        assert self.d_var >= 0
+        assert self.d_var <= 1
 
         p_iswap = np.array([
             [1, 0,  0,   0, 0, 0,   0,  0,  0,   0, 0,  0,   0, 0,  0, 0],

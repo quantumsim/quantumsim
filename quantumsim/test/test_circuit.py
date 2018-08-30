@@ -372,6 +372,75 @@ class TestCPhaseGate:
 
         sdm.cphase.assert_called_once_with("A", "B")
 
+class TestISwapGate:
+
+    def test_init(self):
+        iswap = circuit.ISwapRotation("A", "B", np.pi/2, 20)
+        assert iswap.involved_qubits == ["A" , "B"]
+        assert iswap.time == 20
+        assert iswap.angle == np.pi/2
+        assert iswap.interaction_time == 0
+        assert iswap.t2_enh == None
+        assert not iswap.is_measurement
+
+    def test_init_noisy(self):
+        iswap = circuit.ISwapRotation("A", "B", np.pi/2, 20,
+            t2_enh=1000, interaction_time=10)
+
+        assert not iswap.t2_enh == None
+        assert not iswap.interaction_time == 0
+        assert iswap.d_var == (1 - np.exp(-10/1000))
+
+    def test_apply(self):
+        sdm = MagicMock()
+        sdm.iswap = MagicMock()
+
+        iswap = circuit.ISwapRotation("A", "B", np.pi/2, 20)
+
+        iswap.apply_to(sdm)
+
+        sdm.iswap.assert_not_called()
+
+    def test_ISwapRot_to_ISwap(self):
+        '''
+        Test to verify that ISwapRotation gate at pi/2 generates an ISwap
+        ISwap to PTM from kraus operator using ptm functions
+        Test in IXYZ and 0XY1 basis
+        '''
+        kraus = np.array([
+            [1,  0,  0, 0],
+            [0,  0, 1j, 0],
+            [0, 1j,  0, 0],
+            [0,  0,  0, 1]
+            ])
+        ptm_kraus = ptm.double_kraus_to_ptm(kraus)
+
+        iswaprot = circuit.ISwapRotation("A", "B", np.pi/2, 20)
+
+        assert np.allclose(iswaprot.two_ptm, ptm_kraus)
+        assert np.allclose(ptm.to_0xyz_basis(iswaprot.two_ptm), ptm.to_0xyz_basis(ptm_kraus))
+
+    def test_ISwapRot_to_any(self):
+        '''
+        Test to verify that ISwapRotation on a random angle matches ISwap from kraus
+        '''
+        angle = np.random.random()*np.pi
+
+        c = np.cos(angle)
+        s = np.sin(angle)
+        kraus = np.array([
+            [1,    0,    0, 0],
+            [0,    c, 1j*s, 0],
+            [0, 1j*s,    c, 0],
+            [0,    0,    0, 1]
+            ])
+
+        ptm_kraus = ptm.double_kraus_to_ptm(kraus)
+
+        iswaprot = circuit.ISwapRotation("A", "B", angle, 20)
+
+        assert np.allclose(iswaprot.two_ptm, ptm_kraus)
+        assert np.allclose(ptm.to_0xyz_basis(iswaprot.two_ptm), ptm.to_0xyz_basis(ptm_kraus))
 
 class TestAmpPhDamping:
 
