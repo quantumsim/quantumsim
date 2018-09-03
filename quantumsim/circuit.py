@@ -3,7 +3,7 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
-import matplotlib as mp
+from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -47,6 +47,7 @@ class Qubit:
 
 
 class ClassicalBit(Qubit):
+    # noinspection PyMissingConstructor
     def __init__(self, name):
         self.name = name
 
@@ -84,7 +85,7 @@ class VariableDecoherenceQubit(Qubit):
         for s, e, t1 in self.t1s:
             s = max(s, start_time)
             e = min(e, end_time)
-            if (s < e):
+            if s < e:
                 decay_rate += (e - s) / t1 / duration
 
         for s, e, t2 in self.t2s:
@@ -504,7 +505,7 @@ class TwoPTMGate(Gate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
 
@@ -530,7 +531,7 @@ class CPhase(Gate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
 
@@ -560,7 +561,7 @@ class CNOT(TwoPTMGate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
 
@@ -617,7 +618,7 @@ class ISwap(TwoPTMGate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
 
@@ -681,7 +682,7 @@ class ISwapRotation(TwoPTMGate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
     def adjust(self, angle):
@@ -755,7 +756,7 @@ class Swap(TwoPTMGate):
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
 
@@ -955,7 +956,7 @@ class ResetGate(SinglePTMGate):
 
 class ConditionalGate(Gate):
 
-    def __init__(self, time, control_bit, zero_gates=[], one_gates=[]):
+    def __init__(self, time, control_bit, zero_gates=None, one_gates=None):
         """
         A container that applies gates depending on the state of a classical
         control bit.  The gates are applied in the order given.
@@ -966,6 +967,10 @@ class ConditionalGate(Gate):
 
         super().__init__(time)
 
+        if one_gates is None:
+            one_gates = []
+        if zero_gates is None:
+            zero_gates = []
         self.control_bit = control_bit
         self.zero_gates = zero_gates
         self.one_gates = one_gates
@@ -1031,7 +1036,7 @@ class ClassicalCNOT(Gate):
 
         xdata = (self.time, self.time)
         ydata = (coords[self.bit0], coords[self.bit1])
-        line = mp.lines.Line2D(xdata, ydata, color='k')
+        line = Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
     def apply_to(self, sdm):
@@ -1349,7 +1354,7 @@ class Circuit:
         xdata = (tmin - buffer, tmax + buffer)
         for qubit in coords:
             ydata = (coords[qubit], coords[qubit])
-            line = mp.lines.Line2D(xdata, ydata, color='k')
+            line = Line2D(xdata, ydata, color='k')
             ax.add_line(line)
             ax.text(
                 xdata[0] - 2 * buffer,
