@@ -103,10 +103,10 @@ class VariableDecoherenceQubit(Qubit):
 
 
 class Gate:
+    """A Gate acting at time `time`. If conditional_bit is set, only act
+    when that bit is a classical 1. """
 
     def __init__(self, time, conditional_bit=None):
-        """A Gate acting at time `time`. If conditional_bit is set, only act
-        when that bit is a classical 1. """
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -831,39 +831,46 @@ class CPhaseRotation(TwoPTMGate):
 
 
 class Measurement(Gate):
+    """Create a Measurement gate. The measurement characteristics are defined
+    by `sampler`.  If `sampler` is `None`, a noiseless Monte Carlo sampler is
+    instantiated with a seed `rng`. If both `sampler` and `rng` are `None`,
+    the computation will not be reproducible.
 
-    def __init__(
-            self,
-            bit,
-            time,
-            sampler,
-            output_bit=None,
-            real_output_bit=None):
-        """Create a Measurement gate. The measurement
-        characteristics are defined by the sampler.
-        The sampler is a coroutine object, which implements:
+    After applying the circuit to a density matrix, the declared
+    measurement results are stored in `self.measurements`.
 
-          declare, project, rel_prob = sampler.send((p0, p1))
+    Parameters
+    ----------
+    bit : Qubit
+        A qubit, that is being measured.
+    time : float
+        A time to perform measurement.
+    sampler : coroutine or `None`
+        A coroutine or coroutine-like object, which implements::
 
-        where `p0`, `p1` are two relative probabilities for the outcome 0 and
-        1. `project` is the true post-measurement state of the system,
-        `declare` is the declared outcome of the measurement.
+           declare, project, rel_prob = sampler.send((p0, p1))
 
-        `rel_prob` is the conditional probability for the declaration, given
-        the input and projection; for a perfect measurement this is 1.
+        (see `PEP 342 <https://www.python.org/dev/peps/pep-0342/#new
+        -generator-method-send-value>`_ for clarification). This module
+        implements :func:`uniform_sampler`, :func:`uniform_noisy_sampler`,
+        :func:`selection_sampler` and :class:`BiasedSampler`. Here `p0`,
+        `p1` are two
+        relative probabilities for the outcome 0 and 1. `declare` is the
+        declared outcome of the measurement, `project` is the true
+        post-measurement state of the system, `rel_prob` is the conditional
+        probability for the declaration, given the input and projection; for
+        a perfect measurement this is 1.
+    rng : `None`, `int`, or :class:`numpy.random.RandomState`
+        Random number generator or seed to initialize one. Not used,
+        if `sampler` is specified.
+    output_bit : None or Qubit
+        If defined, is set to declared value after measurement.
+    real_output_bit : None or Qubit
+        If defined, is set to projected value after measurement.
+    """
 
-        If sampler is None, a noiseless Monte Carlo sampler is instantiated
-        with some random seed (depends on Numpy's defaults).
-
-        After applying the circuit to a density matrix, the declared
-        measurement results are stored in self.measurements.
-
-        Additionally, the bits output_bit and real_output_bit (if defined)
-        are set to the declared/projected value.
-
-        See also: uniform_sampler, selection_sampler, uniform_noisy_sampler
-        """
-
+    def __init__(self, bit, time, sampler=None, rng=None, output_bit=None,
+                 real_output_bit=None):
         super().__init__(time)
         self.is_measurement = True
         self.bit = bit
@@ -881,7 +888,7 @@ class Measurement(Gate):
         if sampler:
             self.sampler = sampler
         else:
-            self.sampler = uniform_sampler()
+            self.sampler = uniform_sampler(rng)
         next(self.sampler)
         self.measurements = []
         self.probabilities = []

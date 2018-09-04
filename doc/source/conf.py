@@ -43,6 +43,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
@@ -195,3 +196,8 @@ autosummary_generate = True
 
 autoclass_content = "both"
 autodoc_default_flags = ['show-inheritance']
+
+# -- Options for intersphinx # -----------------------------------------------
+intersphinx_mapping = {
+    'numpy': ('http://docs.scipy.org/doc/numpy', None)
+}
