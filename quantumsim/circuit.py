@@ -103,9 +103,19 @@ class VariableDecoherenceQubit(Qubit):
 
 class Gate:
 
-    def __init__(self, time, conditional_bit=None):
-        """A Gate acting at time `time`. If conditional_bit is set, only act
-        when that bit is a classical 1. """
+    def __init__(self,
+                 time,
+                 time_start=None,
+                 time_end=None,
+                 conditional_bit=None):
+        """
+        A Gate acting at time `time`. If conditional_bit is set, only act
+        when that bit is a classical 1.
+
+        time_start: Indicates when the gate interaction starts, needed for iSwap
+        time_end: Indicates when the gate interaction ends.
+        If time_start, time_end not necessary, time_start=time_end=time
+        """
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -114,6 +124,14 @@ class Gate:
         self.conditional_bit = conditional_bit
         if self.conditional_bit:
             self.involved_qubits.append(self.conditional_bit)
+        if time_start is None:
+            time_start = time
+        if time_end is None:
+            time_end = time
+        self.time_start = time_start
+        self.time_end = time_end
+
+        assert time_start <= time_end
 
     def plot_gate(self, ax, coords):
         x = self.time
@@ -563,6 +581,7 @@ class CNOT(TwoPTMGate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class ISwapNoisy(TwoPTMGate):
 
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
@@ -576,8 +595,8 @@ class ISwapNoisy(TwoPTMGate):
         """
         d = np.exp(-dephase_var/2)
         d4 = np.exp(-dephase_var/8)
-        self.d=d
-        self.d4=d4
+        self.d = d
+        self.d4 = d4
         assert d <= 1
         assert d >= 0
         kraus0 = np.array([
@@ -654,10 +673,14 @@ class ISwapNoisy(TwoPTMGate):
 
         self.two_ptm = p0 @ p1 @ p0
 
+
 class ISwapRotation(TwoPTMGate):
 
-    def __init__(self, bit0, bit1, angle, time, 
-                 interaction_time=0, t2_enh=None, **kwargs):
+    def __init__(self, bit0, bit1, angle, time,
+                 t1_bit0=None, t1_bit1=None,
+                 t2_bit1=None, interaction_time=0,
+                 t2_bit0_dec=None,
+                 **kwargs):
         """
         ISwap rotation gate, described by the two qubit operator
 
@@ -669,25 +692,33 @@ class ISwapRotation(TwoPTMGate):
         '''
         time: Total gate time given by the hardware (20 ns)
         angle: Determines the swap exchange
-        interaction time: Realistic iSwap interaction time, which is different than the total gate time.
+        interaction time: Realistic iSwap interaction time, which is different
+        than the total gate time.
         t2 enhanced: T2 of the system during the iSwap interaction time
         '''
 
         self.angle = angle
-        if t2_enh is None:
-            d_var=0
+        if interaction_time == 0:
+            d_var = 0
             c = np.cos(angle)
             cc = 0.5 * (1 + np.cos(2*angle))
             s = np.sin(angle)
-            ss = 0.5 * ( 1 - np.cos(2*angle))
+            ss = 0.5 * (1 - np.cos(2*angle))
             sc = np.sin(angle) * np.cos(angle)
         else:
-            d_var = 1 - np.exp(-interaction_time/t2_enh) #d_var is the width of the gaussia squared
+            if (not t2_bit0_dec) or (not t2_bit1)\
+                    or (not t1_bit0) or (not t1_bit1):
+                raise ValueError("""I need non-zero t1 and t2
+                    for both qubits if interaction_time>0""")
+
+            # d_var is the width of the gaussia squared
+            d_var = 1 - np.exp(-interaction_time/t2_bit0_dec)
             c = np.cos(angle) * np.exp(-d_var/2)
             cc = 0.5 * (1 + np.exp(-2*d_var) * np.cos(2*angle))
             s = np.sin(angle) * np.exp(-d_var/2)
             ss = 0.5 * (1 - np.exp(-2*d_var) * np.cos(2*angle))
             sc = np.exp(-2*d_var) * np.sin(angle) * np.cos(angle)
+
         assert d_var >= 0
         assert d_var <= 1
 
@@ -708,14 +739,21 @@ class ISwapRotation(TwoPTMGate):
             [0, 0,  0,   0, 0, 0,   0,  0, -s,   0, 0,  0,   0, c,  0, 0],
             [0, 0,  0,   0, s, 0,   0,  0,  0,   0, 0,  0,   0, 0,  c, 0],
             [0, 0,  0,   0, 0, 0,   0,  0,  0,   0, 0,  0,   0, 0,  0, 1]
-            ])
+        ])
 
         self.d_var = d_var
-        self.t2_enh = t2_enh
         self.interaction_time = interaction_time
         self.time = time
+        self.t1_bit0 = t1_bit0
+        self.t1_bit1 = t1_bit1
+        self.t2_bit0_dec = t2_bit0_dec
 
-        super().__init__(bit0, bit1, ptm.to_0xy1_basis(p_iswap), time, **kwargs)
+        super().__init__(bit0, bit1,
+                         ptm.to_0xy1_basis(p_iswap),
+                         time,
+                         time_start=time - interaction_time/2,
+                         time_end=time + interaction_time/2,
+                         **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -733,11 +771,11 @@ class ISwapRotation(TwoPTMGate):
 
         self.angle = angle
 
-        if self.t2_enh is None:
+        if self.interaction_time == 0:
             c = np.cos(angle)
             cc = 0.5 * (1 + np.cos(2*angle))
             s = np.sin(angle)
-            ss = 0.5 * ( 1 - np.cos(2*angle))
+            ss = 0.5 * (1 - np.cos(2*angle))
             sc = np.sin(angle) * np.cos(angle)
         else:
             c = np.cos(angle) * np.exp(-self.d_var/2)
@@ -765,7 +803,7 @@ class ISwapRotation(TwoPTMGate):
             [0, 0,  0,   0, 0, 0,   0,  0, -s,   0, 0,  0,   0, c,  0, 0],
             [0, 0,  0,   0, s, 0,   0,  0,  0,   0, 0,  0,   0, 0,  c, 0],
             [0, 0,  0,   0, 0, 0,   0,  0,  0,   0, 0,  0,   0, 0,  0, 1]
-            ])
+        ])
 
         self.two_ptm = ptm.to_0xy1_basis(p_iswap)
 
@@ -1238,15 +1276,15 @@ class Circuit:
         for each qubit.
 
         """
-        all_gates = list(sorted(self.gates, key=lambda g: g.time))
+        all_gates = list(sorted(self.gates, key=lambda g: g.time_start))
 
         if not all_gates and (tmin is None or tmax is None):
             return
 
         if tmin is None:
-            tmin = all_gates[0].time
+            tmin = all_gates[0].time_start
         if tmax is None:
-            tmax = all_gates[-1].time
+            tmax = all_gates[-1].time_end
 
         if not isinstance(tmin, dict):
             tmin = {qb.name: tmin for qb in self.qubits}
@@ -1261,7 +1299,7 @@ class Circuit:
         for b in qubits_to_do:
             gts = [
                 gate for gate in all_gates if gate.involves_qubit(
-                    str(b)) and tmin[b.name] <= gate.time <= tmax[b.name]]
+                    str(b)) and tmin[b.name] <= gate.time_start <= tmax[b.name]]
 
             if not gts:
                 gate = b.make_idling_gate(tmin[b.name], tmax[b.name])
@@ -1269,19 +1307,19 @@ class Circuit:
                     gate.autogenerated = True
                     self.add_gate(gate)
             else:
-                if (gts[0].time - tmin[b.name] > 1e-6 and not (
+                if (gts[0].time_start - tmin[b.name] > 1e-6 and not (
                         hasattr(gts[0], 'autogenerated') and
                         gts[0].autogenerated
                 )):
-                    gate = b.make_idling_gate(tmin[b.name], gts[0].time)
+                    gate = b.make_idling_gate(tmin[b.name], gts[0].time_start)
                     if gate is not None:
                         gate.autogenerated = True
                         self.add_gate(gate)
-                if (tmax[b.name] - gts[-1].time > 1e-6 and not (
-                            hasattr(gts[-1], 'autogenerated') and
-                            gts[-1].autogenerated
+                if (tmax[b.name] - gts[-1].time_end > 1e-6 and not (
+                    hasattr(gts[-1], 'autogenerated') and
+                    gts[-1].autogenerated
                 )):
-                    gate = b.make_idling_gate(gts[-1].time, tmax[b.name])
+                    gate = b.make_idling_gate(gts[-1].time_end, tmax[b.name])
                     if gate is not None:
                         gate.autogenerated = True
                         self.add_gate(gate)
@@ -1294,7 +1332,7 @@ class Circuit:
                         # calls of this function, skip
                         pass
                     else:
-                        gate = b.make_idling_gate(g1.time, g2.time)
+                        gate = b.make_idling_gate(g1.time_end, g2.time_start)
                         if gate is not None:
                             gate.autogenerated = True
                             self.add_gate(gate)

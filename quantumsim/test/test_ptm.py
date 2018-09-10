@@ -26,11 +26,11 @@ class TestPTMBasisConversion:
     def test_explicit_on_hadamard(self):
         s2 = np.sqrt(0.5)
         ptm_hadamard_0xy1_should_be = np.array(
-                [[0.5, s2, 0, 0.5],
-                 [s2, 0, 0, -s2],
-                 [0, 0, -1, 0],
-                 [0.5, -s2, 0, 0.5]]
-                )
+            [[0.5, s2, 0, 0.5],
+             [s2, 0, 0, -s2],
+             [0, 0, -1, 0],
+             [0.5, -s2, 0, 0.5]]
+        )
 
         ptm3x3hadamard = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])
         ptm_hadamard = ptm.to_0xy1_basis(ptm3x3hadamard)
@@ -40,12 +40,13 @@ class TestPTMBasisConversion:
         ptm_hadamard = ptm.to_0xy1_basis(ptm4x3hadamard)
         assert np.allclose(ptm_hadamard_0xy1_should_be, ptm_hadamard)
 
-        ptm4x4hadamard = np.array([[1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0], [0, 1, 0, 0]])
+        ptm4x4hadamard = np.array(
+            [[1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0], [0, 1, 0, 0]])
         ptm_hadamard = ptm.to_0xy1_basis(ptm4x4hadamard)
         assert np.allclose(ptm_hadamard_0xy1_should_be, ptm_hadamard)
 
     def test_inversion(self):
-        p = np.random.random((4,4))
+        p = np.random.random((4, 4))
 
         p[0, :] = np.array([1, 0, 0, 0])
 
@@ -115,6 +116,7 @@ class TestRotations:
 
         assert np.allclose(state, ground_state)
 
+
 class TestAmpPhaseDamping:
     def test_does_nothing_to_ground_state(self):
         p = ptm.amp_ph_damping_ptm(0.23, 0.42)
@@ -127,13 +129,13 @@ class TestAmpPhaseDamping:
 
         assert np.allclose(p.dot(r), ground_state)
 
+
 class TestGenAmpDamping:
     def test_equal_to_amp_damping(self):
         p1 = ptm.amp_ph_damping_ptm(gamma=0.42, lamda=0)
         p2 = ptm.gen_amp_damping_ptm(gamma_down=0.42, gamma_up=0)
 
         assert np.allclose(p1, p2)
-
 
     def test_strong_exciting_gives_excited_state(self):
         r = random_state()
@@ -142,13 +144,11 @@ class TestGenAmpDamping:
         assert np.allclose(p.dot(r), excited_state)
 
 
-
-
 class TestKrausToPTM:
 
     def test_multiplicative_one_qubit(self):
-        a = np.random.random((2,2))
-        b = np.random.random((2,2))
+        a = np.random.random((2, 2))
+        b = np.random.random((2, 2))
 
         ptm_a = ptm.single_kraus_to_ptm(a)
         ptm_b = ptm.single_kraus_to_ptm(b)
@@ -156,8 +156,8 @@ class TestKrausToPTM:
         assert np.allclose(ptm_ab, np.matmul(ptm_a, ptm_b))
 
     def test_multiplicative_two_qubit(self):
-        a = np.random.random((4,4))
-        b = np.random.random((4,4))
+        a = np.random.random((4, 4))
+        b = np.random.random((4, 4))
 
         ptm_a = ptm.double_kraus_to_ptm(a)
         ptm_b = ptm.double_kraus_to_ptm(b)
