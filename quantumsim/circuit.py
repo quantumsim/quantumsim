@@ -503,10 +503,19 @@ class ButterflyGate(SinglePTMGate, IdlingGate):
 
 class TwoPTMGate(Gate):
 
-    def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
+    def __init__(self,
+                 bit0, bit1,
+                 two_ptm, time,
+                 time_start=None,
+                 time_end=None,
+                 **kwargs):
         """A Two qubit gate.
         """
-        super().__init__(time, **kwargs)
+        super().__init__(time,
+                         time_start,
+                         time_end,
+                         **kwargs)
+
         self.two_ptm = two_ptm
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
@@ -699,12 +708,17 @@ class ISwapRotation(TwoPTMGate):
 
         self.angle = angle
         if interaction_time == 0:
+
             d_var = 0
             c = np.cos(angle)
             cc = 0.5 * (1 + np.cos(2*angle))
             s = np.sin(angle)
             ss = 0.5 * (1 - np.cos(2*angle))
             sc = np.sin(angle) * np.cos(angle)
+
+            t_start = None
+            t_end = None
+
         else:
             if (not t2_bit0_dec) or (not t2_bit1)\
                     or (not t1_bit0) or (not t1_bit1):
@@ -712,12 +726,53 @@ class ISwapRotation(TwoPTMGate):
                     for both qubits if interaction_time>0""")
 
             # d_var is the width of the gaussia squared
-            d_var = 1 - np.exp(-interaction_time/t2_bit0_dec)
+            if t2_bit0_dec == np.inf:
+                """
+                Ensures that for non-zero interaction time without two-qubit
+                phase error we get the same result as per interaction_time=0.
+                In general this will not occur, but it is useful for debugging
+                purposes
+                """
+                d_var = 0
+                t2_bit0_dec = t2_bit1
+            else:
+                d_var = 1 - np.exp(-interaction_time/t2_bit0_dec)
             c = np.cos(angle) * np.exp(-d_var/2)
             cc = 0.5 * (1 + np.exp(-2*d_var) * np.cos(2*angle))
             s = np.sin(angle) * np.exp(-d_var/2)
             ss = 0.5 * (1 - np.exp(-2*d_var) * np.cos(2*angle))
             sc = np.exp(-2*d_var) * np.sin(angle) * np.cos(angle)
+
+            t_start = time - interaction_time/2
+            t_end = time + interaction_time/2
+
+            if (t1_bit0) and (t1_bit1) <= 0:
+                raise RuntimeError("t1 must be positive")
+            if (t2_bit0_dec) and (t2_bit1) <= 0:
+                raise RuntimeError("t2 must be positive")
+            if t2_bit1 > 2 * t1_bit1:
+                raise RuntimeError("t2 must not be greater than 2*t1")
+            if t2_bit0_dec > 2 * t1_bit0:
+                raise RuntimeError("t2 must not be greater than 2*t1")
+
+            if np.allclose(t2_bit0_dec, 2 * t1_bit0) or\
+               np.allclose(t2_bit1, 2 * t1_bit1):
+                t_phi_bit0 = np.inf
+                t_phi_bit1 = np.inf
+            else:
+                t_phi_bit0 = 1 / (1 / t2_bit0_dec - 1 / (2 * t1_bit0)) / 2
+                t_phi_bit1 = 1 / (1 / t2_bit1 - 1 / (2 * t1_bit1)) / 2
+
+            gamma_bit0 = 1 - np.exp(- (interaction_time/2) / t1_bit0)
+            lamda_bit0 = 1 - np.exp(- (interaction_time/2) / t_phi_bit0)
+
+            gamma_bit1 = 1 - np.exp(- (interaction_time/2) / t1_bit1)
+            lamda_bit1 = 1 - np.exp(- (interaction_time/2) / t_phi_bit1)
+
+            PTM_bit0 = np.kron(ptm.amp_ph_damping_ptm(gamma_bit0, lamda_bit0),
+                               np.identity(4))
+            PTM_bit1 = np.kron(np.identity(4),
+                               ptm.amp_ph_damping_ptm(gamma_bit1, lamda_bit1))
 
         assert d_var >= 0
         assert d_var <= 1
@@ -744,16 +799,30 @@ class ISwapRotation(TwoPTMGate):
         self.d_var = d_var
         self.interaction_time = interaction_time
         self.time = time
+        self.time_start = t_start
+        self.time_end = t_end
         self.t1_bit0 = t1_bit0
-        self.t1_bit1 = t1_bit1
         self.t2_bit0_dec = t2_bit0_dec
+        self.t1_bit1 = t1_bit1
+        self.t2_bit1 = t2_bit1
 
-        super().__init__(bit0, bit1,
-                         ptm.to_0xy1_basis(p_iswap),
-                         time,
-                         time_start=time - interaction_time/2,
-                         time_end=time + interaction_time/2,
-                         **kwargs)
+        if interaction_time == 0:
+            super().__init__(bit0, bit1,
+                             ptm.to_0xy1_basis(p_iswap),
+                             time,
+                             time_start=t_start,
+                             time_end=t_end,
+                             **kwargs)
+        else:
+            full_iswap = PTM_bit0 @ PTM_bit1 @ ptm.to_0xy1_basis(p_iswap) @\
+                PTM_bit1 @ PTM_bit0
+
+            super().__init__(bit0, bit1,
+                             full_iswap,
+                             time,
+                             time_start=t_start,
+                             time_end=t_end,
+                             **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -783,6 +852,37 @@ class ISwapRotation(TwoPTMGate):
             s = np.sin(angle) * np.exp(-self.d_var/2)
             ss = 0.5 * (1 - np.exp(-2 * self.d_var) * np.cos(2*angle))
             sc = np.exp(-2*self.d_var) * np.sin(angle) * np.cos(angle)
+
+            if (self.t1_bit0) and (self.t1_bit1) <= 0:
+                raise RuntimeError("t1 must be positive")
+            if (self.t2_bit0_dec) and (self.t2_bit1) <= 0:
+                raise RuntimeError("t2 must be positive")
+            if self.t2_bit1 > 2 * self.t1_bit1:
+                raise RuntimeError("t2 must not be greater than 2*t1")
+            if self.t2_bit0_dec > 2 * self.t1_bit0:
+                raise RuntimeError("t2 must not be greater than 2*t1")
+
+            if np.allclose(self.t2_bit0_dec, 2 * self.t1_bit0) or\
+               np.allclose(self.t2_bit1, 2 * self.t1_bit1):
+                t_phi_bit0 = np.inf
+                t_phi_bit1 = np.inf
+            else:
+                t_phi_bit0 = 1 / (1 / self.t2_bit0_dec -
+                                  1 / (2 * self.t1_bit0)) / 2
+                t_phi_bit1 = 1 / (1 / self.t2_bit1 - 1 /
+                                  (2 * self.t1_bit1)) / 2
+
+            gamma_bit0 = 1 - np.exp(- (self.interaction_time/2) / self.t1_bit0)
+            lamda_bit0 = 1 - np.exp(- (self.interaction_time/2) / t_phi_bit0)
+
+            gamma_bit1 = 1 - np.exp(- (self.interaction_time/2) / self.t1_bit1)
+            lamda_bit1 = 1 - np.exp(- (self.interaction_time/2) / t_phi_bit1)
+
+            PTM_bit0 = np.kron(ptm.amp_ph_damping_ptm(gamma_bit0, lamda_bit0),
+                               np.identity(4))
+            PTM_bit1 = np.kron(np.identity(4),
+                               ptm.amp_ph_damping_ptm(gamma_bit1, lamda_bit1))
+
         assert self.d_var >= 0
         assert self.d_var <= 1
 
@@ -805,7 +905,11 @@ class ISwapRotation(TwoPTMGate):
             [0, 0,  0,   0, 0, 0,   0,  0,  0,   0, 0,  0,   0, 0,  0, 1]
         ])
 
-        self.two_ptm = ptm.to_0xy1_basis(p_iswap)
+        if self.interaction_time == 0:
+            self.two_ptm = ptm.to_0xy1_basis(p_iswap)
+        else:
+            self.two_ptm = PTM_bit0 @ PTM_bit1 @ ptm.to_0xy1_basis(p_iswap) @\
+                           PTM_bit1 @ PTM_bit0
 
 
 class Swap(TwoPTMGate):
