@@ -318,14 +318,14 @@ class RotateZ(SinglePTMGate):
 
 class RotateEuler(SinglePTMGate):
 
-    def __init__(self, bit, time, theta, phi, lamda, **kwargs):
+    def __init__(self, bit, time, phi, theta,  lamda, **kwargs):
         """ A single qubit rotation described by three Euler angles
         (theta, phi, lambda)
          U = R_Z(phi).R_X(theta).R_Z(lamda)
         """
         unitary = np.array(
             [[np.cos(theta / 2),
-                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+              -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
              [-1j * np.exp(1j * phi) * np.sin(theta / 2),
               np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
              ])
@@ -336,7 +336,7 @@ class RotateEuler(SinglePTMGate):
 
         self.label = r"$R(\theta, \phi, \lambda)$"
 
-    def adjust(self, theta, phi, lamda):
+    def adjust(self, phi, theta, lamda):
         unitary = np.array(
             [[np.cos(theta / 2),
                 -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
@@ -543,7 +543,7 @@ class CNOT(TwoPTMGate):
         ax.scatter((self.time,),
                    (coords[bit1],), color='k')
         ax.scatter((self.time,),
-                   (coords[bit0],), color='k', marker='$\oplus$', s=200)
+                   (coords[bit0],), color='k', marker=r'$\oplus$', s=200)
 
         xdata = (self.time, self.time)
         ydata = (coords[bit0], coords[bit1])
@@ -937,7 +937,7 @@ class ResetGate(SinglePTMGate):
                                     gamma_up=population)
         super().__init__(bit, time, p, **kwargs)
         self.state = state
-        self.label = "-> {}".format(state)
+        self.label = r"-> {}".format(state)
 
 
 class ConditionalGate(Gate):
@@ -1014,7 +1014,7 @@ class ClassicalCNOT(Gate):
         ax.scatter((self.time,),
                    (coords[self.bit0],), color='k')
         ax.scatter((self.time,),
-                   (coords[self.bit1],), color='k', marker='$\oplus$', s=70)
+                   (coords[self.bit1],), color='k', marker=r'$\oplus$', s=70)
 
         xdata = (self.time, self.time)
         ydata = (coords[self.bit0], coords[self.bit1])
