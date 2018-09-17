@@ -247,23 +247,10 @@ class RotateX(SinglePTMGate):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
 
-        p = ptm.rotate_x_ptm(angle)
-        if dephasing_angle:
-            p = np.dot(
-                p,
-                ptm.dephasing_ptm(
-                    0,
-                    dephasing_angle,
-                    dephasing_angle))
-        if dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
-
+        super().__init__(bit, time, None, **kwargs)
         self.dephasing_axis = dephasing_axis
         self.dephasing_angle = dephasing_angle
-
-        super().__init__(bit, time, p, **kwargs)
-
-        self.set_labels(angle)
+        self.adjust(angle)
 
     def set_labels(self, angle):
 
@@ -284,11 +271,11 @@ class RotateX(SinglePTMGate):
             p = np.dot(
                 p,
                 ptm.dephasing_ptm(
-                    self.dephasing_angle,
                     0,
+                    self.dephasing_angle,
                     self.dephasing_angle))
         if self.dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+            p = np.dot(p, ptm.dephasing_ptm(self.dephasing_axis, 0, 0))
         self.ptm = p
         self.set_labels(angle)
 
