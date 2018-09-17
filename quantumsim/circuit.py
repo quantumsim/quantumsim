@@ -306,7 +306,7 @@ class RotateX(SinglePTMGate):
                     0,
                     self.dephasing_angle))
         if self.dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+            p = np.dot(p, ptm.dephasing_ptm(self.dephasing_axis, 0, 0))
         self.ptm = p
         self.set_labels(angle)
 
