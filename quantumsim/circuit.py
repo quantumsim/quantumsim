@@ -180,22 +180,10 @@ class RotateY(SinglePTMGate):
             **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
-        p = ptm.rotate_y_ptm(angle)
-        if dephasing_angle:
-            p = np.dot(
-                p,
-                ptm.dephasing_ptm(
-                    dephasing_angle,
-                    0,
-                    dephasing_angle))
-        if dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
-
+        super().__init__(bit, time, None, **kwargs)
         self.dephasing_axis = dephasing_axis
         self.dephasing_angle = dephasing_angle
-
-        super().__init__(bit, time, p, **kwargs)
-        self.set_labels(angle)
+        self.adjust(angle)
 
     def set_labels(self, angle):
         self.angle = angle
@@ -285,17 +273,11 @@ class RotateZ(SinglePTMGate):
     def __init__(self, bit, time, angle, dephasing=None, **kwargs):
         """ A rotation around the z-axis on the bloch sphere by `angle`.
         """
-        p = ptm.rotate_z_ptm(angle)
-        if dephasing:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing, dephasing, 0))
-
+        super().__init__(bit, time, None, **kwargs)
         self.dephasing = dephasing
-
-        super().__init__(bit, time, p, **kwargs)
-        self.set_labels(angle)
+        self.adjust(angle)
 
     def set_labels(self, angle):
-
         self.angle = angle
         multiple_of_pi = angle / np.pi
         if np.allclose(multiple_of_pi, 1):
@@ -323,18 +305,8 @@ class RotateEuler(SinglePTMGate):
         (theta, phi, lambda)
          U = R_Z(phi).R_X(theta).R_Z(lamda)
         """
-        unitary = np.array(
-            [[np.cos(theta / 2),
-              -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
-             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
-              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
-             ])
-
-        p = ptm.single_kraus_to_ptm(unitary)
-
-        super().__init__(bit, time, p, **kwargs)
-
-        self.label = r"$R(\theta, \phi, \lambda)$"
+        super().__init__(bit, time, None, **kwargs)
+        self.adjust(phi, theta, lamda)
 
     def adjust(self, phi, theta, lamda):
         unitary = np.array(
@@ -346,6 +318,7 @@ class RotateEuler(SinglePTMGate):
 
         p = ptm.single_kraus_to_ptm(unitary)
         self.ptm = p
+        self.label = r"$R(\phi, \theta, \lambda)$"
 
 
 class IdlingGate:
@@ -619,45 +592,10 @@ class ISwapRotation(TwoPTMGate):
         0  i*sin(theta)     cos(theta)      0
         0  0                0               1
         """
-        if angle != 0:
-            d = np.exp(-dephase_var * (2*angle/np.pi)**2 / 2)
-            d4 = np.exp(-dephase_var * (2*angle/np.pi)**2 / 8)
-        else:
-            d = 1
-            d4 = 1
-        assert d >= 0
-        assert d <= 1
-
-        kraus0 = np.array([
-            [1, 0, 0, 0],
-            [0, np.cos(angle)*d, 1j*np.sin(angle)*d, 0],
-            [0, 1j*np.sin(angle)*d, np.cos(angle)*d, 0],
-            [0, 0, 0, 1]
-        ])
-        kraus1 = np.exp(1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, 1, 0],
-            [0, 1, 1, 0],
-            [0, 0, 0, 0]
-        ])
-        kraus2 = np.exp(-1j*angle)*np.sqrt(1-d**2)/2*np.array([
-            [0, 0, 0, 0],
-            [0, 1, -1, 0],
-            [0, -1, 1, 0],
-            [0, 0, 0, 0]
-        ])
-
-        self.angle = angle
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, d4, d4])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d4**2),
-                                             np.sqrt(1-d4**2)]))
-        p1 = ptm.double_kraus_to_ptm(kraus0) +\
-            ptm.double_kraus_to_ptm(kraus1) +\
-            ptm.double_kraus_to_ptm(kraus2)
-
+        super().__init__(bit0, bit1, None, time, **kwargs)
         self.dephase_var = dephase_var
+        self.adjust(angle)
 
-        super().__init__(bit0, bit1, p0 @ p1 @ p0, time, **kwargs)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -767,30 +705,9 @@ class NoisyCPhase(TwoPTMGate):
 class CPhaseRotation(TwoPTMGate):
 
     def __init__(self, bit0, bit1, angle, time, dephase_var=0, **kwargs):
-
-        if angle != 0:
-            d = np.exp(-dephase_var * (angle/np.pi)**2 / 2)
-            d2 = np.exp(-dephase_var * (angle/np.pi)**2 / 4)
-        else:
-            d = 1
-            d2 = 1
-        assert d >= 0
-        assert d <= 1
-
-        p0 = ptm.double_kraus_to_ptm(np.diag([1, 1, 1,
-                                              np.exp(1j * angle)*d])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, 0,
-                                             np.exp(1j * angle) *
-                                             np.sqrt(1-d**2)]))
-
-        p1 = ptm.double_kraus_to_ptm(np.diag([1, 1, d2, d2])) +\
-            ptm.double_kraus_to_ptm(np.diag([0, 0, np.sqrt(1-d2**2),
-                                             np.sqrt(1-d2**2)]))
-
-        self.angle = angle
+        super().__init__(bit0, bit1, None, time, **kwargs)
         self.dephase_var = dephase_var
-
-        super().__init__(bit0, bit1, p0 @ p1, time, **kwargs)
+        self.adjust(angle)
 
     def adjust(self, angle):
 
