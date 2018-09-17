@@ -381,15 +381,20 @@ class TestISwapGate:
         assert iswap.time == 20
         assert iswap.angle == np.pi/2
         assert iswap.interaction_time == 0
-        assert iswap.t2_enh is None
+        assert iswap.t2_bit0_dec is None
         assert not iswap.is_measurement
 
     def test_init_noisy(self):
         iswap = circuit.ISwapRotation("A", "B", np.pi/2, 20,
-                                      t2_enh=1000, interaction_time=10)
+                                      t2_bit0_dec=1000, interaction_time=10,
+                                      t1_bit0=30000, t1_bit1=30000,
+                                      t2_bit1=30000)
 
-        assert not iswap.t2_enh == None
+        assert iswap.t2_bit0_dec is not None
         assert not iswap.interaction_time == 0
+        assert iswap.t1_bit0 is not None
+        assert iswap.t1_bit1 is not None
+        assert iswap.t2_bit1 is not None
         assert iswap.d_var == (1 - np.exp(-10/1000))
 
     def test_apply(self):

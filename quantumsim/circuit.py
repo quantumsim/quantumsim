@@ -737,6 +737,7 @@ class ISwapRotation(TwoPTMGate):
                 t2_bit0_dec = t2_bit1
             else:
                 d_var = 1 - np.exp(-interaction_time/t2_bit0_dec)
+
             c = np.cos(angle) * np.exp(-d_var/2)
             cc = 0.5 * (1 + np.exp(-2*d_var) * np.cos(2*angle))
             s = np.sin(angle) * np.exp(-d_var/2)
