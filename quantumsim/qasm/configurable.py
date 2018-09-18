@@ -25,7 +25,7 @@ class Decomposer:
     instruction as input and return its expansion, according to definition in
     `config['gate_decomposition']`.
     """
-    _arg_matcher = re.compile(r"\%(\d+)")
+    _arg_matcher = re.compile(r"%(\d+)")
 
     def __init__(self, alias, expansion):
         s = alias.strip()
@@ -47,7 +47,7 @@ class Decomposer:
             fs = str(instr)
             for i, k in enumerate(arg_nums):
                 fs = re.sub(
-                    r"\%{id}\b".format(id=k), r'{{{}}}'.format(i), fs)
+                    r"%{id}\b".format(id=k), r'{{{}}}'.format(i), fs)
             self._format_strings.append(fs)
 
     def _match(self, instr):
