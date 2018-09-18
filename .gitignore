@@ -16,3 +16,6 @@ build/*
 doc/build/*
 **/generated
 **/.pytest_cache
+
+# idea configuration
+.idea/*

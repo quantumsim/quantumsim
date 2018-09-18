@@ -631,3 +631,55 @@ class TestSamplers:
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 1, 0.7)
         assert s.p_twiddle < 1 and s.p_twiddle > 0
+
+    def test_rotate_euler_random(self):
+        rng = np.random.RandomState()
+        n_rounds = 10
+
+        for _ in range(n_rounds):
+            angle = rng.uniform(0., 2*np.pi)
+            rotate_z = circuit.RotateZ('q0', 0., angle)
+            rotate_e1 = circuit.RotateEuler('q0', 0., angle, 0., 0.)
+            rotate_e2 = circuit.RotateEuler('q0', 0., 0., 0., angle)
+            assert np.allclose(rotate_z.ptm, rotate_e1.ptm)
+            assert np.allclose(rotate_z.ptm, rotate_e2.ptm)
+
+        for _ in range(n_rounds):
+            angle = rng.uniform(0., 2*np.pi)
+            rotate_x = circuit.RotateX('q0', 0., angle)
+            rotate_e = circuit.RotateEuler('q0', 0., 0., angle, 0.)
+            assert np.allclose(rotate_x.ptm, rotate_e.ptm)
+
+        for _ in range(n_rounds):
+            angle = rng.uniform(0., 2*np.pi)
+            rotate_y = circuit.RotateY('q0', 0., angle)
+            rotate_e = circuit.RotateEuler('q0', 0.,
+                                           0.5*np.pi, angle, -0.5*np.pi)
+            assert np.allclose(rotate_y.ptm, rotate_e.ptm)
+
+    def test_rotate_xy_random(self):
+        rng = np.random.RandomState()
+        n_rounds = 10
+
+        for _ in range(n_rounds):
+            phi = 0.
+            theta = rng.uniform(0., 2*np.pi)
+            dephasing_axis = rng.uniform(0., 1.)
+            dephasing_angle = rng.uniform(0., 1.)
+            rotate_x = circuit.RotateX('q0', 0., theta,
+                                       dephasing_angle, dephasing_axis)
+            rotate_xy = circuit.RotateXY('q0', 0., phi, theta,
+                                         dephasing_angle, dephasing_axis)
+            assert np.allclose(rotate_x.ptm, rotate_xy.ptm)
+
+        for _ in range(n_rounds):
+            phi = 0.5*np.pi
+            theta = rng.uniform(0., 2*np.pi)
+            dephasing_axis = rng.uniform(0., 1.)
+            dephasing_angle = rng.uniform(0., 1.)
+            rotate_y = circuit.RotateY('q0', 0., theta,
+                                       dephasing_angle, dephasing_axis)
+            rotate_xy = circuit.RotateXY('q0', 0., phi, theta,
+                                         dephasing_angle, dephasing_axis)
+            assert np.allclose(rotate_y.ptm, rotate_xy.ptm)
+
