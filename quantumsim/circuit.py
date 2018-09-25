@@ -1218,7 +1218,7 @@ class Circuit:
         This function should always be called after defining the circuit and
         before applying it.
 
-        See also: Circuit.apply_to
+        See also: :func:`Circuit.apply_to`
         """
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
 

@@ -172,7 +172,7 @@ class ConfigurableParser:
         }
 
     def parse(self, qasm, rng=None, *, ordering='ALAP',
-              time_start=None, time_end=None):
+              time_start=None, time_end=None, toposort=True):
         """Parses QASM to the list of circuits.
 
         Parameters
@@ -194,13 +194,17 @@ class ConfigurableParser:
             Ending time for the circuits.
             Mutually exclusive with `time_start`.
             If both are None, defaults to 0.
+        toposort: bool
+            Whether to apply topological ordering while circuit creation
+            (see :func:`quantumsim.tp.partial_greedy_toposort`). Defaults to
+            True.
         """
         return list(self.gen_circuits(
             qasm, rng, ordering=ordering,
-            time_start=time_start, time_end=time_end))
+            time_start=time_start, time_end=time_end, toposort=toposort))
 
     def gen_circuits(self, qasm, rng=None, *, ordering='ALAP',
-                     time_start=None, time_end=None):
+                     time_start=None, time_end=None, toposort=True):
         """Returns a generator over the circuits, defined in QASM.
         Circuits are constructed lazily.
 
@@ -223,14 +227,18 @@ class ConfigurableParser:
             Ending time for the circuits.
             Mutually exclusive with `time_start`.
             If both are None, defaults to 0.
+        toposort: bool
+            Whether to apply topological ordering while circuit creation
+            (see :func:`quantumsim.tp.partial_greedy_toposort`). Defaults to
+            True.
         """
         rng = ct._ensure_rng(rng)
         if isinstance(qasm, str):
             return self._gen_circuits_fn(qasm, rng, ordering,
-                                         time_start, time_end)
+                                         time_start, time_end, toposort)
         else:
             return self._gen_circuits_fp(qasm, rng, ordering,
-                                         time_start, time_end)
+                                         time_start, time_end, toposort)
 
     @staticmethod
     def _gen_circuits_src(fp):
@@ -261,7 +269,8 @@ class ConfigurableParser:
         else:
             warnings.warn("Could not find any circuits in the QASM file.")
 
-    def _gen_circuits_fp(self, fp, rng, ordering, time_start, time_end):
+    def _gen_circuits_fp(self, fp, rng, ordering, time_start, time_end,
+                         toposort):
         """Returns a generator over the circuits, provided iterator or
         generator of strings `fp`.
         """
@@ -283,14 +292,15 @@ class ConfigurableParser:
             # We pass the same rng to avoid correlations between measurements,
             # everything else must be re-initialized
             yield self._parse_circuit(title, source, ordering, rng,
-                                      time_start, time_end)
+                                      time_start, time_end, toposort)
 
-    def _gen_circuits_fn(self, fn, rng, ordering, time_start, time_end):
+    def _gen_circuits_fn(self, fn, rng, ordering, time_start, time_end,
+                         toposort):
         """Returns a generator over the circuits, provided QASM filename `fn`.
         """
         with open(fn, 'r') as fp:
             generator = self._gen_circuits_fp(fp, rng, ordering,
-                                              time_start, time_end)
+                                              time_start, time_end, toposort)
             for circuit in generator:
                 yield circuit
 
@@ -376,7 +386,7 @@ class ConfigurableParser:
         return gate, duration
 
     def _parse_circuit(self, title, source, ordering, rng,
-                       time_start, time_end):
+                       time_start, time_end, toposort):
         """Parces circuit, defined by set of instructions `source`,
         to a Quantumsim circuit.
         """
@@ -404,7 +414,8 @@ class ConfigurableParser:
         # idling gates afterwards are useless
         # circuit.add_waiting_gates(tmin=tmin, tmax=None)
         circuit.add_waiting_gates(tmin=0, tmax=None)
-        circuit.order()
+        if toposort:
+            circuit.order()
         return circuit
 
     @staticmethod
