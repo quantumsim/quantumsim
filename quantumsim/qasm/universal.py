@@ -85,7 +85,7 @@ class QASMParser(parsimonious.NodeVisitor):
     """
 
     def __init__(self, qubit_parameters, timegrid=20,
-                 gate_1_step=1, gate_2_step=5):
+                 gate_1_step=1, gate_2_step=5, toposort=True):
 
         self.grammar = qasm_grammar
         self.lines = []
@@ -98,6 +98,7 @@ class QASMParser(parsimonious.NodeVisitor):
         self.timestep_increment_sgl = gate_1_step * timegrid
         self.timestep_increment_dbl = gate_2_step * timegrid
         self.timestep_increment = timegrid
+        self.toposort = toposort
 
     def visit_qubit_spec(self, node, children):
         try:
@@ -193,7 +194,7 @@ class QASMParser(parsimonious.NodeVisitor):
                                        time=self.timestep)
             self.current_circuit.add_gate(ro_gate)
         self.current_circuit.add_waiting_gates(tmin=0, tmax=self.timestep)
-        self.current_circuit.order()
+        self.current_circuit.order(toposort=self.toposort)
 
         self.circuits.append(self.current_circuit)
 
