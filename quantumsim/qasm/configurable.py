@@ -414,8 +414,8 @@ class ConfigurableParser:
         # idling gates afterwards are useless
         # circuit.add_waiting_gates(tmin=tmin, tmax=None)
         circuit.add_waiting_gates(tmin=0, tmax=None)
-        if toposort:
-            circuit.order()
+        circuit.order(toposort=toposort)
+
         return circuit
 
     @staticmethod

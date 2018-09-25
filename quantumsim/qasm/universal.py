@@ -194,8 +194,7 @@ class QASMParser(parsimonious.NodeVisitor):
                                        time=self.timestep)
             self.current_circuit.add_gate(ro_gate)
         self.current_circuit.add_waiting_gates(tmin=0, tmax=self.timestep)
-        if self.toposort:
-            self.current_circuit.order()
+        self.current_circuit.order(toposort=self.toposort)
 
         self.circuits.append(self.current_circuit)
 
