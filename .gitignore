@@ -1,0 +1,21 @@
+.ipynb_checkpoints/*
+
+.*.swo
+.*.swp
+dmcpu.c
+*.so
+
+*.ipynb
+
+*__pycache__
+.cache/*
+
+*egg-info
+
+build/*
+doc/build/*
+**/generated
+**/.pytest_cache
+
+# idea configuration
+.idea/*
