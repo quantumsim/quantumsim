@@ -20,6 +20,21 @@ class NotSupportedError(RuntimeError):
     pass
 
 
+def _dict_merge_recursive(*dicts):
+    if len(dicts) == 1 and not isinstance(dicts[0], dict):
+        dicts = dicts[0]
+    rv = dict()
+
+    for d in dicts:
+        for k, v in d.items():
+            if isinstance(rv.get(k), dict) and isinstance(v, dict):
+                rv[k] = _dict_merge_recursive(rv[k], v)
+            else:
+                rv[k] = v
+
+    return rv
+
+
 class Decomposer:
     """Instances of this class are callable objects, that take a QASM
     instruction as input and return its expansion, according to definition in
@@ -139,20 +154,21 @@ class ConfigurableParser:
         if len(args) == 0:
             raise ConfigurationError('No config files provided')
 
-        configuration = {}
+        config_dicts = []
         for i, config in enumerate(args):
             if isinstance(config, str):
+                # assuming path to JSON file
                 with open(config, 'r') as c:
-                    cfg = json.load(c)
-            else:
+                    config_dicts.append(json.load(c))
+            elif isinstance(config, dict):
                 # Assuming dictionary
-                cfg = config
-            try:
-                configuration.update(cfg)
-            except TypeError:
+                config_dicts.append(config)
+            else:
                 raise ConfigurationError(
                     'Could not cast config entry number {} to dictioary'
                     .format(i))
+        configuration = _dict_merge_recursive(*config_dicts)
+
 
         try:
             self._instructions = configuration['instructions']
