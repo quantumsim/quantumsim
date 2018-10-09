@@ -1,3 +1,5 @@
+import os
+
 import quantumsim.qasm as qasm
 
 qubit_test_pars = {
@@ -744,3 +746,30 @@ class TestQASMParser:
             assert len(c.qubits) == 2
 
         assert len(parser.circuits) == 42
+
+
+class TestConfigurableParser:
+
+    def test_config_merging(self):
+        config = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                              'config_qasm_5q.json')
+        config_override = {
+            'instructions': {
+                'i q0': {
+                    'duration': 200,
+                }
+            },
+            'gate_decompositions': {}
+        }
+
+        parser1 = qasm.ConfigurableParser(config)
+        parser2 = qasm.ConfigurableParser(config, config_override)
+
+        assert len(parser1._instructions) == len(parser2._instructions)
+        unchanged = parser1._instructions.pop('i q0')
+        changed = parser2._instructions.pop('i q0')
+        assert unchanged['duration'] == 100
+        assert changed['duration'] == 200
+        assert unchanged['kraus_repr'] == changed['kraus_repr']
+        assert unchanged['qubits'] == changed['qubits']
+        assert len(parser1._decomposers) == len(parser2._decomposers)
