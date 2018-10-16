@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+from scipy.optimize import minimize
+
 from . import tp
 from . import ptm
 
@@ -907,7 +909,7 @@ class ISwapIncoherent(ISwapCoherent):
 
         self.mode = temp_mode
         self.angle = temp_angle
-self.E10 = mean_E10
+        self.E10 = mean_E10
 
 
 class ISwapRotation(TwoPTMGate):
