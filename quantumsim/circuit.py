@@ -683,6 +683,233 @@ class ISwapNoisy(TwoPTMGate):
         self.two_ptm = p0 @ p1 @ p0
 
 
+class ISwapCoherent(TwoPTMGate):
+    '''
+    Class for a coherent ISwap gate. Can be operated
+    by fixing the pulse amplitude and the duration
+    (mode='experiment'),
+    by fixing the duration and angle and solving for
+    the amplitude (mode='amplitude'),
+    or by fixing the amplitude and angle and solving
+    for the time (mode='time').
+    '''
+    def __init__(self, bit0, bit1, time,
+                 gap, E01, E10=None,
+                 duration=None, angle=None,
+                 mode='time'):
+
+        self.E01 = E01
+        self.E10 = E10
+        self.duration = duration
+        self.mode = mode
+        self.angle = angle
+        self.gap = gap
+
+        unitary = self.make_unitary()
+
+        time_start = time - self.duration/2
+        time_end = time + self.duration/2
+
+        super().__init__(bit0, bit1, ptm.double_kraus_to_ptm(unitary),
+                         time, time_start=time_start, time_end=time_end)
+
+
+    def make_unitary(self):
+        '''
+        Makes the unitary for an iSwap gate.
+        '''
+
+        mode = self.mode
+        angle = self.angle
+        gap = self.gap
+        E01 = self.E01
+        E10 = self.E10
+        duration = self.duration
+
+        if mode == 'experiment':
+            # This mode assumes that the experimental parameters
+            # are given, and that the final angle is to be found
+            # out.
+            delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
+            K_plus = delta_E - 0.5*(E01-E10)
+            M_plus = np.sqrt(gap**2 + K_plus**2)
+            E0 = 0.5*(E01+E10)
+            ct = np.sqrt(gap**4 + K_plus**4 +
+                         2*gap**2*K_plus**2*np.cos(2*delta_E*duration))/\
+                M_plus**2
+            st = gap*K_plus / M_plus**2 * 2 * np.sin(delta_E*duration)
+            assert np.abs(ct**2 + st**2 - 1) < 1e-6
+            angle = np.angle(ct+1j*st)
+            self.angle = angle
+
+        elif mode == 'time':
+            # This mode assumes that the duration of the gate
+            # has not been set, and will be fixed to make
+            # the angle as desired.
+            if E10 is None:
+                warnings.warn('E10 not set, defaulting to E10=E01')
+                E10 = E01
+            delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
+            K_plus = delta_E - 0.5*(E01-E10)
+            M_plus = np.sqrt(gap**2 + K_plus**2)
+            E0 = 0.5*(E01+E10)
+            duration = np.arccos(
+                (M_plus**4*np.cos(angle)**2 -
+                 gap**4 - K_plus**4) /
+                (2 * gap**2 * K_plus**2)) / (2*delta_E)
+            if not np.isfinite(duration):
+                raise ValueError('''
+                    Cannot perform an ISwap of angle {} with detuning {}.
+                    '''.format(angle, (E01-E10)/gap))
+            self.duration = duration
+
+        elif mode == 'amplitude':
+            # This mode assumes that the detuning of the gate
+            # has not been set, and will be fixed to make the
+            # desired angle.
+            if duration is None:
+                raise ValueError('''Cannot use the amplitude knob
+                                 without a set time''')
+            # I don't think I can solve these equations analytically
+            # for E10, defaulting to a numerical solution
+
+            def calc_angle(E10):
+                delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
+                K_plus = delta_E - 0.5*(E01-E10)
+                M_plus = np.sqrt(gap**2 + K_plus**2)
+                ct = np.sqrt(gap**4 + K_plus**4 +
+                             2*gap**2*K_plus**2 *
+                             np.cos(2*delta_E*duration)) /\
+                    M_plus**2
+                st = gap*K_plus / M_plus**2 * 2 * np.sin(delta_E*duration)
+                assert np.abs(ct**2 + st**2 - 1) < 1e-6
+                return np.abs(angle-np.angle(ct+1j*st))
+            res = minimize(calc_angle, [E01-0.1])
+            E10 = res['x']
+            self.E10 = E10
+            delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
+            K_plus = delta_E - 0.5*(E01-E10)
+            M_plus = np.sqrt(gap**2 + K_plus**2)
+            E0 = 0.5*(E01+E10)
+
+        unitary = np.zeros([4, 4], dtype=complex)
+        unitary[0, 0] = 1
+        unitary[1, 1] = np.exp(1j*E0*duration) / M_plus**2 * (
+            gap**2*np.exp(1j*delta_E*duration) +
+            K_plus**2*np.exp(-1j*delta_E*duration))
+        unitary[2, 2] = np.exp(1j*E0*duration) / M_plus**2 * (
+            gap**2*np.exp(-1j*delta_E*duration) +
+            K_plus**2*np.exp(1j*delta_E*duration))
+        unitary[3, 3] = np.exp(2j*E0*duration)
+        unitary[1, 2] = np.exp(1j*E0*duration) * gap * K_plus * (
+            np.exp(1j*delta_E*duration) - np.exp(-1j*delta_E*duration))
+        unitary[2, 1] = np.exp(1j*E0*duration) * gap * K_plus * (
+            np.exp(-1j*delta_E*duration) - np.exp(1j*delta_E*duration))
+
+        return unitary
+
+    def adjust(self, angle=None, E10=None, duration=None):
+        if self.mode == 'experiment':
+            if E10:
+                self.E10 = E10
+            if duration:
+                self.duration = duration
+            if angle:
+                warnings.warn('''You cannot set the angle
+                    when mode=experiment - fix the duration
+                    and detuning (E10) instead.''')
+        if self.mode == 'time':
+
+            warnings.warn('''This changes the duration of the
+                gate, which will cause inconsistencies with
+                idling gates. Proceed at your own caution.
+                (Use mode=experiment or mode=amplitude to 
+                avoid this).''')
+            if E10:
+                self.E10 = E10
+            if angle:
+                self.angle = angle
+            if duration:
+                warnings.warn('''You cannot set the gate duration
+                    when mode=time - fix the detuning (E10) and
+                    angle instead.''')
+
+        if self.mode == 'amplitude':
+            if E10:
+                warnings.warn('''You cannot set the detuning
+                    when mode=amplitude - fix the time and
+                    angle instead.''')
+            if angle:
+                self.angle = angle
+            if duration:
+                self.duration = duration
+
+        unitary = self.make_unitary()
+
+        self.two_ptm = ptm.double_kraus_to_ptm(unitary)
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time, self.time),
+                   (coords[bit0], coords[bit1]),
+                   marker="x", s=80, color='b')
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+
+
+class ISwapIncoherent(ISwapCoherent):
+    '''
+    Class to make an incoherent version of a coherent ISwap gate,
+    by numerically integrating over the PTM.
+    '''
+    def __init__(self, width, num_points=19, xmin=3, **kwargs):
+        '''
+        @width - width of the Gaussian distribution to draw
+            E10 from
+        @num_points - number of points to sum over
+        @xmin - distance to extend summation
+        '''
+        super().__init__(**kwargs)
+        self.width = width
+        self.num_points = num_points
+        self.xmin = xmin
+        self.make_ptm()
+
+    def make_ptm(self):
+        '''
+        Numerically integrates a PTM to obtain an incoherent version.
+        '''
+        xmin = self.xmin
+        num_points = self.num_points
+        width = self.width
+
+        mean_E10 = self.E10
+
+        temp_angle = self.angle
+        temp_mode = self.mode
+
+        self.mode = 'experiment'
+        self.two_ptm = np.zeros([16,16])
+        for E10 in np.linspace(
+                mean_E10 - xmin*width * (num_points - 1) / num_points,
+                mean_E10 + xmin*width * (num_points - 1) / num_points):
+            self.E10 = E10
+            unitary = self.make_unitary()
+            p = np.exp(-(E10-mean_E10)**2 / (2*width**2)) /\
+                np.sqrt(2 * np.pi * width**2)
+            self.two_ptm += ptm.double_kraus_to_ptm(unitary) * p
+
+        self.two_ptm *= self.two_ptm[0,0]
+
+        self.mode = temp_mode
+        self.angle = temp_angle
+self.E10 = mean_E10
+
+
 class ISwapRotation(TwoPTMGate):
 
     def __init__(self, bit0, bit1, angle, time,
