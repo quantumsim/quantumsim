@@ -46,6 +46,19 @@ def to_0xy1_basis(ptm):
         basis_transformation_matrix, np.dot(
             ptm, basis_transformation_matrix))
 
+def to_20xy1_basis(ptm):
+    """Transform a 2 qubit Pauli transfer in the "usual" basis (0xyz) [1],
+    to the 0xy1 basis which is required by sparsesdm.apply_ptm.
+
+    ptm: The input transfer matrix in 0xyz basis. Is asserted to be 16 x 16.
+
+    [1] Daniel Greenbaum, Introduction to Quantum Gate Set Tomography, http://arxiv.org/abs/1509.02921v1
+    """
+
+    assert ptm.shape == (16, 16)
+    return np.dot(
+        np.kron(basis_transformation_matrix,basis_transformation_matrix), np.dot(
+            ptm, np.kron(basis_transformation_matrix,basis_transformation_matrix)))
 
 def to_0xyz_basis(ptm):
     """Transform a Pauli transfer in the 0xy1 basis [1],

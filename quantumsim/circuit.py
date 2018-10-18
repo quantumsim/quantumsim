@@ -369,6 +369,57 @@ class RotateEuler(SinglePTMGate):
                                                _format_angle(theta),
                                                _format_angle(lamda))
 
+class RotateArb(SinglePTMGate):
+
+    def __init__(self, bit, time, nx, ny, nz, theta, **kwargs):
+        """ A single qubit rotation about the angle define by (nx, ny, nz) with angle theta.
+        """
+
+        k = np.cos(theta/2)*np.c_[[1,0],[0,1]] - 1j*np.sin(theta/2)*np.c_[[nz, nx -1j*ny],[nx + 1j*ny, -nz]]
+        
+        super().__init__(bit, time, ptm.single_kraus_to_ptm(k), **kwargs)
+        
+
+class overX(SinglePTMGate):
+
+    def __init__(self, bit, time, theta, kappa, **kwargs):
+        """
+        An X overrotation gate which has unitarity kappa and overrotates by an angle of theta in the coherent case. Kappa controls the mixing between an X rotation gate and the Pauli Twirl.
+        """
+        p = np.sin(theta/2)**2
+        
+        kI = np.sqrt((1-kappa)*(1-p))*np.c_[[1,0],[0,1]]
+        kX = np.sqrt((1-kappa)*p)*np.c_[[0,1],[1,0]]
+
+        super().__init__(bit, time,  ptm.single_kraus_to_ptm(kI) + ptm.single_kraus_to_ptm(kX) + kappa*ptm.rotate_x_ptm(theta), **kwargs)
+
+        
+class overY(SinglePTMGate):
+
+    def __init__(self, bit, time, theta, kappa, **kwargs):
+        """
+        An Y overrotation gate which has unitarity kappa and overrotates by an angle of theta in the coherent case. Kappa controls the mixing between a Y rotation gate and the Pauli Twirl.
+        """
+        p = np.sin(theta/2)**2
+        
+        kI = np.sqrt((1-kappa)*(1-p))*np.c_[[1,0],[0,1]]
+        kY = np.sqrt((1-kappa)*p)*np.c_[[0,-1j],[1j,0]]
+
+        super().__init__(bit, time,  ptm.single_kraus_to_ptm(kI) + ptm.single_kraus_to_ptm(kY) + kappa*ptm.rotate_y_ptm(theta), **kwargs)
+
+        
+class overZ(SinglePTMGate):
+
+    def __init__(self, bit, time, theta, kappa, **kwargs):
+        """
+        An Z overrotation gate which has unitarity kappa and overrotates by an angle of theta in the coherent case. Kappa controls the mixing between a Z rotation gate and the Pauli Twirl.
+        """
+        p = np.sin(theta/2)**2
+        
+        kI = np.sqrt((1-kappa)*(1-p))*np.c_[[1,0],[0,1]]
+        kZ = np.sqrt((1-kappa)*p)*np.c_[[1,0],[0,-1]]
+
+        super().__init__(bit, time,  ptm.single_kraus_to_ptm(kI) + ptm.single_kraus_to_ptm(kZ) + kappa*ptm.rotate_z_ptm(theta), **kwargs)
 
 class IdlingGate:
     pass
@@ -450,6 +501,19 @@ class DepolarizingNoise(SinglePTMGate, IdlingGate):
         ax.scatter((self.time),
                    (coords[self.involved_qubits[-1]]), color='k', marker='o')
 
+        
+class AsymmetricDepolarizingNoise(SinglePTMGate, IdlingGate):
+
+    def __init__(self, bit, time, px, py, pz, **kwargs):
+        """A depolarizing noise gate with inputs for asymmetric probabilities."""
+
+        self.px = px
+        self.py = py
+        self.pz = pz
+        
+        super().__init__(bit, time, ptm.dephasing_ptm(2*px, 2*py, 2*pz), **kwargs)
+
+        
 
 class BitflipNoise(SinglePTMGate, IdlingGate):
 
@@ -542,7 +606,59 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+class XX(TwoPTMGate):
 
+    def __init__(self, bit0, bit1, time, chi, **kwargs):
+        """
+        XX gate acing on the two qubits. Maslov 2017
+        """
+        
+        kraus = np.array([
+            [np.cos(chi), 0, 0, -1j*np.sin(chi)],
+            [0, np.cos(chi), -1j*np.sin(chi), 0],
+            [0, -1j*np.sin(chi), np.cos(chi), 0],
+            [-1j*np.sin(chi), 0, 0, np.cos(chi)]
+        ])
+        
+        p = ptm.double_kraus_to_ptm(kraus)
+        super().__init__(bit0, bit1, p, time, **kwargs)
+        
+        
+class overXX(TwoPTMGate):
+
+    def __init__(self, bit0, bit1, time, theta, kappa, **kwargs):
+        """
+        An XX overrotation gate which has unitarity kappa and overrotates by an angle of theta in the coherent case. Kappa controls the mixing between an XX gate and the Pauli Twirl.
+        """
+
+        p = np.sin(theta)**2
+        
+        kraus = np.sqrt(kappa)*np.c_[
+            [np.cos(theta), 0, 0, -1j*np.sin(theta)],
+            [0, np.cos(theta), -1j*np.sin(theta), 0],
+            [0, -1j*np.sin(theta), np.cos(theta), 0],
+            [-1j*np.sin(theta), 0, 0, np.cos(theta)]
+        ]
+        
+        kII = np.sqrt((1-kappa)*(1-p))*np.c_[
+            [1,0,0,0],
+            [0,1,0,0],
+            [0,0,1,0],
+            [0,0,0,1]
+        ]
+        
+        kXX = np.sqrt((1-kappa)*p)*np.c_[
+            [0,0,0,1],
+            [0,0,1,0],
+            [0,1,0,0],
+            [1,0,0,0]
+        ]
+
+        super().__init__(bit0, bit1, ptm.double_kraus_to_ptm(kraus) + ptm.double_kraus_to_ptm(kII) + ptm.double_kraus_to_ptm(kXX), time, **kwargs)
+
+
+
+        
 class CNOT(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
@@ -698,7 +814,33 @@ class ISwapRotation(TwoPTMGate):
 
         self.two_ptm = p0 @ p1 @ p0
 
+class TwoDepolarizingGate(TwoPTMGate):
+    '''
+    A two qubit depolarizing gate where p is the probability that the state is replaced by a completely mixed state.
+    '''
+    def __init__(self, bit0, bit1, time, p, **kwargs):
+        
+        pt = np.array([
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1-p]
+        ])
+        super().__init__(bit0, bit1, ptm.to_20xy1_basis(pt), time, **kwargs)
 
+        
 class Swap(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
