@@ -135,6 +135,36 @@ class Gate:
 
         assert time_start <= time_end
 
+    def set_time(self, time, time_start=None, time_end=None):
+        '''
+        Sets a new time for the gate safely (i.e. making sure
+        that it has the same duration as before).
+        Args:
+            time (float): new time for gate.
+            time_start (float or None): new start time for gate. If None,
+                is adjusted to maintain dt_start = time - time_start.
+            time_end (float or None): new end time for gate. If None,
+                is adjusted to maintain dt_end = time_end - time.
+        '''
+        if time_start is None:
+            time_start = self.time_start - self.time + time
+        if time_end is None:
+            time_end = self.time_end - self.time + time
+        self.time_start = time_start
+        self.time_end = time_end
+        self.time = time
+
+    def increment_time(self, dt):
+        '''
+        Increments the time on the gate safely (i.e. shifting
+        the start_time and end_time).
+        Args:
+            dt (float): amount to increment gate by
+        '''
+        self.time += dt
+        self.time_start += dt
+        self.time_end += dt
+
     def plot_gate(self, ax, coords):
         x = self.time
         y = coords[self.involved_qubits[-1]]

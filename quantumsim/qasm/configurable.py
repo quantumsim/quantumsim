@@ -463,7 +463,7 @@ class ConfigurableParser:
             gate_time_end = min((current_times[qubit]
                                  for qubit in spec['qubits']))
             gate_time_start = gate_time_end - duration
-            gate.time = 0.5*(gate_time_start + gate_time_end)
+            gate.set_time(0.5*(gate_time_start + gate_time_end))
             for qubit in spec['qubits']:
                 current_times[qubit] = gate_time_start
             gates.append(gate)
@@ -482,7 +482,7 @@ class ConfigurableParser:
 
         if not np.allclose(time_shift, 0.):
             for gate in gates:
-                gate.time += time_shift
+                gate.increment_time(time_shift)
 
         return gates, time_min + time_shift, time_shift
 
@@ -503,7 +503,7 @@ class ConfigurableParser:
             gate_time_start = max((current_times[qubit]
                                    for qubit in spec['qubits']))
             gate_time_end = gate_time_start + duration
-            gate.time = 0.5*(gate_time_start + gate_time_end)
+            gate.set_time(0.5*(gate_time_start + gate_time_end))
             for qubit in spec['qubits']:
                 current_times[qubit] = gate_time_end
             gates.append(gate)
@@ -519,7 +519,7 @@ class ConfigurableParser:
 
         if not np.allclose(time_shift, 0.):
             for gate in gates:
-                gate.time += time_shift
+                gate.increment_time(time_shift)
         return gates, time_shift, time_max + time_shift
 
     def _expand_decompositions(self, source):
