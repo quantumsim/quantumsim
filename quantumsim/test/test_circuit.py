@@ -451,6 +451,33 @@ class TestISwapGate:
             iswaprot.two_ptm), ptm.to_0xyz_basis(ptm_kraus))
 
 
+class TestCoherentISwap:
+
+    def test_three_ways(self):
+        gap = 0.56732
+        E01 = 0.1384
+        E10 = 0.2939
+        duration = 0.7632
+        gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=duration, angle=None,
+            mode='experiment')
+        angle = gate.angle
+        gate2 = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=None,
+            duration=duration, angle=angle,
+            mode='amplitude')
+        gate3 = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=None, angle=angle,
+            mode='time')
+        assert gate2.E10 == gate.E10
+        assert gate3.duration == gate.duration
+
+
 class TestAmpPhDamping:
 
     def test_init(self):
