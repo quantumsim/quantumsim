@@ -559,6 +559,25 @@ class TestCoherentISwap:
             new_gate.two_ptm,
             np.kron(phase_gate.ptm,phase_gate.ptm) @ old_gate.two_ptm)
 
+class TestIncoherentISwap:
+
+    def test_vs_coherent(self):
+        gap = 0.56732
+        E01 = 0.5
+        E10 = 0.5
+        angle = np.pi/3
+        gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=None, angle=angle,
+            mode='time')
+        gateinc = circuit.ISwapIncoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=None, angle=angle,
+            mode='time', width=1e-20)
+        assert np.allclose(gate.two_ptm, gateinc.two_ptm)
+
 
 class TestAmpPhDamping:
 

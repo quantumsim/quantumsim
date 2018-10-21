@@ -729,6 +729,20 @@ class ISwapCoherent(TwoPTMGate):
                  gap, E01, E10=None,
                  duration=None, angle=None,
                  mode='time'):
+        '''
+        Args:
+            bit0: low-frequency qubit label
+            bit1: high-frequency qubit label
+            E01: energy of the low-frequency qubit (in the absence of coupling)
+            E10: energy of the high-frequency qubit (in the absence of coupling)
+                Fixed if mode='amplitude', and set to E01 otherwise if =None.
+            duration: gate length. Fixed if mode='time', otherwise required.
+                required.
+            angle: rotation angle. Fixed if mode='experiment', otherwise required.
+            mode: 'time', 'amplitude', 'angle'; chooses which gate parameter
+                to be left free.
+
+        '''
 
         self.E01 = E01
         self.E10 = E10
@@ -852,10 +866,10 @@ class ISwapCoherent(TwoPTMGate):
 
         unitary = np.zeros([4, 4], dtype=complex)
         unitary[0, 0] = 1
-        unitary[1, 1] = np.exp(1j*E0*duration) / M_plus**2 * (
+        unitary[2, 2] = np.exp(1j*E0*duration) / M_plus**2 * (
             gap**2*np.exp(1j*delta_E*duration) +
             K_plus**2*np.exp(-1j*delta_E*duration))
-        unitary[2, 2] = np.exp(1j*E0*duration) / M_plus**2 * (
+        unitary[1, 1] = np.exp(1j*E0*duration) / M_plus**2 * (
             gap**2*np.exp(-1j*delta_E*duration) +
             K_plus**2*np.exp(1j*delta_E*duration))
         unitary[3, 3] = np.exp(2j*E0*duration)
@@ -867,6 +881,16 @@ class ISwapCoherent(TwoPTMGate):
         return unitary
 
     def adjust(self, angle=None, E10=None, duration=None):
+        '''
+        Updates angle, E10 and/or duration of gate.
+        Args:
+            angle: angle of rotation (unable to be set when
+                mode='experiment')
+            E10: high-frequency qubit energy (unable to be
+                set when mode='amplitude')
+            duration: gate duration (unable to be set when
+                mode='time').
+        '''
         if self.mode == 'experiment':
             if E10:
                 self.E10 = E10
@@ -961,7 +985,7 @@ class ISwapIncoherent(ISwapCoherent):
                 np.sqrt(2 * np.pi * width**2)
             self.two_ptm += ptm.double_kraus_to_ptm(unitary) * p
 
-        self.two_ptm *= self.two_ptm[0,0]
+        self.two_ptm *= 1/self.two_ptm[0,0]
 
         self.mode = temp_mode
         self.angle = temp_angle
