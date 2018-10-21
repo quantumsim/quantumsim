@@ -859,10 +859,10 @@ class ISwapCoherent(TwoPTMGate):
             gap**2*np.exp(-1j*delta_E*duration) +
             K_plus**2*np.exp(1j*delta_E*duration))
         unitary[3, 3] = np.exp(2j*E0*duration)
-        unitary[1, 2] = np.exp(1j*E0*duration) * gap * K_plus * (
+        unitary[1, 2] = np.exp(1j*E0*duration) * gap * K_plus / M_plus**2 * (
             np.exp(1j*delta_E*duration) - np.exp(-1j*delta_E*duration))
-        unitary[2, 1] = np.exp(1j*E0*duration) * gap * K_plus * (
-            np.exp(-1j*delta_E*duration) - np.exp(1j*delta_E*duration))
+        unitary[2, 1] = np.exp(1j*E0*duration) * gap * K_plus / M_plus**2 * (
+            np.exp(1j*delta_E*duration) - np.exp(-1j*delta_E*duration))
 
         return unitary
 

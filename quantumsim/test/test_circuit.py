@@ -477,6 +477,88 @@ class TestCoherentISwap:
         assert np.isclose(gate2.E10,gate.E10)
         assert np.isclose(gate3.duration,gate.duration)
 
+    def test_duration(self):
+        gap = 0.56732
+        E01 = 0.2939
+        E10 = 0.1238
+        duration = 0.7632
+        gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=duration, angle=None,
+            mode='experiment')
+        assert np.isclose(gate.time_start,-duration/2)
+        assert np.isclose(gate.time_end, duration/2)
+        gate.increment_time(0.1)
+        assert np.isclose(gate.time, 0.1)
+        assert np.isclose(gate.time_start, 0.1-duration/2)
+        assert np.isclose(gate.time_end, 0.1+duration/2)
+        gate.set_time(0.2)
+        assert np.isclose(gate.time, 0.2)
+        assert np.isclose(gate.time_start, 0.2-duration/2)
+        assert np.isclose(gate.time_end, 0.2+duration/2)
+        gate.set_time(0.2, time_start=0.1, time_end=0.3)
+        assert np.isclose(gate.time, 0.2)
+        assert np.isclose(gate.time_start, 0.1)
+        assert np.isclose(gate.time_end, 0.3)
+
+    def test_unitary_phase(self):
+        gap = 0.56732
+        E01 = 1
+        E10 = 1
+        duration = 1
+        gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=duration, angle=None,
+            mode='experiment')
+        unitary = gate.make_unitary()
+        assert np.isclose(np.angle(unitary[0,0]), 0)
+        assert np.isclose(np.angle(unitary[1,1]), 1)
+        assert np.isclose(np.angle(unitary[2,2]), 1)
+        assert np.isclose(np.angle(unitary[3,3]), 2)
+        assert np.isclose(np.angle(unitary[1,2]), 1+np.pi/2)
+        assert np.isclose(np.angle(unitary[2,1]), 1+np.pi/2)
+
+    def test_unitary_angle(self):
+        gap = 0.56732
+        E01 = 0.5
+        E10 = 0.5
+        angle = np.pi/3
+        gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=None, angle=angle,
+            mode='time')
+        unitary = gate.make_unitary()
+        assert np.isclose(np.abs(unitary[1,1]),np.cos(np.pi/3))
+        assert np.isclose(np.abs(unitary[2,2]),np.cos(np.pi/3))
+        assert np.isclose(np.abs(unitary[0,0]),1)
+        assert np.isclose(np.abs(unitary[3,3]),1)
+        assert np.isclose(np.abs(unitary[1,2]),np.sin(np.pi/3))
+        assert np.isclose(np.abs(unitary[2,1]),np.sin(np.pi/3))
+
+    def test_newcoherent_oldcoherent(self):
+        gap = 0.56732
+        E01 = 0.5
+        E10 = 0.5
+        angle = 0.45652
+        new_gate = circuit.ISwapCoherent(
+            bit0='q0', bit1='q1', time=0,
+            gap=gap, E01=E01, E10=E10,
+            duration=None, angle=angle,
+            mode='time')
+        old_gate = circuit.ISwapRotation(
+                 bit0='q0', bit1='q1', angle=angle, time=0,
+                 t1_bit0=None, t1_bit1=None,
+                 t2_bit1=None, interaction_time=0,
+                 t2_bit0_dec=None)
+        gate_length = new_gate.duration
+        phase_gate = circuit.RotateZ(bit='q0', time=0, angle=gate_length*E01)
+        assert np.allclose(
+            new_gate.two_ptm,
+            np.kron(phase_gate.ptm,phase_gate.ptm) @ old_gate.two_ptm)
+
 
 class TestAmpPhDamping:
 
