@@ -746,6 +746,45 @@ class ISwapCoherent(TwoPTMGate):
                          time, time_start=time_start, time_end=time_end)
 
 
+    def _calc_angle(self, E10=None):
+        '''
+        Calculates the angle of rotation between the |01> and |10>
+        states for the ISwap gate.
+        Takes parameters stored in the class (with the possible
+        exception of E10).
+
+        Args:
+            E10 (float or None, optional): The energy of the |10>
+                state (with the excitation on the high-frequency qubit).
+                To be set during the function for the sake of
+                minimization.
+        '''
+        angle = self.angle
+        gap = self.gap
+        E01 = self.E01
+        duration = self.duration
+        if E10 is None:
+            E10 = self.E10
+
+        E0 = 0.5*(E01+E10)
+        Delta = 0.5*(E01-E10)
+        delta_E = np.sqrt(gap**2 + Delta**2)
+        K_plus = delta_E - Delta
+        K_minus = -delta_E - Delta
+        M_plus = np.sqrt(gap**2 + K_plus**2)
+        M_minus = np.sqrt(gap**2 + K_minus**2)
+
+        # Sanity check
+        assert np.isclose(gap / M_minus, K_plus / M_plus)
+
+        ct = np.sqrt(gap**4 + K_plus**4 + 2 * gap**2 * K_plus**2 *
+                     np.cos(2*delta_E*duration)) / M_plus**2
+        st = gap * K_plus * 2 * np.sin(delta_E*duration) / M_plus**2
+
+        assert np.isclose(ct**2 + st**2, 1)
+        angle = np.angle(ct + 1j*st)
+        return angle
+
     def make_unitary(self):
         '''
         Makes the unitary for an iSwap gate.
@@ -762,16 +801,13 @@ class ISwapCoherent(TwoPTMGate):
             # This mode assumes that the experimental parameters
             # are given, and that the final angle is to be found
             # out.
-            delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
-            K_plus = delta_E - 0.5*(E01-E10)
-            M_plus = np.sqrt(gap**2 + K_plus**2)
+
             E0 = 0.5*(E01+E10)
-            ct = np.sqrt(gap**4 + K_plus**4 +
-                         2*gap**2*K_plus**2*np.cos(2*delta_E*duration))/\
-                M_plus**2
-            st = gap*K_plus / M_plus**2 * 2 * np.sin(delta_E*duration)
-            assert np.abs(ct**2 + st**2 - 1) < 1e-6
-            angle = np.angle(ct+1j*st)
+            Delta = 0.5*(E01-E10)
+            delta_E = np.sqrt(gap**2 + Delta**2)
+            K_plus = delta_E - Delta
+            M_plus = np.sqrt(gap**2 + K_plus**2)
+            angle = self._calc_angle()
             self.angle = angle
 
         elif mode == 'time':
@@ -805,18 +841,8 @@ class ISwapCoherent(TwoPTMGate):
             # I don't think I can solve these equations analytically
             # for E10, defaulting to a numerical solution
 
-            def calc_angle(E10):
-                delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
-                K_plus = delta_E - 0.5*(E01-E10)
-                M_plus = np.sqrt(gap**2 + K_plus**2)
-                ct = np.sqrt(gap**4 + K_plus**4 +
-                             2*gap**2*K_plus**2 *
-                             np.cos(2*delta_E*duration)) /\
-                    M_plus**2
-                st = gap*K_plus / M_plus**2 * 2 * np.sin(delta_E*duration)
-                assert np.abs(ct**2 + st**2 - 1) < 1e-6
-                return np.abs(angle-np.angle(ct+1j*st))
-            res = minimize(calc_angle, [E01-0.1])
+            res = minimize(lambda x: np.abs(self.angle-self._calc_angle(x)),
+                           [E01-0.1])
             E10 = res['x']
             self.E10 = E10
             delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)

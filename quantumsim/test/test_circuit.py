@@ -455,8 +455,8 @@ class TestCoherentISwap:
 
     def test_three_ways(self):
         gap = 0.56732
-        E01 = 0.1384
-        E10 = 0.2939
+        E01 = 0.2939
+        E10 = 0.1238
         duration = 0.7632
         gate = circuit.ISwapCoherent(
             bit0='q0', bit1='q1', time=0,
@@ -474,8 +474,8 @@ class TestCoherentISwap:
             gap=gap, E01=E01, E10=E10,
             duration=None, angle=angle,
             mode='time')
-        assert gate2.E10 == gate.E10
-        assert gate3.duration == gate.duration
+        assert np.isclose(gate2.E10,gate.E10)
+        assert np.isclose(gate3.duration,gate.duration)
 
 
 class TestAmpPhDamping:
