@@ -82,7 +82,8 @@ class Qubit:
             If `end_time <= start_time`. We require strictly that gates are
             given different times for ordering purposes.
         """
-        assert start_time < end_time
+        if start_time >= end_time:
+            raise ValueError('Start time must be less than end time.')
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
@@ -222,7 +223,7 @@ class Gate:
                  time_start=None,
                  time_end=None,
                  conditional_bit=None):
-        if time_start >= time_end:
+        if time_start and time_end and time_start >= time_end:
             raise ValueError('Start time must be less than end time.')
         self.is_measurement = False
         self.time = time
