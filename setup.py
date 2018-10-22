@@ -22,6 +22,7 @@ setup(
         "numpy>=1.12",
         "pytest",
         "matplotlib",
-        "parsimonious"
+        "parsimonious",
+        "scipy"
     ]
 )
