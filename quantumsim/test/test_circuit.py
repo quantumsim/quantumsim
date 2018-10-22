@@ -58,7 +58,7 @@ class TestCircuit:
             one_gates=[rotate_backwards])
         c.add_gate(conditional_rotate2)
 
-        sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, seed=43)
+        sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, rng=43)
         measurement = circuit.Measurement(
             "A", time=40, sampler=sampler, output_bit="MA")
         c.add_gate(measurement)
@@ -720,7 +720,7 @@ class TestMeasurement:
         m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
 
         # uniform sampler
-        s = circuit.uniform_sampler(seed=42)
+        s = circuit.uniform_sampler(rng=42)
         m1 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
         m2 = circuit.Measurement("A", 0, sampler=s, output_bit="O")
 
@@ -776,7 +776,7 @@ class TestSamplers:
             rsclass.return_value = rs
             rs.random_sample = MagicMock(return_value=0.5)
 
-            s = circuit.uniform_sampler(seed=42)
+            s = circuit.uniform_sampler(rng=42)
             next(s)
 
             rsclass.assert_called_once_with(seed=42)
@@ -793,7 +793,7 @@ class TestSamplers:
             rsclass.return_value = rs
             rs.random_sample = MagicMock(return_value=0.5)
 
-            s = circuit.uniform_noisy_sampler(0.4, seed=42)
+            s = circuit.uniform_noisy_sampler(0.4, rng=42)
             next(s)
 
             rsclass.assert_called_once_with(seed=42)
@@ -804,7 +804,7 @@ class TestSamplers:
             dec, proj, prob = s.send((0.9, 0.1))
             assert (proj, dec, prob) == (0, 0, 0.6)
 
-            s = circuit.uniform_noisy_sampler(0.7, seed=42)
+            s = circuit.uniform_noisy_sampler(0.7, rng=42)
             next(s)
             dec, proj, prob = s.send((0.2, 0.8))
             assert (proj, dec, prob) == (1, 0, 0.7)
