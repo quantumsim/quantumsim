@@ -199,6 +199,15 @@ def rotate_z_ptm(angle):
                     [0, 0, 1]])
     return to_0xy1_basis(ptm)
 
+def rotate_euler_ptm(phi, theta, lamda):
+    unitary = np.array(
+        [[np.cos(theta / 2),
+          -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+         [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+          np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+         ])
+    return single_kraus_to_ptm(unitary)
+
 
 def single_kraus_to_ptm(kraus):
     """Given a Kraus operator in z-basis, obtain the corresponding single-qubit ptm in 0xy1 basis"""

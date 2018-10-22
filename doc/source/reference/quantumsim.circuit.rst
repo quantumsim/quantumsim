@@ -29,6 +29,7 @@ Gates
    RotateX
    RotateY
    RotateZ
+   RotateXY
    RotateEuler
    Hadamard
    AmpPhDamp

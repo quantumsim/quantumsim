@@ -44,6 +44,7 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
     'sphinx.ext.mathjax',
+    'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
     'nbsphinx',
@@ -191,4 +192,6 @@ epub_exclude_files = ['search.html']
 autosummary_generate = True
 
 autoclass_content = "both"
-autodoc_default_flags = ['show-inheritance']
+autodoc_default_options = {
+    'show-inheritance': True,
+}
