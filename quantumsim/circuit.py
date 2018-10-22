@@ -23,11 +23,15 @@ class Qubit:
     def __init__(self, name, t1=np.inf, t2=np.inf):
         """A Qubit with a name and amplitude damping time t1 and phase damping
         time t2,
+        
+        Args:
+            name (string): qubit label
+            t1 (float): defined as measured in a free decay experiment
+            t2 (float): defined as measured in a ramsey/hahn echo experiment
 
-        t1 is defined as measured in a free decay experiment,
-        t2 is defined as measured in a ramsey/hahn echo experiment
-
-        Note especially that you must have t2 <= 2*t1
+        Raises:
+            AssertionError: if t2 > 2*t1 (by definition of t2, we require
+                t2 <= 2*t1).
         """
         self.name = name
         assert t2 <= 2 * t1
@@ -38,6 +42,21 @@ class Qubit:
         return self.name
 
     def make_idling_gate(self, start_time, end_time):
+        """Generates a gate that decays this qubit for a period of time
+        from start_time to end_time. Currently T1 and T2 decay.
+        
+        Args:
+            start_time (float): time when gate begins
+            end_time (float): time when gate ends
+
+        Returns:
+            idling_gate (circuit.AmpPhDamp): idling gate performing
+                t1 and t2 decay for required period of time.
+
+        Raises:
+            AssertionError: if end_time <= start_time. We require strictly
+                that gates are given different times for ordering purposes.
+        """
         assert start_time < end_time
         time = (start_time + end_time) / 2
         duration = end_time - start_time
@@ -49,10 +68,25 @@ class Qubit:
 
 
 class ClassicalBit(Qubit):
+    '''
+    A ClassicalBit is similar to a qubit, but has no T1 or T2
+    and cannot be put into a density matrix.
+    '''
     def __init__(self, name):
+        '''
+        Args:
+            name: label for qubit.
+        '''
         self.name = name
 
     def make_idling_gate(self, start_time, end_time):
+        '''Extends function of same name for qubit, replacing
+        it with returning nothing.
+
+        Args:
+            start_time (float): time when gate begins
+            end_time (float): time when gate ends
+        '''
         pass
 
 
@@ -61,21 +95,37 @@ class VariableDecoherenceQubit(Qubit):
     def __init__(self, name, base_t1, base_t2, t1s, t2s):
         """A Qubit with a name and variable t1 and t2.
 
-        t1s and t2s are  given as a list of intervals
-        [(start_time, end_time, t1/t2)]
-        base_t1 and base_t2 are used when time is not inside any of those
-        intervals.
-
         t1 is defined as measured in a free decay experiment,
         t2 is defined as measured in a ramsey/hahn echo experiment
 
         Note especially that you must have t2 <= 2*t1
+
+        Args:
+            base_t1 (float): t1 when time is not inside any interval
+            base_t2 (float): t2 when time is not inside any interval
+            t1s (list of tuples): a list of intervals
+                [(start_time, end_time, t1/t2)]
         """
         self.t1s = t1s
         self.t2s = t2s
         super().__init__(name, base_t1, base_t2)
 
     def make_idling_gate(self, start_time, end_time):
+        """Generates a gate that decays this qubit for a period of time
+        from start_time to end_time. Currently T1 and T2 decay.
+        
+        Args:
+            start_time (float): time when gate begins
+            end_time (float): time when gate ends
+
+        Returns:
+            idling_gate (circuit.AmpPhDamp): idling gate performing
+                t1 and t2 decay for required period of time.
+
+        Raises:
+            AssertionError: if end_time <= start_time. We require strictly
+                that gates are given different times for ordering purposes.
+        """
         assert start_time < end_time
         time = (start_time + end_time) / 2
         duration = end_time - start_time
@@ -104,6 +154,11 @@ class VariableDecoherenceQubit(Qubit):
 
 
 class Gate:
+    """
+    Gates are the quantumsim primitives that act on qubits.
+    A gate's primary purpose is to contain a ptm or two_ptm, and
+    information about where and when the gate acts.
+    """
 
     def __init__(self,
                  time,
@@ -111,12 +166,17 @@ class Gate:
                  time_end=None,
                  conditional_bit=None):
         """
-        A Gate acting at time `time`. If conditional_bit is set, only act
-        when that bit is a classical 1.
-
-        time_start: Indicates when the gate interaction starts, needed for iSwap
-        time_end: Indicates when the gate interaction ends.
-        If time_start, time_end not necessary, time_start=time_end=time
+        Args:
+            time (float): Time when the gate occurs. Used for ordering
+                the gate. Also, most gates act as infintessimal (i.e.
+                the gate acts at a single point in time but is sandwiched
+                between resting gates on either side), in which case
+                time_start and time_end are not set and will be set
+                equal to time.
+            time_start (float or None): Indicates when the gate
+                interaction starts. If None, defaults to time.
+            time_end (float or None): Indicates when the gate
+                interaction ends. If None, defaults to time.
         """
         self.is_measurement = False
         self.time = time
@@ -136,7 +196,7 @@ class Gate:
         assert time_start <= time_end
 
     def set_time(self, time, time_start=None, time_end=None):
-        '''
+        """
         Sets a new time for the gate safely (i.e. making sure
         that it has the same duration as before).
         Args:
@@ -145,7 +205,7 @@ class Gate:
                 is adjusted to maintain dt_start = time - time_start.
             time_end (float or None): new end time for gate. If None,
                 is adjusted to maintain dt_end = time_end - time.
-        '''
+        """
         if time_start is None:
             time_start = self.time_start - self.time + time
         if time_end is None:
@@ -155,17 +215,25 @@ class Gate:
         self.time = time
 
     def increment_time(self, dt):
-        '''
+        """
         Increments the time on the gate safely (i.e. shifting
         the start_time and end_time).
         Args:
             dt (float): amount to increment gate by
-        '''
+        """
         self.time += dt
         self.time_start += dt
         self.time_end += dt
 
     def plot_gate(self, ax, coords):
+        """
+        Function to plot the gate on a matplotlib axis as part of
+        a circuit plot.
+        Args:
+            ax (matplotlib axis): the axis to plot the gate on
+            coords (dict of floats): the y-values of the qubits being
+                plotted.
+        """
         x = self.time
         y = coords[self.involved_qubits[-1]]
         ax.text(
@@ -181,6 +249,14 @@ class Gate:
             ax.plot((x, x), (y, y2), ".--", color='k')
 
     def annotate_gate(self, ax, coords):
+        """
+        Function to add a gate annotation if one exists to a circuit
+        plot.
+        Args:
+            ax (matplotlib axis): the axis to plot the gate on
+            coords (dict of floats): the y-values of the qubits
+                being plotted.
+        """
         if self.annotation:
             x = self.time
             y = coords[self.involved_qubits[0]]
@@ -188,9 +264,26 @@ class Gate:
                 0, -15), textcoords='offset points', ha='center')
 
     def involves_qubit(self, bit):
+        """
+        Checks if a given qubit is involved in this gate.
+        Args:
+            bit (string): qubit label
+        Returns:
+            (boolean): whether this qubit is involved in this gate.
+        """
         return bit in self.involved_qubits
 
     def apply_to(self, sdm):
+        """
+        Applies this gate to a density matrix.
+        To be specific, this adds the gate to the queue of
+        gates to be applied to the density matrix, which
+        then chooses to execute them as required.
+
+        Args:
+            sdm (sparsedm.SparseDM): the density matrix to apply the
+            gate to.
+        """
         if self.conditional_bit is not None:
             sdm.ensure_classical(self.conditional_bit)
             if sdm.classical[self.conditional_bit] == 1:
