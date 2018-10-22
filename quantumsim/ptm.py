@@ -84,8 +84,10 @@ def to_0xy1_basis(ptm):
     if ptm.shape == (3, 4):
         ptm = np.vstack(([1, 0, 0, 0], ptm))
 
-    assert ((ptm.shape == (4, 4) or ptm.shape == (16, 16)) and
-            np.allclose(ptm[0, 0], 1) and np.allclose(ptm[0, 1:], 0))
+    if not ((ptm.shape == (4, 4) or ptm.shape == (16, 16)) and
+            np.allclose(ptm[0, 0], 1) and np.allclose(ptm[0, 1:], 0)):
+        raise ValueError(
+            "`ptm` is not a valid Pauli transfer matrix in ixyz basis")
     return _switch_basis(ptm)
 
 
@@ -112,8 +114,10 @@ def to_0xyz_basis(ptm):
 
     ptm = np.array(ptm)
     out = _switch_basis(ptm)
-    assert ((out.shape == (4, 4) or out.shape == (16, 16)) and
-            np.allclose(out[0, 0], 1) and np.allclose(out[0, 1:], 0))
+    if not ((out.shape == (4, 4) or out.shape == (16, 16)) and
+            np.allclose(out[0, 0], 1) and np.allclose(out[0, 1:], 0)):
+        raise ValueError(
+            "`ptm` is not a valid Pauli transfer matrix in 0xy1 basis")
     return out
 
 
