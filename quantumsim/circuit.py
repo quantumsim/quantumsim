@@ -1169,13 +1169,26 @@ class ISwapCoherent(TwoPTMGate):
 
     def adjust(self, angle=None, E10=None, duration=None):
         """Updates angle, `E10 and/or duration of gate.
-        Args:
-            angle: angle of rotation (unable to be set when
-                mode='experiment')
-            E10: high-frequency qubit energy (unable to be
-                set when mode='amplitude')
-            duration: gate duration (unable to be set when
-                mode='time').
+        Args
+        ------
+        angle : float
+            angle of rotation (unable to be set when
+            mode='experiment')
+        E10 : float 
+            high-frequency qubit energy (unable to be
+            set when mode='amplitude')
+        duration : float 
+            gate duration (unable to be set when
+            mode='time').
+
+        Excepts
+        ------
+        ValueError
+            if user attempts to set duration when mode='time'
+        ValueError
+            if user attempts to set angle when mode='experiment'
+        ValueError
+            if user attempts to set E10 when mode='amplitude'
         """
         if self.mode == 'experiment':
             if E10:
@@ -1183,7 +1196,7 @@ class ISwapCoherent(TwoPTMGate):
             if duration:
                 self.duration = duration
             if angle:
-                warnings.warn(
+                raise ValueError(
                     'You cannot set the angle when mode=experiment -- '
                     'fix the duration and detuning (E10) instead.')
         if self.mode == 'time':
@@ -1230,7 +1243,7 @@ class ISwapIncoherent(ISwapCoherent):
     """Class to make an incoherent version of a coherent ISwap gate,
     by numericaly integrating over the PTM.
 
-    Parameters
+    Parameter
     ----------
     width : float
         Width of the Gaussian distribution to draw E10 from
@@ -1273,6 +1286,24 @@ class ISwapIncoherent(ISwapCoherent):
         self.mode = temp_mode
         self.angle = temp_angle
         self.E10 = mean_E10
+
+    def adjust(self, angle=None, E10=None, duration=None):
+        """Adjusts the angle of the ISwap gate.
+
+        Args
+        ------
+        angle : float
+            angle of rotation (unable to be set when
+            mode='experiment')
+        E10 : float 
+            high-frequency qubit energy (unable to be
+            set when mode='amplitude')
+        duration : float 
+            gate duration (unable to be set when
+            mode='time').
+        """
+        super().adjust(angle=angle, E10=E10, duration=duration)
+        self.make_ptm()
 
 
 class ISwapRotation(TwoPTMGate):
