@@ -1086,8 +1086,8 @@ class ISwapCoherent(TwoPTMGate):
         assert np.isclose(gap / M_minus, K_plus / M_plus)
 
         ct = np.sqrt(gap**4 + K_plus**4 + 2 * gap**2 * K_plus**2 *
-                     np.cos(2*delta_E*duration)) / M_plus**2
-        st = gap * K_plus * 2 * np.sin(delta_E*duration) / M_plus**2
+                     np.cos(2*delta_E*duration*2*np.pi)) / M_plus**2
+        st = gap * K_plus * 2 * np.sin(delta_E*duration*2*np.pi) / M_plus**2
 
         assert np.isclose(ct**2 + st**2, 1)
         angle = np.angle(ct + 1j*st)
@@ -1127,7 +1127,7 @@ class ISwapCoherent(TwoPTMGate):
             duration = np.arccos(
                 (M_plus**4*np.cos(angle)**2 -
                  gap**4 - K_plus**4) /
-                (2 * gap**2 * K_plus**2)) / (2*delta_E)
+                (2 * gap**2 * K_plus**2)) / (2*delta_E*2*np.pi)
             if not np.isfinite(duration):
                 raise ValueError(
                     "Cannot perform an ISwap of angle {} with detuning {}."
@@ -1143,8 +1143,12 @@ class ISwapCoherent(TwoPTMGate):
             # I don't think I can solve these equations analytically
             # for E10, defaulting to a numerical solution
             res = minimize(lambda x: np.abs(self.angle-self._calc_angle(x)),
-                           [E01-0.1])
-            E10 = res['x']
+                           method='Nelder-Mead',
+                           tol=1e-6,
+                           x0=[E01-0.01])
+            if res['fun'] > 1e-6:
+                raise ValueError('I cant achieve this angle with the chosen time.')
+            E10 = res['x'][0]
             self.E10 = E10
             delta_E = np.sqrt(gap**2 + 0.25*(E01-E10)**2)
             K_plus = delta_E - 0.5*(E01-E10)
@@ -1153,17 +1157,17 @@ class ISwapCoherent(TwoPTMGate):
 
         unitary = np.zeros([4, 4], dtype=complex)
         unitary[0, 0] = 1
-        unitary[2, 2] = np.exp(1j*E0*duration) / M_plus**2 * (
-            gap**2*np.exp(1j*delta_E*duration) +
-            K_plus**2*np.exp(-1j*delta_E*duration))
-        unitary[1, 1] = np.exp(1j*E0*duration) / M_plus**2 * (
-            gap**2*np.exp(-1j*delta_E*duration) +
-            K_plus**2*np.exp(1j*delta_E*duration))
-        unitary[3, 3] = np.exp(2j*E0*duration)
-        unitary[1, 2] = np.exp(1j*E0*duration) * gap * K_plus / M_plus**2 * (
-            np.exp(1j*delta_E*duration) - np.exp(-1j*delta_E*duration))
-        unitary[2, 1] = np.exp(1j*E0*duration) * gap * K_plus / M_plus**2 * (
-            np.exp(1j*delta_E*duration) - np.exp(-1j*delta_E*duration))
+        unitary[2, 2] = np.exp(1j*E0*duration*2*np.pi) / M_plus**2 * (
+            gap**2*np.exp(1j*delta_E*duration*2*np.pi) +
+            K_plus**2*np.exp(-1j*delta_E*duration*2*np.pi))
+        unitary[1, 1] = np.exp(1j*E0*duration*2*np.pi) / M_plus**2 * (
+            gap**2*np.exp(-1j*delta_E*duration*2*np.pi) +
+            K_plus**2*np.exp(1j*delta_E*duration*2*np.pi))
+        unitary[3, 3] = np.exp(2j*E0*duration*2*np.pi)
+        unitary[1, 2] = np.exp(1j*E0*duration*2*np.pi) * gap * K_plus / M_plus**2 * (
+            np.exp(1j*delta_E*duration*2*np.pi) - np.exp(-1j*delta_E*duration*2*np.pi))
+        unitary[2, 1] = np.exp(1j*E0*duration*2*np.pi) * gap * K_plus / M_plus**2 * (
+            np.exp(1j*delta_E*duration*2*np.pi) - np.exp(-1j*delta_E*duration*2*np.pi))
 
         return unitary
 
@@ -1191,11 +1195,11 @@ class ISwapCoherent(TwoPTMGate):
             if user attempts to set E10 when mode='amplitude'
         """
         if self.mode == 'experiment':
-            if E10:
+            if E10 is not None:
                 self.E10 = E10
-            if duration:
+            if duration is not None:
                 self.duration = duration
-            if angle:
+            if angle is not None:
                 raise ValueError(
                     'You cannot set the angle when mode=experiment -- '
                     'fix the duration and detuning (E10) instead.')
@@ -1205,22 +1209,22 @@ class ISwapCoherent(TwoPTMGate):
                 'inconsistencies with idling gates. Proceed at your own '
                 'caution. (Use `mode=experiment` or `mode=amplitude` to avoid '
                 'this).')
-            if E10:
+            if E10 is not None:
                 self.E10 = E10
-            if angle:
+            if angle is not None:
                 self.angle = angle
-            if duration:
+            if duration is not None:
                 raise ValueError(
                     'You cannot set the gate duration when `mode=time` -- '
                     'fix the detuning (`E10`) and `angle` instead.')
         if self.mode == 'amplitude':
-            if E10:
+            if E10 is not None:
                 raise ValueError(
                     'You cannot set the detuning when `mode=amplitude` -- '
                     'fix the time and angle instead.')
-            if angle:
+            if angle is not None:
                 self.angle = angle
-            if duration:
+            if duration is not None:
                 self.duration = duration
 
         unitary = self.make_unitary()

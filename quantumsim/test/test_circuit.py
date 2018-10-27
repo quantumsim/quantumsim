@@ -1,5 +1,6 @@
 import quantumsim.circuit as circuit
 import quantumsim.ptm as ptm
+import quantumsim.sparsedm as sparsedm
 from unittest.mock import MagicMock, patch, call, ANY
 import numpy as np
 import pytest
@@ -457,7 +458,7 @@ class TestCoherentISwap:
         gap = 0.56732
         E01 = 0.2939
         E10 = 0.1238
-        duration = 0.7632
+        duration = 0.1010
         gate = circuit.ISwapCoherent(
             bit0='q0', bit1='q1', time=0,
             gap=gap, E01=E01, E10=E10,
@@ -481,7 +482,7 @@ class TestCoherentISwap:
         gap = 0.56732
         E01 = 0.2939
         E10 = 0.1238
-        duration = 0.7632
+        duration = 0.1010
         gate = circuit.ISwapCoherent(
             bit0='q0', bit1='q1', time=0,
             gap=gap, E01=E01, E10=E10,
@@ -503,9 +504,9 @@ class TestCoherentISwap:
         assert np.isclose(gate.time_end, 0.3)
 
     def test_unitary_phase(self):
-        gap = 0.56732
-        E01 = 1
-        E10 = 1
+        gap = 0.56732/(2*np.pi)
+        E01 = 1/(2*np.pi)
+        E10 = 1/(2*np.pi)
         duration = 1
         gate = circuit.ISwapCoherent(
             bit0='q0', bit1='q1', time=0,
@@ -554,10 +555,27 @@ class TestCoherentISwap:
                  t2_bit1=None, interaction_time=0,
                  t2_bit0_dec=None)
         gate_length = new_gate.duration
-        phase_gate = circuit.RotateZ(bit='q0', time=0, angle=gate_length*E01)
+        phase_gate = circuit.RotateZ(
+            bit='q0', time=0, angle=gate_length*E01*2*np.pi)
         assert np.allclose(
             new_gate.two_ptm,
             np.kron(phase_gate.ptm,phase_gate.ptm) @ old_gate.two_ptm)
+
+    def test_angles_agree(self):
+        c = circuit.Circuit('ISwap Coherent')
+        c.add_qubit('q0', t1=np.inf, t2=np.inf)
+        c.add_qubit('q1', t1=np.inf, t2=np.inf)
+        c.add_gate(circuit.RotateY('q0', time=0, angle=np.pi))
+        iswap = circuit.ISwapCoherent(
+            'q0','q1',time=10,
+            mode='experiment',gap=0.0209, 
+            E01=5.150875, E10=5.150875, duration=1e-10)
+        angle = iswap.angle
+        c.add_gate(iswap)
+        sdm = sparsedm.SparseDM(names=c.get_qubit_names())
+        c.apply_to(sdm)
+        dm = sdm.full_dm.to_array()
+        assert np.isclose(dm[1,1],np.cos(angle)**2)
 
 class TestIncoherentISwap:
 
