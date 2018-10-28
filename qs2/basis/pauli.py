@@ -2,6 +2,7 @@
 # (c) 2018 Quantumsim Authors
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
+"""General classes for Pauli bases and PTMs"""
 
 import numpy as np
 import collections
