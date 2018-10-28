@@ -13,6 +13,16 @@ from qs2.basis import (
     twolevel_ixyz)
 
 
+class TestPauliBasis:
+
+    def test_init(self):
+        labels = ['test']
+        vectors = np.array([[[1]]])
+        b0 = PauliBasis(vectors, labels)
+        assert len(b0.labels) == 1
+        assert np.allclose(b0.vectors.shape,np.array([1,1,1]))
+
+
 class TestBasis:
 
     def test_inits(self):

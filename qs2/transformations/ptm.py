@@ -3,7 +3,11 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
-"""Base classes for PTMs"""
+"""Base/general PTM classes, distinguished by their methods and means of 
+storing data. Instances of PTM classes (i.e. specific gates) should not
+be placed here; use primitives.py instead"""
+
+import numpy as np
 
 
 class PTM:
@@ -345,49 +349,20 @@ class LindbladPLM(PTM):
         return result.real
 
 
-class RotateXPTM(ConjunctionPTM):
-    def __init__(self, angle):
-        s, c = np.sin(angle / 2), np.cos(angle / 2)
-        super().__init__([[c, -1j * s], [-1j * s, c]])
-
-
-class RotateYPTM(ConjunctionPTM):
-    def __init__(self, angle):
-        s, c = np.sin(angle / 2), np.cos(angle / 2)
-        super().__init__([[c, -s], [s, c]])
-
-
-class RotateZPTM(ConjunctionPTM):
-    def __init__(self, angle):
-        z = np.exp(-.5j * angle)
-        super().__init__([[z, 0], [0, z.conj()]])
-
-
-class AmplitudePhaseDampingPTM(ProductPTM):
-    def __init__(self, gamma, lamda):
-        e0 = [[1, 0], [0, np.sqrt(1 - gamma)]]
-        e1 = [[0, np.sqrt(gamma)], [0, 0]]
-        amp_damp = ConjunctionPTM(e0) + ConjunctionPTM(e1)
-
-        e0 = [[1, 0], [0, np.sqrt(1 - lamda)]]
-        e1 = [[0, 0], [0, np.sqrt(lamda)]]
-        ph_damp = ConjunctionPTM(e0) + ConjunctionPTM(e1)
-
-        super().__init__([amp_damp, ph_damp])
-
-
 class TwoPTM:
     def __init__(self, dim0, dim1):
-        pass
-
-    def get_matrix(self, bases_in, bases_out):
-        pass
+        raise NotImplementedError
 
     def multiply(self, subspace, process):
-        pass
+        raise NotImplementedError
 
     def multiply_two(self, other):
-        pass
+        raise NotImplementedError
+
+
+class TwoPTMExplicit(TwoPTM):
+    def __init__(self, ptm, basis0, basis1):
+        raise NotImplementedError
 
 
 class TwoPTMProduct(TwoPTM):
@@ -516,15 +491,4 @@ class TwoKrausPTM(TwoPTM):
                          st0i, [22, 5, 7], st1i, [23, 6, 8],
                          kraus.conj(), [1, 2, 7, 8],
                          [20, 21, 22, 23], optimize=True).real
-
-
-class CPhaseRotationPTM(TwoKrausPTM):
-    def __init__(self, angle=np.pi):
-        u = np.diag([1, 1, 1, np.exp(1j * angle)]).reshape(2, 2, 2, 2)
-        super().__init__(u)
-
-
-class TwoPTMExplicit(TwoPTM):
-    def __init__(self, ptm, basis0, basis1):
-        pass
 

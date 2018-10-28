@@ -1,18 +1,20 @@
 from .ptm import (
     AdjunctionPLM,
-    AmplitudePhaseDampingPTM,
     ConjunctionPTM,
-    CPhaseRotationPTM,
     ExplicitBasisPTM,
     LindbladPLM,
     LinearCombPTM,
     PLMIntegrator,
     ProductPTM,
     PTM,
-    RotateXPTM,
-    RotateYPTM,
-    RotateZPTM,
     TwoKrausPTM,
     TwoPTM,
     TwoPTMProduct,
     TwoPTMExplicit)
+
+from .primitives import(
+    AmplitudePhaseDampingPTM,
+    CPhaseRotationPTM,
+    RotateXPTM,
+    RotateYPTM,
+    RotateZPTM)
