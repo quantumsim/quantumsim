@@ -8,6 +8,7 @@ storing data. Instances of PTM classes (i.e. specific gates) should not
 be placed here; use primitives.py instead"""
 
 import numpy as np
+import collections
 
 
 class PTM:
@@ -83,6 +84,99 @@ class PTM:
                 "basis Pauli dimention is incompatible with `ptm`.\n"
                 "basis Pauli dimension must be {}, got {}\n"
                     .format(ptm.shape[0], basis.dim_pauli))
+
+
+class ConjunctionPTM(PTM):
+    def __init__(self, op):
+        """The PTM describing conjunction with unitary operator `op`, i.e.
+
+        .. math::
+            \\rho^\\prime = P(\\rho) =
+            \\text{op} \\cdot \\rho \\cdot \\text{op}^\\dagger
+
+        Typical usage: `op` describes the unitary time evolution of a system
+        described by :math:`\\rho`.
+
+        Parameters
+        ----------
+        op : 2D array
+            A matrix given in computational basis.
+        """
+        self.op = np.array(op)
+        self.dim_hilbert = self.op.shape[0]
+
+    def get_matrix(self, basis_in, basis_out=None):
+        if basis_out is None:
+            basis_out = basis_in
+
+        self._check_basis_op_consistency(basis_out, basis_in)
+
+        st_out = basis_out.basisvectors
+        st_in = basis_in.basisvectors
+
+        result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
+                           self.op.conj(), optimize=True)
+
+        assert np.allclose(result.imag, 0)
+
+        return result.real
+
+    def embed_hilbert(self, new_dim_hilbert, mp=None):
+        if mp is None:
+            mp = range(min(self.dim_hilbert, new_dim_hilbert))
+
+        proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
+        for i, j in enumerate(mp):
+            proj[i, j] = 1
+
+        new_op = np.eye(new_dim_hilbert) - proj.T @ proj + \
+                 proj.T @ self.op @ proj
+
+        return ConjunctionPTM(new_op)
+
+
+class DummyPTM(PTM):
+    """
+    A PTM with no get_matrix method - this in turn needs to
+    be added by an adjustable gate.
+
+    Params
+    ------
+    ready : boolean
+        Whether or not the PTM matrix can be made yet.
+    """
+    def __init__(self):
+        self.ready = False
+        pass
+
+    def get_matrix(self):
+        """ This needs to be overridden for each instance of this class.
+        """
+        raise NotImplementedError
+
+
+class AdjustablePTM(DummyPTM):
+    """
+    A PTM with an adjust function that sets its matrix.
+
+    Params
+    ------
+    adjust_function : function
+        a function that returns either a get_matrix method
+        or another PTM with a get_matrix method that can be
+        immediately called.
+    """
+    def __init__(self, adjust_function):
+        self.adjust_function = adjust_function
+        super().__init__()
+
+    def adjust(self, **kwargs):
+        returned_object = self.adjust_function(**kwargs)
+        if isinstance(returned_object, PTM):
+            self.get_matrix = returned_object.get_matrix
+        else:
+            self.get_matrix = returned_object
+        self.ready = True
 
 
 class ExplicitBasisPTM(PTM):
@@ -209,55 +303,6 @@ class ProductPTM(PTM):
 
     def __rmatmul__(self, other):
         return other.__matmul__(self)
-
-
-class ConjunctionPTM(PTM):
-    def __init__(self, op):
-        """The PTM describing conjunction with unitary operator `op`, i.e.
-
-        .. math::
-            \\rho^\\prime = P(\\rho) =
-            \\text{op} \\cdot \\rho \\cdot \\text{op}^\\dagger
-
-        Typical usage: `op` describes the unitary time evolution of a system
-        described by :math:`\\rho`.
-
-        Parameters
-        ----------
-        op : 2D array
-            A matrix given in computational basis.
-        """
-        self.op = np.array(op)
-        self.dim_hilbert = self.op.shape[0]
-
-    def get_matrix(self, basis_in, basis_out=None):
-        if basis_out is None:
-            basis_out = basis_in
-
-        self._check_basis_op_consistency(basis_out, basis_in)
-
-        st_out = basis_out.basisvectors
-        st_in = basis_in.basisvectors
-
-        result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
-                           self.op.conj(), optimize=True)
-
-        assert np.allclose(result.imag, 0)
-
-        return result.real
-
-    def embed_hilbert(self, new_dim_hilbert, mp=None):
-        if mp is None:
-            mp = range(min(self.dim_hilbert, new_dim_hilbert))
-
-        proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
-        for i, j in enumerate(mp):
-            proj[i, j] = 1
-
-        new_op = np.eye(new_dim_hilbert) - proj.T @ proj + \
-                 proj.T @ self.op @ proj
-
-        return ConjunctionPTM(new_op)
 
 
 class PLMIntegrator:

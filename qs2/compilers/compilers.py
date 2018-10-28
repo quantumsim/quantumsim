@@ -5,7 +5,7 @@
 
 """Compilers for multiple PTM elements."""
 
-from qs2.transformations import TwoPTMProduct
+from qs2.operators import TwoPTMProduct
 
 
 class CompilerBlock:

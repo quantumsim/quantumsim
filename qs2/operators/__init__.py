@@ -1,6 +1,8 @@
 from .ptm import (
     AdjunctionPLM,
+    AdjustablePTM,
     ConjunctionPTM,
+    DummyPTM,
     ExplicitBasisPTM,
     LindbladPLM,
     LinearCombPTM,
@@ -12,9 +14,11 @@ from .ptm import (
     TwoPTMProduct,
     TwoPTMExplicit)
 
-from .primitives import(
-    AmplitudePhaseDampingPTM,
-    CPhaseRotationPTM,
-    RotateXPTM,
-    RotateYPTM,
-    RotateZPTM)
+from .gates import (
+    AdjustableGate,
+    ContainerGate,
+    DecayContainer,
+    Gate,
+    ProductContainer,
+    RotationGate,
+    TimedGate)
