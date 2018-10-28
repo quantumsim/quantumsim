@@ -1032,11 +1032,29 @@ class ISwapCoherent(TwoPTMGate):
         Rotation angle. Fixed if mode='experiment', otherwise required.
     mode: 'time', 'amplitude', or 'angle'
          Sets which gate parameter to be left free.
+    t1_bit0: float, optional
+        the t1 of the low-frequency qubit
+    t1_bit1: float, optional
+        the t1 of the high-frequency qubit
+    t2_bit0: float, optional
+        the t2 of the low-frequency qubit
+    t2_bit1_dec: float, optional
+        the t2 of the high-frequency qubit away from the sweet spot.
+    rise_time : float, optional
+        time for qubit to get from sweet spot to ISwap point
+    fall_time : float, optional
+        time for qubit to return to sweet spot from ISwap point
     """
     def __init__(self, bit0, bit1, time,
                  gap, E01, E10=None,
                  duration=None, angle=None,
-                 mode='time'):
+                 mode='time',
+                 t1_bit0=None,
+                 t1_bit1=None,
+                 t2_bit0=None,
+                 t2_bit1_dec=None,
+                 rise_time=0,
+                 fall_time=0):
 
         self.E01 = E01
         self.E10 = E10
@@ -1044,14 +1062,89 @@ class ISwapCoherent(TwoPTMGate):
         self.mode = mode
         self.angle = angle
         self.gap = gap
+        self.rise_time = rise_time
+        self.fall_time = fall_time
 
         unitary = self.make_unitary()
+        gate_ptm = ptm.double_kraus_to_ptm(unitary)
 
-        time_start = time - self.duration/2
-        time_end = time + self.duration/2
+        if rise_time or fall_time:
+            self._store_ts(t1_bit0, t1_bit1, t2_bit0, t2_bit1_dec)
+        if rise_time:
+            gate_ptm = self.dress_ptm(gate_ptm, time=self.rise_time,
+                                      decay_first=True)
+        if fall_time:
+            gate_ptm = self.dress_ptm(gate_ptm, time=self.fall_time,
+                                      decay_first=False)
 
-        super().__init__(bit0, bit1, ptm.double_kraus_to_ptm(unitary),
+        time_start = time - self.duration/2 - rise_time
+        time_end = time + self.duration/2 + fall_time
+
+        super().__init__(bit0, bit1, gate_ptm,
                          time, time_start=time_start, time_end=time_end)
+
+    def _store_ts(self, t1_bit0, t1_bit1, t2_bit0, t2_bit1):
+        """ Converts t1 and t2 values if needed and stores them.
+
+        Parameters
+        ---------
+        t1_bit0: float, optional
+            the t1 of the low-frequency qubit
+        t1_bit1: float, optional
+            the t1 of the high-frequency qubit
+        t2_bit0: float, optional
+            the t2 of the low-frequency qubit
+        t2_bit1: float, optional
+            the t2 of the high-frequency qubit away from the sweet spot.
+        """
+        if (t1_bit0) <= 0 or (t1_bit1) <= 0:
+            raise RuntimeError("t1 must be positive")
+        if (t2_bit0) <= 0 or (t2_bit1) <= 0:
+            raise RuntimeError("t2 must be positive")
+        if t2_bit1 > 2 * t1_bit1 or t2_bit0 > 2 * t1_bit0:
+            raise RuntimeError("t2 must not be greater than 2*t1")
+
+        self.t1_bit0 = t1_bit0
+        self.t1_bit1 = t1_bit1
+
+        if np.allclose(t2_bit0, 2 * t1_bit0) or\
+           np.allclose(t2_bit1, 2 * t1_bit1):
+            self.tphi_bit0 = np.inf
+            self.tphi_bit1 = np.inf
+        else:
+            self.tphi_bit0 = 1 / (1 / t2_bit0 - 1 / (2 * t1_bit0)) / 2
+            self.tphi_bit1 = 1 / (1 / t2_bit1 - 1 / (2 * t1_bit1)) / 2
+
+    def dress_ptm(self, undressed_ptm, time, decay_first=True):
+        """Takes the ptm from the rotation and dresses it with
+        decay during the rise and fall times.
+        
+        Parameters
+        ----------
+        undressed_ptm : numpy array
+            The ptm to be dressed
+        time : the time over which to decay
+        decay_first: whether the decay occurs before or after
+            the ptm is applied (in time!)
+
+        Returns
+        ----------
+        dressed_ptm : numpy array
+            The dressed ptm
+        """
+        gamma_bit0 = 1 - np.exp(-time / self.t1_bit0)
+        lamda_bit0 = 1 - np.exp(-time / self.tphi_bit0)
+
+        gamma_bit1 = 1 - np.exp(-time / self.t1_bit1)
+        lamda_bit1 = 1 - np.exp(-time / self.tphi_bit1)
+
+        ptm_decay = np.kron(
+            ptm.amp_ph_damping_ptm(gamma_bit0, lamda_bit0),
+            ptm.amp_ph_damping_ptm(gamma_bit1, lamda_bit1))
+        if decay_first:
+            return undressed_ptm @ ptm_decay
+        else:
+            return ptm_decay @ undressed_ptm
 
 
     def _calc_angle(self, E10=None):
@@ -1228,7 +1321,16 @@ class ISwapCoherent(TwoPTMGate):
                 self.duration = duration
 
         unitary = self.make_unitary()
+
         self.two_ptm = ptm.double_kraus_to_ptm(unitary)
+        if self.rise_time:
+            self.two_ptm = self.dress_ptm(
+                self.two_ptm, time=self.rise_time,
+                decay_first=True)
+        if self.fall_time:
+            self.two_ptm = self.dress_ptm(
+                self.two_ptm, time=self.fall_time,
+                decay_first=False)
 
     def plot_gate(self, ax, coords):
         bit0 = self.involved_qubits[-2]
@@ -1256,7 +1358,7 @@ class ISwapIncoherent(ISwapCoherent):
     xmin : float, optional
         Distance to extend summation. Defaults to 3.
     """
-    def __init__(self, width, num_points=19, xmin=3, **kwargs):
+    def __init__(self, width, num_points=19, xmin=3,**kwargs):
         super().__init__(**kwargs)
         self.width = width
         self.num_points = num_points
