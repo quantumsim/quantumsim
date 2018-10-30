@@ -169,7 +169,6 @@ class ConfigurableParser:
                     .format(i))
         configuration = _dict_merge_recursive(*config_dicts)
 
-
         try:
             self._instructions = configuration['instructions']
         except KeyError:
@@ -401,6 +400,11 @@ class ConfigurableParser:
 
         return gate, duration
 
+    @staticmethod
+    def _gate_label_by_instruction(instruction):
+        """Returns instruction command."""
+        return instruction.strip().split(" ")[0]
+
     def _parse_circuit(self, title, source, ordering, rng,
                        time_start, time_end, toposort):
         """Parces circuit, defined by set of instructions `source`,
@@ -408,6 +412,8 @@ class ConfigurableParser:
         """
         source_decomposed = list(self._expand_decompositions(source))
         gate_specs = [self._instructions[line] for line in source_decomposed]
+        gate_labels = [self._gate_label_by_instruction(line)
+                       for line in source_decomposed]
         # Here we get all qubits, that actually participate in circuit
         qubits = set(chain(*(gs['qubits'] for gs in gate_specs)))
         circuit = ct.Circuit(title)
@@ -420,7 +426,7 @@ class ConfigurableParser:
             raise RuntimeError('Unknown ordering: {}'.format(ordering))
         gates, tmin, tmax = order_func(
             qubits=qubits, gate_specs=gate_specs,
-            gate_labels=source_decomposed, rng=rng,
+            gate_labels=gate_labels, rng=rng,
             time_start=time_start, time_end=time_end)
 
         for gate in gates:
