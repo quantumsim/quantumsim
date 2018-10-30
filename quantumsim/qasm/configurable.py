@@ -349,7 +349,7 @@ class ConfigurableParser:
         # gate object itself.
         qubits = gate_spec['qubits']
         if self._gate_is_ignored(gate_spec):
-            return None, 0.
+            return None
         elif self._gate_is_measurement(gate_spec):
             # FIXME VO: To comply with Brian's code, I insert here
             # ButterflyGate. I suppose this is not as this should be, need to
@@ -366,39 +366,44 @@ class ConfigurableParser:
                 p_exc = params['frac1_0']
                 p_dec = 1 - params['frac1_1']
                 gate = ct.ButterflyGate(qubits[0], 0.,
-                                        p_exc=p_exc, p_dec=p_dec)
+                                        p_exc=p_exc, p_dec=p_dec,
+                                        time_start=0., time_end=0.)
                 gate.label = gate_label
             else:
                 gate = None
-            duration = 0.
         elif self._gate_is_single_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
             kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((2, 2)) for m in kr_spec]
             ptm_list = [ptm.single_kraus_to_ptm(kr) for kr in kr_list]
+            half_duration = 0.5*gate_spec['duration']
             gate = ct.SinglePTMGate(
                 qubits[0],
                 0.,
                 np.sum(ptm_list, axis=0),
+                time_start=-half_duration,
+                time_end=half_duration
             )
             gate.label = gate_label
-            duration = gate_spec['duration']
+
         elif self._gate_is_two_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
             kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((4, 4)) for m in kr_spec]
             ptm_list = [ptm.double_kraus_to_ptm(kr) for kr in kr_list]
+            half_duration = 0.5*gate_spec['duration']
             gate = ct.TwoPTMGate(
                 qubits[0],
                 qubits[1],
                 np.sum(ptm_list, axis=0),
                 0.,
+                time_start=-half_duration,
+                time_end=half_duration
             )
             gate.label = gate_label
-            duration = gate_spec['duration']
         else:
             raise ConfigurationError(
                 'Could not identify gate type from gate_spec')
 
-        return gate, duration
+        return gate
 
     @staticmethod
     def _gate_label_by_instruction(instruction):
@@ -489,16 +494,17 @@ class ConfigurableParser:
         gates = []
         for spec, label in zip(reversed(gate_specs),
                                reversed(gate_labels)):
-            gate, duration = self._gate_spec_to_gate(spec, label, rng)
+            gate = self._gate_spec_to_gate(spec, label, rng)
             # gate is validated already inside `_gate_spec_to_gate`
             if gate is None:
                 continue
+            assert gate.time == 0.  # FIXME: remove assertion
             gate_time_end = min((current_times[qubit]
                                  for qubit in spec['qubits']))
-            gate_time_start = gate_time_end - duration
-            gate.set_time(0.5*(gate_time_start + gate_time_end))
+            gate_time_increment = gate_time_end - gate.time_end
+            gate.increment_time(gate_time_increment)
             for qubit in spec['qubits']:
-                current_times[qubit] = gate_time_start
+                current_times[qubit] = gate.time_start
             gates.append(gate)
 
         gates = list(reversed(gates))
@@ -529,14 +535,14 @@ class ConfigurableParser:
         current_times = {qubit: 0. for qubit in qubits}
         gates = []
         for spec, label in zip(gate_specs, gate_labels):
-            gate, duration = self._gate_spec_to_gate(spec, label, rng)
+            gate = self._gate_spec_to_gate(spec, label, rng)
             # gate is validated already inside `_gate_spec_to_gate`
             if gate is None:
                 continue
             gate_time_start = max((current_times[qubit]
                                    for qubit in spec['qubits']))
-            gate_time_end = gate_time_start + duration
-            gate.set_time(0.5*(gate_time_start + gate_time_end))
+            gate_time_increment = gate_time_start - gate.time_start
+            gate.increment_time(gate_time_increment)
             for qubit in spec['qubits']:
                 current_times[qubit] = gate_time_end
             gates.append(gate)
