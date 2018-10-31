@@ -2,8 +2,19 @@ import quantumsim.circuit as circuit
 import quantumsim.ptm as ptm
 import quantumsim.sparsedm as sparsedm
 from unittest.mock import MagicMock, patch, call, ANY
+from unittest import TestCase
 import numpy as np
 import pytest
+
+
+class TestQubit(TestCase):
+
+    def test_make_idling_gate_boundaries(self):
+        q = circuit.Qubit(name='test',t1=10,t2=20)
+        self.assertFalse(q.make_idling_gate(10, 10))
+        self.assertTrue(isinstance(q.make_idling_gate(10,20), circuit.AmpPhDamp))
+        with self.assertRaises(ValueError):
+            q.make_idling_gate(20, 10)
 
 
 class TestCircuit:
