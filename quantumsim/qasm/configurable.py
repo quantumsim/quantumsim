@@ -12,8 +12,12 @@ class ConfigurationError(RuntimeError):
     pass
 
 
-class QasmError(RuntimeError):
+class QASMError(RuntimeError):
     pass
+
+
+# Reverse compatibility
+QasmError = QASMError
 
 
 class NotSupportedError(RuntimeError):
@@ -165,7 +169,7 @@ class ConfigurableParser:
                 config_dicts.append(config)
             else:
                 raise ConfigurationError(
-                    'Could not cast config entry number {} to dictioary'
+                    'Could not cast config entry number {} to dictionary'
                     .format(i))
         configuration = _dict_merge_recursive(*config_dicts)
 
@@ -181,9 +185,9 @@ class ConfigurableParser:
 
         self._simulation_settings = configuration.get('simulation_settings',
                                                       None)
-        self._gates_order_table = {
-            'asap': self._gates_order_asap,
-            'alap': self._gates_order_alap,
+        self._parse_func_table = {
+            'asap': self._parse_circuit_asap,
+            'alap': self._parse_circuit_alap,
         }
 
     def parse(self, qasm, rng=None, *, ordering='ALAP',
@@ -301,13 +305,15 @@ class ConfigurableParser:
                 break
 
         if not n_qubits:
-            raise QasmError('Number of qubits is not specified')
+            raise QASMError('Number of qubits is not specified')
 
         for title, source in self._gen_circuits_src(fp):
             # We pass the same rng to avoid correlations between measurements,
             # everything else must be re-initialized
-            yield self._parse_circuit(title, source, ordering, rng,
-                                      time_start, time_end, toposort)
+            circuit = self._parse_circuit(source, ordering, rng,
+                                          time_start, time_end, toposort)
+            circuit.title = title
+            yield circuit
 
     def _gen_circuits_fn(self, fn, rng, ordering, time_start, time_end,
                          toposort):
@@ -341,19 +347,22 @@ class ConfigurableParser:
             # No simulation settings provided -- assuming ideal qubits
             circuit.add_qubit(qubit_name)
 
-    def _gate_spec_to_gate(self, gate_spec, gate_label, rng):
+    # noinspection PyUnusedLocal
+    def _instruction_to_gate(self, instruction, rng):
         """Returns a tuple of gate with its starting time set to 0 and gate's
         duration"""
         # TODO After fixing https://gitlab.com/quantumsim/quantumsim/issues/7
         # this should be refactored, since duration will be bundled into the
         # gate object itself.
+        gate_spec = self._instructions[instruction]
         qubits = gate_spec['qubits']
         if self._gate_is_ignored(gate_spec):
             return None, 0.
         elif self._gate_is_measurement(gate_spec):
-            # FIXME VO: To comply with Brian's code, I insert here
-            # ButterflyGate. I suppose this is not as this should be, need to
-            # consult and get this correctly.
+            # FIXME This is not precise: currently we are interested in
+            # actual density matrix instead of measurement result in the end,
+            # so we insert ButterflyGate instead of the measurement. Ideally
+            # this piece of code should be redone for the general case.
             if self._simulation_settings:
                 qubit_name = qubits[0]
                 try:
@@ -367,24 +376,26 @@ class ConfigurableParser:
                 p_dec = 1 - params['frac1_1']
                 gate = ct.ButterflyGate(qubits[0], 0.,
                                         p_exc=p_exc, p_dec=p_dec)
-                gate.label = gate_label
+                gate.label = self._gate_label_by_instruction(instruction)
             else:
                 gate = None
             duration = 0.
         elif self._gate_is_single_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
-            kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((2, 2)) for m in kr_spec]
+            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((2, 2)) for m in
+                       kr_spec]
             ptm_list = [ptm.single_kraus_to_ptm(kr) for kr in kr_list]
             gate = ct.SinglePTMGate(
                 qubits[0],
                 0.,
                 np.sum(ptm_list, axis=0),
             )
-            gate.label = gate_label
+            gate.label = self._gate_label_by_instruction(instruction)
             duration = gate_spec['duration']
         elif self._gate_is_two_qubit(gate_spec):
             kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
-            kr_list = [(m[:, 0] + m[:, 1]*1j).reshape((4, 4)) for m in kr_spec]
+            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((4, 4)) for m in
+                       kr_spec]
             ptm_list = [ptm.double_kraus_to_ptm(kr) for kr in kr_list]
             gate = ct.TwoPTMGate(
                 qubits[0],
@@ -392,7 +403,7 @@ class ConfigurableParser:
                 np.sum(ptm_list, axis=0),
                 0.,
             )
-            gate.label = gate_label
+            gate.label = self._gate_label_by_instruction(instruction)
             duration = gate_spec['duration']
         else:
             raise ConfigurationError(
@@ -405,30 +416,10 @@ class ConfigurableParser:
         """Returns instruction command."""
         return instruction.strip().split(" ")[0]
 
-    def _parse_circuit(self, title, source, ordering, rng,
-                       time_start, time_end, toposort):
-        """Parces circuit, defined by set of instructions `source`,
-        to a Quantumsim circuit.
-        """
-        source_decomposed = list(self._expand_decompositions(source))
-        gate_specs = [self._instructions[line] for line in source_decomposed]
-        gate_labels = [self._gate_label_by_instruction(line)
-                       for line in source_decomposed]
-        # Here we get all qubits, that actually participate in circuit
-        qubits = set(chain(*(gs['qubits'] for gs in gate_specs)))
-        circuit = ct.Circuit(title)
+    def _format_circuit(self, qubits, gates, toposort):
+        circuit = ct.Circuit()
         for qubit in qubits:
             self._add_qubit(circuit, qubit)
-
-        try:
-            order_func = self._gates_order_table[ordering.lower()]
-        except KeyError:
-            raise RuntimeError('Unknown ordering: {}'.format(ordering))
-        gates, tmin, tmax = order_func(
-            qubits=qubits, gate_specs=gate_specs,
-            gate_labels=gate_labels, rng=rng,
-            time_start=time_start, time_end=time_end)
-
         for gate in gates:
             circuit.add_gate(gate)
 
@@ -437,8 +428,22 @@ class ConfigurableParser:
         # circuit.add_waiting_gates(tmin=tmin, tmax=None)
         circuit.add_waiting_gates(tmin=0, tmax=None)
         circuit.order(toposort=toposort)
-
         return circuit
+
+    def _parse_circuit(self, source, ordering, rng,
+                       time_start, time_end, toposort):
+        """Parses circuit, defined by set of instructions `source`,
+        to a Quantumsim circuit.
+        """
+        source_decomposed = list(self._decompose_instructions(source))
+        # Here we get all qubits, that actually participate in circuit
+        try:
+            parse_func = self._parse_func_table[ordering.lower()]
+        except KeyError:
+            raise RuntimeError('Unknown ordering: {}'.format(ordering))
+        return parse_func(instructions=source_decomposed, rng=rng,
+                          time_start=time_start, time_end=time_end,
+                          toposort=toposort)
 
     @staticmethod
     def _gate_is_ignored(gate_spec):
@@ -478,26 +483,28 @@ class ConfigurableParser:
                         ' number of qubits')
         return out
 
-    def _gates_order_alap(self, qubits, gate_specs, gate_labels,
-                          rng, time_start, time_end):
+    def _parse_circuit_alap(self, instructions, rng, time_start, time_end,
+                            toposort):
         """Gets list of gate specifications (as parsed from configuration) and
         returns list of gates constructed, scheduling each gate as late
         as possible.
         """
         rng = ct._ensure_rng(rng)
+        instructions = list(instructions)
+        qubits = set(chain(*(self._instructions[line]['qubits']
+                             for line in instructions)))
         current_times = {qubit: 0. for qubit in qubits}
         gates = []
-        for spec, label in zip(reversed(gate_specs),
-                               reversed(gate_labels)):
-            gate, duration = self._gate_spec_to_gate(spec, label, rng)
-            # gate is validated already inside `_gate_spec_to_gate`
+        for instruction in reversed(instructions):
+            gate, duration = self._instruction_to_gate(instruction, rng)
+            # gate is validated already inside `_instruction_to_gate`
             if gate is None:
                 continue
             gate_time_end = min((current_times[qubit]
-                                 for qubit in spec['qubits']))
+                                 for qubit in gate.involved_qubits))
             gate_time_start = gate_time_end - duration
-            gate.set_time(0.5*(gate_time_start + gate_time_end))
-            for qubit in spec['qubits']:
+            gate.set_time(0.5 * (gate_time_start + gate_time_end))
+            for qubit in gate.involved_qubits:
                 current_times[qubit] = gate_time_start
             gates.append(gate)
 
@@ -517,27 +524,30 @@ class ConfigurableParser:
             for gate in gates:
                 gate.increment_time(time_shift)
 
-        return gates, time_min + time_shift, time_shift
+        return self._format_circuit(qubits, gates, toposort)
 
-    def _gates_order_asap(self, qubits, gate_specs, gate_labels,
-                          rng, time_start, time_end):
+    def _parse_circuit_asap(self, instructions, rng, time_start, time_end,
+                            toposort):
         """Gets list of gate specifications (as parsed from configuration) and
         returns list of gates constructed, scheduling each gate as soon
         as possible.
         """
         rng = ct._ensure_rng(rng)
+        instructions = list(instructions)
+        qubits = set(chain(*(self._instructions[line]['qubits']
+                             for line in instructions)))
         current_times = {qubit: 0. for qubit in qubits}
         gates = []
-        for spec, label in zip(gate_specs, gate_labels):
-            gate, duration = self._gate_spec_to_gate(spec, label, rng)
-            # gate is validated already inside `_gate_spec_to_gate`
+        for instruction in instructions:
+            gate, duration = self._instruction_to_gate(instruction, rng)
+            # gate is validated already inside `_instruction_to_gate`
             if gate is None:
                 continue
             gate_time_start = max((current_times[qubit]
-                                   for qubit in spec['qubits']))
+                                   for qubit in gate.involved_qubits))
             gate_time_end = gate_time_start + duration
-            gate.set_time(0.5*(gate_time_start + gate_time_end))
-            for qubit in spec['qubits']:
+            gate.set_time(0.5 * (gate_time_start + gate_time_end))
+            for qubit in gate.involved_qubits:
                 current_times[qubit] = gate_time_end
             gates.append(gate)
 
@@ -553,9 +563,9 @@ class ConfigurableParser:
         if not np.allclose(time_shift, 0.):
             for gate in gates:
                 gate.increment_time(time_shift)
-        return gates, time_shift, time_max + time_shift
+        return self._format_circuit(qubits, gates, toposort)
 
-    def _expand_decompositions(self, source):
+    def _decompose_instructions(self, source):
         """Returns a generator of instructions from `source` (can be also a
         generator), expanding all aliases, specified in configuration in
         "gate_decompositions" field, so that we have only instructions from
@@ -563,7 +573,7 @@ class ConfigurableParser:
         impossible.
         """
         for s in source:
-            # FIXME Here we filter out prepz gates, based on name. Generally
+            # FIXME: Here we filter out prepz gates, based on name. Generally
             # this should be done, based on gate_spec, in the method
             # _gate_is_ignored, but it does not get any signature of it yet.
             if s.startswith('prepz'):
@@ -578,10 +588,10 @@ class ConfigurableParser:
                 # function recursively.
                 # FIXME Would be nice to insert here some protection
                 # against infinite recursion.
-                for s1 in self._expand_decompositions(maybe_decomposed):
+                for s1 in self._decompose_instructions(maybe_decomposed):
                     yield s1
                 continue
-            raise QasmError("Unknown QASM instruction: {}".format(s))
+            raise QASMError("Unknown QASM instruction: {}".format(s))
 
     def _try_decompose(self, instr):
         """If instruction matches alias, this method returns expansion of
