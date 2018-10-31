@@ -11,7 +11,10 @@ from qs2.gates import(
     cphase_rotation_ptm,
     rotate_x_ptm,
     rotate_y_ptm,
-    rotate_z_ptm)
+    rotate_z_ptm,
+    rotate_x_unitary,
+    rotate_y_unitary,
+    rotate_z_unitary)
 
 from qs2.operators import(
     LinearCombPTM,
