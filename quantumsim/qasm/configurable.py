@@ -148,13 +148,37 @@ class ConfigurableParser:
         interpreted as a filename of a JSON file and dictionary is parsed out
         of it. Each next config overrides items, defined in previous config.
 
+    gate_ptm_mapping : dict of function
+        A dictionary, that maps gate instructions, as they are specified in
+        QASM file, to Pauli transfer matrices of correspondent gates.
+
+        Keys of this dictionary are of type :class:`str`, and they are
+        interpreted as Python regular expressions patterns (see :mod:`re`
+        documentation), that target gates should match. For example,
+        if you provide `"rx"` as a key, it will match all `"rx"` instructions
+        (including `"rx180"` and `"rx90"`), and if you specify `"rx q0"` --
+        only instructions on qubit `"q0"`.
+
+        Values of the dictionary are functions, that take non-perturbed
+        Kraus representation of a quantum operation, and return a PTM
+        in :math:`0xy1` basis. Module :mod:`quantumsim.ptm` might have
+        some useful helpers to construct these functions.
+
+        If no mapping is provided for some gate, its Kraus is converted to
+        Pauli transfer matrix, assuming no errors at all (perfect gate).
+
     Raises
     ------
     ConfigurationError
         If the configuration is wrong or insufficient.
     """
 
-    def __init__(self, *args):
+    def __init__(self, *args, gate_ptm_mapping=None):
+        self._gate_ptm_mapping = {}
+        if gate_ptm_mapping:
+            for k, v in gate_ptm_mapping.items():
+                self._gate_ptm_mapping[re.compile(k)] = v
+
         if len(args) == 0:
             raise ConfigurationError('No config files provided')
 
