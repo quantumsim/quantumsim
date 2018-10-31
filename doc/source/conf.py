@@ -43,6 +43,7 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
@@ -194,4 +195,12 @@ autosummary_generate = True
 autoclass_content = "both"
 autodoc_default_options = {
     'show-inheritance': True,
+}
+
+# -- Options for intersphinx # ----------------------------------------------
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
+    'matplotlib': ('http://matplotlib.org', None),
 }
