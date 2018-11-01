@@ -2,6 +2,7 @@ import json
 import numpy as np
 import re
 import warnings
+from collections import OrderedDict
 from itertools import chain
 
 from .. import circuit as ct
@@ -148,7 +149,7 @@ class ConfigurableParser:
         interpreted as a filename of a JSON file and dictionary is parsed out
         of it. Each next config overrides items, defined in previous config.
 
-    gate_ptm_mapping : dict of function
+    gate_ptm_mapping : collections.OrderedDict of function or None
         A dictionary, that maps gate instructions, as they are specified in
         QASM file, to Pauli transfer matrices of correspondent gates.
 
@@ -166,6 +167,8 @@ class ConfigurableParser:
 
         If no mapping is provided for some gate, its Kraus is converted to
         Pauli transfer matrix, assuming no errors at all (perfect gate).
+        Gates are matched in the order of items in the dictionary, first one
+        has priority.
 
     Raises
     ------
@@ -173,11 +176,17 @@ class ConfigurableParser:
         If the configuration is wrong or insufficient.
     """
 
+    # Regexp, used to identify whether a string is a valid QASM instruction
+    _valid_instruction_re = re.compile(r"^[a-zA-Z\d_.]+ q\d+(?:,q\d+)?$")
+
+    # noinspection PyTypeChecker
     def __init__(self, *args, gate_ptm_mapping=None):
-        self._gate_ptm_mapping = {}
+        self._gate_ptm_mapping = OrderedDict()
         if gate_ptm_mapping:
             for k, v in gate_ptm_mapping.items():
                 self._gate_ptm_mapping[re.compile(k)] = v
+        self._gate_ptm_mapping[self._valid_instruction_re] = \
+            self._gate_ptm_mapping_default
 
         if len(args) == 0:
             raise ConfigurationError('No config files provided')
@@ -380,6 +389,15 @@ class ConfigurableParser:
         # gate object itself.
         gate_spec = self._instructions[instruction]
         qubits = gate_spec['qubits']
+
+        kraus_to_ptm_func = None
+        for matcher, func in self._gate_ptm_mapping.items():
+            if matcher.match(instruction):
+                kraus_to_ptm_func = func
+                break
+        if not kraus_to_ptm_func:
+            raise QASMError('Invalid instruction: "{}"'.format(instruction))
+
         if self._gate_is_ignored(gate_spec):
             return None, 0.
         elif self._gate_is_measurement(gate_spec):
@@ -404,36 +422,37 @@ class ConfigurableParser:
             else:
                 gate = None
             duration = 0.
-        elif self._gate_is_single_qubit(gate_spec):
-            kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
-            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((2, 2)) for m in
-                       kr_spec]
-            ptm_list = [ptm.single_kraus_to_ptm(kr) for kr in kr_list]
-            gate = ct.SinglePTMGate(
-                qubits[0],
-                0.,
-                np.sum(ptm_list, axis=0),
-            )
-            gate.label = self._gate_label_by_instruction(instruction)
-            duration = gate_spec['duration']
-        elif self._gate_is_two_qubit(gate_spec):
-            kr_spec = np.array(gate_spec['kraus_repr'], dtype=float)
-            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((4, 4)) for m in
-                       kr_spec]
-            ptm_list = [ptm.double_kraus_to_ptm(kr) for kr in kr_list]
-            gate = ct.TwoPTMGate(
-                qubits[0],
-                qubits[1],
-                np.sum(ptm_list, axis=0),
-                0.,
-            )
-            gate.label = self._gate_label_by_instruction(instruction)
-            duration = gate_spec['duration']
         else:
-            raise ConfigurationError(
-                'Could not identify gate type from gate_spec')
+            n_qubits = len(gate_spec['qubits'])
+            ptm_ = kraus_to_ptm_func(gate_spec['kraus_repr'])
+            self._validate_ptm(instruction, ptm_, n_qubits)
+            label = self._gate_label_by_instruction(instruction)
+            duration = gate_spec['duration']
+            gate = ct.SinglePTMGate(qubits[0], 0., ptm_) if n_qubits == 1 \
+                else ct.TwoPTMGate(qubits[0], qubits[1], ptm_, 0.)
+            gate.label = self._gate_label_by_instruction(instruction)
+            duration = gate_spec['duration']
 
         return gate, duration
+
+    @staticmethod
+    def _validate_ptm(name, ptm_, n_qubits):
+        if ptm_.shape == (4, 4):
+            n_qubits_ptm = 1
+        elif ptm_.shape == (16, 16):
+            n_qubits_ptm = 2
+        else:
+            raise ConfigurationError(
+                'Invalid shape of a Pauli transfer matrix for gate "{}": '
+                'must be 4x4 matrix for single-qubit gate or 16x16 matrix '
+                'for two-qubit gate, got shape {}'.format(name, ptm_.shape))
+
+        if n_qubits != n_qubits_ptm:
+            raise ConfigurationError(
+                'Invalid gate specification for gate "{}": number of '
+                'involved qubits according to specification is {}, '
+                'number of involved qubits according to Pauli transfer '
+                'matrix is {}.'.format(name, n_qubits, n_qubits_ptm))
 
     @staticmethod
     def _gate_label_by_instruction(instruction):
@@ -481,30 +500,6 @@ class ConfigurableParser:
             if len(gate_spec['qubits']) != 1:
                 raise NotSupportedError(
                     'Only single-qubit measurements are supported')
-        return out
-
-    @staticmethod
-    def _gate_is_single_qubit(gate_spec):
-        out = (gate_spec['type'] != 'readout') and \
-              (len(gate_spec['qubits']) == 1)
-        if out:
-            for k in gate_spec['kraus_repr']:
-                if len(k) != 4:
-                    raise ConfigurationError(
-                        'Process` Kraus representation is incompatible with'
-                        ' number of qubits')
-        return out
-
-    @staticmethod
-    def _gate_is_two_qubit(gate_spec):
-        out = (gate_spec['type'] != 'readout') and \
-              (len(gate_spec['qubits']) == 2)
-        if out:
-            for k in gate_spec['kraus_repr']:
-                if len(k) != 16:
-                    raise ConfigurationError(
-                        'Process` Kraus representation is incompatible with'
-                        ' number of qubits')
         return out
 
     def _parse_circuit_alap(self, instructions, rng, time_start, time_end,
@@ -626,3 +621,32 @@ class ConfigurableParser:
             if result is not None:
                 return result
         return None
+
+    @staticmethod
+    def _gate_ptm_mapping_default(kraus_repr):
+        n_items = len(kraus_repr[0])
+        for i, matrix in enumerate(kraus_repr[1:]):
+            if len(matrix) != n_items:
+                raise ConfigurationError(
+                    "Got inconsistent Kraus representation: matrix number 1 "
+                    "has {} elements, matrix number {} has {} elements."
+                    .format(n_items, i, len(matrix))
+                )
+        kr_spec = np.array(kraus_repr, dtype=float)
+        if n_items == 4:
+            # Single-qubit gate
+            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((2, 2)) for m in
+                       kr_spec]
+            ptm_list = [ptm.single_kraus_to_ptm(kr) for kr in kr_list]
+            return np.sum(ptm_list, axis=0)
+        elif n_items == 16:
+            kr_list = [(m[:, 0] + m[:, 1] * 1j).reshape((4, 4)) for m in
+                       kr_spec]
+            ptm_list = [ptm.double_kraus_to_ptm(kr) for kr in kr_list]
+            return np.sum(ptm_list, axis=0)
+        else:
+            raise ConfigurationError(
+                "Kraus representation should have either 4 items in a "
+                "matrix for single-qubit gate or 16 items for two qubit-gate. "
+                "Got {} items instead.".format(n_items)
+            )
