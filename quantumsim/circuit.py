@@ -1182,7 +1182,7 @@ class Circuit:
         tmax and tmin must either be None, a number, or a dictionary of numbers
         for each qubit.
 
-        Params
+        Parameters
         ------
         tmin : float or dict of floats or None
             starting times for the decay on each qubit. If a float, takes the
