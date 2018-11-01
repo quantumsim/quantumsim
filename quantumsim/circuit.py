@@ -15,6 +15,18 @@ import functools
 import copy
 import warnings
 
+# Tolerances for various routines below.
+
+# Tolerance for equality when checking > or <'
+ABS_TOL=1e-8  # Same as numpy default
+REL_TOL=1e-5  # Same as numpy default
+# Tolerance for scipy optimize routines
+OPT_TOL=1e-6
+# Tolerance on T1, T2 (i.e. the min T1, T2 allowed)
+TIME_TOL=1e-10
+
+
+
 def _format_angle(angle):
     multiple_of_pi = angle / np.pi
     if np.allclose(multiple_of_pi, 1):
@@ -46,7 +58,32 @@ class Qubit:
         return self.name
 
     def make_idling_gate(self, start_time, end_time):
-        assert start_time < end_time
+        """Generates a gate that decays this qubit for a period of time
+        from start_time to end_time. Currently T1 and T2 decay.
+        
+        Parameters
+        ----------
+        start_time : float
+            Time when gate begins.
+        end_time : float
+            Time when gate ends.
+
+        Returns
+        -------
+        idling_gate : AmpPhDamp
+            Idling gate performing :math:`T_1` and :math:`T_2` decay for
+            required period of time.
+
+        Raises
+        ------
+        ValueError
+            If `end_time <= start_time`. We require strictly that gates are
+            given different times for ordering purposes.
+        """
+        if end_time - start_time < -ABS_TOL:
+            raise ValueError('Start time must be less than end time.')
+        if np.abs(end_time - start_time) < ABS_TOL:
+            return None
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
