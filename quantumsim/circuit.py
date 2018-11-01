@@ -1145,21 +1145,45 @@ class Circuit:
         tmax and tmin must either be None, a number, or a dictionary of numbers
         for each qubit.
 
+        Params
+        ------
+        tmin : float or dict of floats or None
+            starting times for the decay on each qubit. If a float, takes the
+            same time for all qubits. If a dict or None, takes times for qubits
+            individually and defaults to min([time for time in self.gates]).
+        tmax : float or dict of floats or None
+            end times for the decay on each qubit. If a float, takes the
+            same time for all qubits. If a dict or None, takes times for qubits
+            individually and defaults to max([time for time in self.gates]).
+        only_qubits : list or None
+            list of qubits to add waiting gates to. If None, adds decay to
+            all qubits.
+
         """
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
 
         if not all_gates and (tmin is None or tmax is None):
             return
 
+        if all_gates:
+            first_gate_time = all_gates[0].time
+            last_gate_time = all_gates[-1].time
+
         if tmin is None:
-            tmin = all_gates[0].time
+            tmin = first_gate_time
         if tmax is None:
-            tmax = all_gates[-1].time
+            tmax = last_gate_time
 
         if not isinstance(tmin, dict):
             tmin = {qb.name: tmin for qb in self.qubits}
         if not isinstance(tmax, dict):
             tmax = {qb.name: tmax for qb in self.qubits}
+
+        for qb in self.qubits:
+            if qb.name not in tmin:
+                tmin[qb.name] = first_gate_time
+            if qb.name not in tmax:
+                tmax[qb.name] = last_gate_time
 
         qubits_to_do = [qb for qb in self.qubits]
         if only_qubits:
