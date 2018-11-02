@@ -15,6 +15,18 @@ import functools
 import copy
 import warnings
 
+# Tolerances for various routines below.
+
+# Tolerance for equality when checking > or <'
+ABS_TOL=1e-8  # Same as numpy default
+REL_TOL=1e-5  # Same as numpy default
+# Tolerance for scipy optimize routines
+OPT_TOL=1e-6
+# Tolerance on T1, T2 (i.e. the min T1, T2 allowed)
+TIME_TOL=1e-10
+
+
+
 def _format_angle(angle):
     multiple_of_pi = angle / np.pi
     if np.allclose(multiple_of_pi, 1):
@@ -46,7 +58,32 @@ class Qubit:
         return self.name
 
     def make_idling_gate(self, start_time, end_time):
-        assert start_time < end_time
+        """Generates a gate that decays this qubit for a period of time
+        from start_time to end_time. Currently T1 and T2 decay.
+        
+        Parameters
+        ----------
+        start_time : float
+            Time when gate begins.
+        end_time : float
+            Time when gate ends.
+
+        Returns
+        -------
+        idling_gate : AmpPhDamp
+            Idling gate performing :math:`T_1` and :math:`T_2` decay for
+            required period of time.
+
+        Raises
+        ------
+        ValueError
+            If `end_time <= start_time`. We require strictly that gates are
+            given different times for ordering purposes.
+        """
+        if end_time - start_time < -ABS_TOL:
+            raise ValueError('Start time must be less than end time.')
+        if np.abs(end_time - start_time) < ABS_TOL:
+            return None
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
@@ -1145,21 +1182,45 @@ class Circuit:
         tmax and tmin must either be None, a number, or a dictionary of numbers
         for each qubit.
 
+        Parameters
+        ------
+        tmin : float or dict of floats or None
+            starting times for the decay on each qubit. If a float, takes the
+            same time for all qubits. If a dict or None, takes times for qubits
+            individually and defaults to min([time for time in self.gates]).
+        tmax : float or dict of floats or None
+            end times for the decay on each qubit. If a float, takes the
+            same time for all qubits. If a dict or None, takes times for qubits
+            individually and defaults to max([time for time in self.gates]).
+        only_qubits : list or None
+            list of qubits to add waiting gates to. If None, adds decay to
+            all qubits.
+
         """
         all_gates = list(sorted(self.gates, key=lambda g: g.time))
 
         if not all_gates and (tmin is None or tmax is None):
             return
 
+        if all_gates:
+            first_gate_time = all_gates[0].time
+            last_gate_time = all_gates[-1].time
+
         if tmin is None:
-            tmin = all_gates[0].time
+            tmin = first_gate_time
         if tmax is None:
-            tmax = all_gates[-1].time
+            tmax = last_gate_time
 
         if not isinstance(tmin, dict):
             tmin = {qb.name: tmin for qb in self.qubits}
         if not isinstance(tmax, dict):
             tmax = {qb.name: tmax for qb in self.qubits}
+
+        for qb in self.qubits:
+            if qb.name not in tmin:
+                tmin[qb.name] = first_gate_time
+            if qb.name not in tmax:
+                tmax[qb.name] = last_gate_time
 
         qubits_to_do = [qb for qb in self.qubits]
         if only_qubits:

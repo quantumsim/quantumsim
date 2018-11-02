@@ -91,6 +91,30 @@ class TestCircuit:
 
         c.order()
 
+    def test_add_waiting_single_tmin(self):
+        c = circuit.Circuit()
+
+        qb = circuit.Qubit("A", t1=10, t2=0)
+        qb2 = circuit.Qubit("B", t1=10, t2=10)
+        c.add_qubit(qb)
+        c.add_qubit(qb2)
+
+        c.add_gate(circuit.Hadamard("A", time=1))
+        c.add_gate(circuit.Hadamard("A", time=0))
+
+        assert len(c.gates) == 2
+        print(c.qubits)
+        c.add_waiting_gates(tmin = {"B": 0.5})
+
+        assert len(c.gates) == 4
+
+        c.order()
+
+        assert c.gates[2].time == 0.5
+        assert c.gates[2].duration == 1.0
+        assert c.gates[0].duration == 0.5
+        assert c.gates[0].time == 0.75
+
     def test_add_waiting_full(self):
         c = circuit.Circuit()
 
