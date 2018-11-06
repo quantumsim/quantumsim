@@ -1,11 +1,40 @@
 import quantumsim.circuit as circuit
 import quantumsim.ptm as ptm
 from unittest.mock import MagicMock, patch, call, ANY
+from unittest import TestCase
 import numpy as np
 import pytest
 
 
-class TestCircuit:
+class TestCircuit(TestCase):
+
+    def test_simple_order(self):
+        c = circuit.Circuit()
+        c.add_qubit("A")
+        c.add_qubit("B")
+        c.add_qubit("C")
+        c.add_qubit("MA")
+        c.add_qubit("MC")
+        gate1 = circuit.RotateY("A", time=0, angle=np.pi/2)
+        gate2 = circuit.RotateY("C", time=0, angle=np.pi/2)
+        gate2a = circuit.RotateY("B", time=0, angle=np.pi/2)
+        gate3 = circuit.CPhase("A", "B", time=20)
+        gate4 = circuit.CPhase("C", "B", time=10)
+        sampler = circuit.BiasedSampler(readout_error=0.0015, alpha=1, seed=43)
+        gate5 = circuit.Measurement(
+            "A", time=40, sampler=sampler, output_bit="MA")
+        gate6 = circuit.Measurement(
+            "C", time=40, sampler=sampler, output_bit="MC")
+        c.add_gate(gate1)
+        c.add_gate(gate2)
+        c.add_gate(gate2a)
+        c.add_gate(gate3)
+        c.add_gate(gate4)
+        c.add_gate(gate5)
+        c.add_gate(gate6)
+        c.order(toposort="simple")
+        self.assertEqual(c.gates[2], gate4)
+        self.assertEqual(c.gates[3], gate6)
 
     def test_add_qubit(self):
         c = circuit.Circuit()
