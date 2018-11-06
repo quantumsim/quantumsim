@@ -149,8 +149,6 @@ def simple_toposort(partial_orders, targets):
             break
         total_order += new_qubits
 
-    print(total_order, links)
-
     ordered_gates = []
     for q in total_order:
         add_to_gate(
