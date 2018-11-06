@@ -1,4 +1,5 @@
 import quantumsim.tp as tp
+import unittest
 
 test_data_dict = {1: set(),
                   2: {20},
@@ -65,4 +66,54 @@ def test_regression():
     assert len(result) == len(item_set)
 
 
+class TestSimpleToposort(unittest.TestCase):
 
+    def test_add_to_gate_simple(self):
+        qubit = 0
+        final_gate = 5
+        links = {0: {}}
+        ordered_gates = []
+        partial_orders = [[0, 1, 2, 3, 4, 5]]
+        tp.add_to_gate(qubit, final_gate, links, ordered_gates, partial_orders)
+        self.assertEqual(len(ordered_gates), 6)
+
+    def test_add_to_gate_two_qubits_no_connection(self):
+        qubit = 0
+        final_gate = 3
+        links = {0: {1: []}, 1: {0: []}}
+        ordered_gates = []
+        partial_orders = [[0, 2, 3], [1, 4, 5]]
+        tp.add_to_gate(qubit, final_gate, links, ordered_gates, partial_orders)
+        self.assertEqual(len(ordered_gates), 3)
+
+    def test_add_to_gate_two_qubits_with_connection(self):
+        qubit = 0
+        final_gate = 3
+        links = {0: {1: [2]}, 1: {0: [2]}}
+        ordered_gates = []
+        partial_orders = [[0, 2, 3], [1, 2, 4, 5]]
+        tp.add_to_gate(qubit, final_gate, links, ordered_gates, partial_orders)
+        print(ordered_gates)
+        self.assertEqual(len(ordered_gates), 4)
+
+    def test_simple_toposort_single(self):
+        partial_orders = [[0]]
+        targets = {0: 0}
+        res = tp.simple_toposort(partial_orders, targets)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0], 0)
+
+    def test_simple_toposort_complex(self):
+        partial_orders = [[0, 4, 5], [1, 3, 4, 6], [2, 3, 7]]
+        targets = {0: 5, 2: 7}
+        res = tp.simple_toposort(partial_orders, targets)
+        print(res)
+        self.assertEqual(len(res), 8)
+        self.assertEqual(res[3], 7)
+        self.assertEqual(res[1], 1)
+        self.assertEqual(res[0], 2)
+        self.assertEqual(res[2], 3)
+        self.assertEqual(res[4], 0)
+        self.assertEqual(res[5], 4)
+        self.assertEqual(res[6], 5)
+        self.assertEqual(res[7], 6)
