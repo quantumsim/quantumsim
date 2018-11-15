@@ -10,6 +10,11 @@ class Operation(metaclass=abc.ABCMeta):
     :class:`qs2.state.State` object and modifies it inline. This method may
     return nothing or result of a measurement, if it is a gate.
     """
+    def __init__(self, indices=None):
+        if indices is None:
+            self._indices = tuple(range(self.n_qubits))
+        else:
+            self._indices = indices
 
     @abc.abstractmethod
     def __call__(self, state, *qubit_indices):
@@ -21,6 +26,19 @@ class Operation(metaclass=abc.ABCMeta):
 
     def __matmul__(self, other):
         pass
+
+    def at(self, *indices):
+        copy = self.copy()
+        copy._indices = indices
+        return copy
+
+    @property
+    @abc.abstractmethod
+    def n_qubits(self):
+        pass
+
+    def copy(self):
+        raise NotImplementedError()
 
 
 class TracePreservingOperation(Operation):
@@ -36,7 +54,7 @@ class TracePreservingOperation(Operation):
         Basis, in which the operation is provided.
         TODO: expand.
     """
-    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None):
+    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None, indices=None):
         if transfer_matrix and kraus:
             raise ValueError(
                 '`transfer_matrix` and `kraus` are exclusive parameters, '
@@ -49,8 +67,10 @@ class TracePreservingOperation(Operation):
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
         self._basis = basis
 
-    def __call__(self, state, *qubit_indices):
-        pass
+        super().__init__(indices)
+
+    def __call__(self, state, *indices):
+        raise NotImplementedError()
 
 
 class Initialization(Operation):
