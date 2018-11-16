@@ -12,6 +12,7 @@ from qs2.state import State
 
 
 class TestOperations:
+    @pytest.mark.xfail(reason='Not implemented yet.')
     def test_algebra(self):
         s = State(3)
         rot_pi2 = op.rotate_y(0.5*pi)
@@ -39,6 +40,7 @@ class TestOperations:
         assert rot_pi2.n_qubits == 3
         assert np.allclose(s.probability(axis='x'), [(1, 0), (1, 0), (1, 0)])
 
+    @pytest.mark.xfail(reason='Not implemented yet.')
     def test_rotate_z(self):
         s = State(3)
 
@@ -55,6 +57,7 @@ class TestOperations:
         rotate90(s, 0)
         assert np.allclose(s.probability(0, axis='z'), [(0.5, 0.5)])
 
+    @pytest.mark.xfail(reason='Not implemented yet.')
     def test_rotate_x(self):
         s = State(3)
 
@@ -73,5 +76,6 @@ class TestOperations:
         rotate90(s, 0)
         assert np.allclose(s.probability(0, axis='x'), [(0.5, 0.5)])
 
+    @pytest.mark.xfail(reason='Not implemented yet.')
     def test_rotate_y(self):
         raise NotImplementedError()

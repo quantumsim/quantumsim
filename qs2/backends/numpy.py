@@ -1,4 +1,7 @@
 from .backend import Backend
 
+
 class NumpyBackend(Backend):
-    pass
+    """Backend for Quantumsim, that uses Numpy for computations."""
+    def __init__(self):
+        raise NotImplementedError

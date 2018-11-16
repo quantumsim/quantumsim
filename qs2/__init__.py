@@ -3,7 +3,7 @@ from ._version import __version__
 
 __all__ = []
 
-for module in ['basis', 'compilers', 'gates', 'operators', 'setup', 'system']:
+for module in ['backends', 'basis', 'operations', 'state']:
     exec('from . import {0}'.format(module))
     __all__.append(module)
 

@@ -7,7 +7,9 @@ import numpy as np
 
 
 class PauliBasis:
-    """Defines a Pauli basis [1]_ . TODO.
+    """Defines a Pauli basis.
+
+    TODO [1]_ .
 
     References
     ----------
@@ -40,8 +42,8 @@ class PauliBasis:
             for i, cb in enumerate(self.computational_basis_vectors)}
 
         # make hint on how to trace
-        traces = np.einsum("xii", self.vectors, optimize=True) / \
-                 np.sqrt(self.dim_hilbert)
+        traces = (np.einsum("xii", self.vectors, optimize=True) /
+                  np.sqrt(self.dim_hilbert))
 
         self.trace_index = self._to_unit_vector(traces)
 
@@ -65,10 +67,9 @@ class PauliBasis:
                           [self.labels[i] for i in indices], self)
 
     def classical_subbasis(self):
-        idxes = [idx
-                 for st, idx in self.comp_basis_indices.items()
-                 if idx is not None]
-        return self.subbasis(idxes)
+        indices = [idx for st, idx in self.comp_basis_indices.items()
+                   if idx is not None]
+        return self.subbasis(indices)
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.vectors, rho, optimize=True)
