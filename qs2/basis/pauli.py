@@ -4,10 +4,9 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
-import collections
 
 
-class PauliBasis():
+class PauliBasis:
     """Defines a Pauli basis [1]_ . TODO.
 
     References
