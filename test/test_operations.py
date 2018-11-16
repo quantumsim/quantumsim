@@ -8,6 +8,7 @@ import numpy as np
 from numpy import pi
 
 import qs2.operations as op
+from qs2.basis import basis
 from qs2.state import State
 
 
@@ -84,3 +85,22 @@ class TestOperations:
         assert cphase_ptm.shape() == (16, 16)
         assert np.sum(cphase_ptm[0, :]) == 1
         assert np.sum(cphase_ptm[:, 0]) == 1
+
+        wrong_kraus = np.zeros(2, 4)
+        with pytest.raises(ValueError):
+            cphase_ptm = op.common.kraus_to_transfer_matrix(
+                wrong_kraus, double_kraus=True)
+
+        basis_2d = basis.general(2)
+
+        cphase_ptm = op.common.kraus_to_transfer_matrix(
+            cphase_unitary, pauli_basis=basis_2d, double_kraus=True)
+
+        assert cphase_ptm.shape() == (16, 16)
+        assert np.sum(cphase_ptm[0, :]) == 1
+        assert np.sum(cphase_ptm[:, 0]) == 1
+
+        basis_3d = basis.general(3)
+        with pytest.raises(ValueError):
+            cphase_ptm = op.common.kraus_to_transfer_matrix(
+                cphase_unitary, pauli_basis=basis_3d, double_kraus=True)
