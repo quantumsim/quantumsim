@@ -19,3 +19,4 @@ doc/build/*
 
 # idea configuration
 .idea/*
+*.iml

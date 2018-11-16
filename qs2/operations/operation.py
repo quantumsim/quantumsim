@@ -3,11 +3,12 @@ from .common import kraus_to_transfer_matrix
 
 
 class Operation(metaclass=abc.ABCMeta):
-    """A metaclass for all gates.
+    """A metaclass for all operations.
 
-    Every gate has to implement call method, that takes a
+    Every operation has to implement call method, that takes a
     :class:`qs2.state.State` object and modifies it inline. This method may
-    return nothing or result of a measurement, if it is a gate.
+    return nothing or a result of a measurement, if the operation is a
+    measurement.
 
     Operations are designed to form an algebra. For the sake of making
     interface sane, we do not provide explicit multiplication, instead we use
@@ -41,12 +42,6 @@ class Operation(metaclass=abc.ABCMeta):
         Indices of qubits it acts on. They are designed to be dumb and used
         for tracking the multiplication of several operations.
     """
-    def __init__(self, indices=None):
-        if indices is None:
-            self._indices = tuple(range(self.n_qubits))
-        else:
-            self._indices = indices
-
     @abc.abstractmethod
     def __call__(self, state, *qubit_indices):
         """Applies the operation inline (modifying the state) to the state
@@ -78,6 +73,15 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
 
+class _DumbIndexedOperation:
+    """Internal representation of an operations during their multiplications.
+    Contains an operation itself and dumb indices of qubits it acts on.
+    """
+    def __init__(self, operation, indices):
+        self._operation = operation
+        self._indices = indices
+
+
 class TracePreservingOperation(Operation):
     """A general trace preserving operation.
 
@@ -91,7 +95,7 @@ class TracePreservingOperation(Operation):
         Basis, in which the operation is provided.
         TODO: expand.
     """
-    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None, indices=None):
+    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None):
         if transfer_matrix and kraus:
             raise ValueError(
                 '`transfer_matrix` and `kraus` are exclusive parameters, '
@@ -104,23 +108,12 @@ class TracePreservingOperation(Operation):
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
         self._basis = basis
 
-        super().__init__(indices)
-
     def __call__(self, state, *indices):
         raise NotImplementedError()
 
     @property
     def n_qubits(self):
         raise NotImplementedError()
-
-
-class _DumbIndexedOperation:
-    """Internal representation of an operations during their multiplications.
-    Contains an operation itself and dumb indices of qubits it acts on.
-    """
-    def __init__(self, operation, indices):
-        self._operation = operation
-        self._indices = indices
 
 
 class Initialization(Operation):
