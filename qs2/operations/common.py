@@ -17,7 +17,7 @@ def kraus_to_transfer_matrix(kraus, pauli_basis=None, double_kraus=False):
         ValueError -- if mismatch between basis and kraus dimensions
 
     Returns:
-        [type] -- [description]
+        ndarray -- the ptm representation of the kraus
     '''
 
     dim = kraus.shape[0]
@@ -33,6 +33,7 @@ def kraus_to_transfer_matrix(kraus, pauli_basis=None, double_kraus=False):
     else:
         tensor = basis.general(dim).vectors
 
+    # NOTE: If we agree not to have 4-dim qubits maybe we can get rid this of this flag, that will pop up in a few places
     if double_kraus:
         tensor = np.kron(tensor, tensor)
 

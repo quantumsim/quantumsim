@@ -10,6 +10,7 @@ class Operation(metaclass=abc.ABCMeta):
     :class:`qs2.state.State` object and modifies it inline. This method may
     return nothing or result of a measurement, if it is a gate.
     """
+
     def __init__(self, indices=None):
         if indices is None:
             self._indices = tuple(range(self.n_qubits))
@@ -54,7 +55,8 @@ class TracePreservingOperation(Operation):
         Basis, in which the operation is provided.
         TODO: expand.
     """
-    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None, indices=None):
+
+    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None, indices=None, double_kraus=False):
         if transfer_matrix and kraus:
             raise ValueError(
                 '`transfer_matrix` and `kraus` are exclusive parameters, '
@@ -62,7 +64,9 @@ class TracePreservingOperation(Operation):
         if transfer_matrix is not None:
             self._transfer_matrix = transfer_matrix
         elif kraus is not None:
-            self._transfer_matrix = kraus_to_transfer_matrix(kraus)
+            self._transfer_matrix =
+            kraus_to_transfer_matrix(
+                kraus=kraus, basis=basis, double_kraus=double_kraus)
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
         self._basis = basis
