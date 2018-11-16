@@ -75,3 +75,12 @@ class TestOperations:
 
     def test_rotate_y(self):
         raise NotImplementedError()
+
+    def test_kraus_to_transfer_matrix(self):
+        cphase_unitary = np.diag([1, 1, 1, -1])
+        cphase_ptm = op.common.kraus_to_transfer_matrix(
+            cphase_unitary, double_kraus=True)
+
+        assert cphase_ptm.shape() == (16, 16)
+        assert np.sum(cphase_ptm[0, :]) == 1
+        assert np.sum(cphase_ptm[:, 0]) == 1
