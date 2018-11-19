@@ -20,7 +20,7 @@ run tests:
   stage: test
   script:
   - python3 setup.py install
-  - py.test
+  - py.test --cov=qs2
 
 check for broken links in doc:
   stage: test
