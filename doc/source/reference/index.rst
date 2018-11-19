@@ -9,7 +9,7 @@ Low-level interface
 .. toctree::
    :maxdepth: 1
 
-   quantumsim.basis
+   quantumsim.bases
    quantumsim.state
    quantumsim.operations
 

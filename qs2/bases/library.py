@@ -2,7 +2,7 @@ import numpy as np
 
 from itertools import count
 from functools import lru_cache
-from .pauli import PauliBasis
+from .pauli_basis import PauliBasis
 
 _sqrt2i = np.sqrt(0.5)
 
