@@ -35,6 +35,7 @@ upload documentation to docs repo:
   - qs2/master@quantumsim/quantumsim
   before_script:
   # kaniko issue https://github.com/GoogleContainerTools/kaniko/issues/457
+  - mkdir -p /etc/ssh
   - ssh-keyscan -t rsa gitlab.com >> /etc/ssh/ssh_known_hosts
   script:
   - mkdir -p ~/.ssh && touch ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
