@@ -20,7 +20,10 @@ run tests:
   stage: test
   script:
   - python3 setup.py install
-  - py.test --cov=qs2
+  - py.test --cov=qs2 --cov-report=xml
+  artifacts:
+    paths:
+    - coverage.xml
 
 check for broken links in doc:
   stage: test
