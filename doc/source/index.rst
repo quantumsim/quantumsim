@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Welcome to Quantumsim v2 documentation!
-======================================
+=======================================
 
 .. toctree::
    :maxdepth: 2

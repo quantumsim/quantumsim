@@ -13,12 +13,11 @@ class PauliBasis:
 
     References
     ----------
-    .. [1] A "Pauli basis" is an orthonormal basis (w.r.t
-        :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
-        for a space of Hermitian matrices.
-    "a tensor B of shape (dim_pauli, dim_hilbert, dim_hilbert)"
-    "read as a vector of matrices"
-    "must satisfy Tr(B[i] @ B[j]) = delta(i, j)"
+    .. [1] A Pauli basis is an orthonormal basis (w.r.t
+           :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
+           for a space of Hermitian matrices. A tensor `B` of shape
+           `(dim_pauli, dim_hilbert, dim_hilbert)` read as a vector of
+           matrices must satisfy :math:`\text{Tr} B_i \cdot B_j = \delta_{ij}`
     """
 
     def __init__(self, vectors, labels, superbasis=None):

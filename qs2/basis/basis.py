@@ -56,16 +56,15 @@ def general(dim_hilbert):
 @lru_cache(maxsize=64)
 def gell_mann(dim_hilbert):
     """A Pauli basis consisting of the generalization of Pauli matrices for
-    higher dimensions, the generalized Gell-Mann matrices [1]_ [2]_ .
+    higher dimensions, the generalized Gell-Mann matrices.
 
-    These matrices are Hermitian and traceless, except the first, which is the
-    identity.
+    Gell-Mann matrices are Hermitian and traceless, except the first,
+    which is the identity [1]_ [2]_.
 
-    `GellMannBasis(2)` is the same as `TwoLevelOXYZ()`.
+    `qs2.basis.gell_mann(2)` is the same as `qs2.basis.twolevel_ixyz`.
 
     References
     ----------
-
     .. [1] https://en.wikipedia.org/wiki/Generalizations_of_Pauli_matrices
     .. [2] https://en.wikipedia.org/wiki/Gell-Mann_matrices
     """
