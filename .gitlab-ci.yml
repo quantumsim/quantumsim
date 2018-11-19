@@ -33,6 +33,9 @@ upload documentation to docs repo:
   only:
   - master@quantumsim/quantumsim
   - qs2/master@quantumsim/quantumsim
+  before_script:
+  # kaniko issue https://github.com/GoogleContainerTools/kaniko/issues/457
+  - ssh-keyscan -t rsa gitlab.com >> /etc/ssh/ssh_known_hosts
   script:
   - mkdir -p ~/.ssh && touch ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
   - echo "${QUANTUMSIM_DOC_DEPLOY_KEY}" | base64 -d > ~/.ssh/id_rsa
