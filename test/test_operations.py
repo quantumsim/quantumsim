@@ -28,10 +28,6 @@ class TestOperations:
         combined_rotation_2q = rot_pi2.at(0) @ rot_pi2.at(1)
         assert combined_rotation_2q.n_qubits == 2
 
-        with pytest.raises(ValueError):
-            # indices must be ordered
-            rot_pi2.at(0) @ rot_pi2.at(2)
-
         combined_rotation_3q = rot_pi2[0] @ rot_pi2[1] @ rot_pi2[2]
         the_same_rotation = combined_rotation_2q.at(0, 2) @ rot_pi2.at(1)
         assert combined_rotation_3q == the_same_rotation
