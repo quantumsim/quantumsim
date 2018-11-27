@@ -61,7 +61,7 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
 class DensityMatrix(DensityMatrixBase):
     _gpuarray_cache = {}
 
-    def __init__(self, bases, data=None):
+    def __init__(self, bases, expansion=None):
         """Create a new density matrix for several qudits.
 
         Parameters
@@ -70,37 +70,35 @@ class DensityMatrix(DensityMatrixBase):
         bases : a list of :class:`ptm.PauliBasis`
             A descrption of the basis for the subsystems.
 
-        data : :class:`numpy.ndarray`, :class:`pycuda.gpuarray.array`,\
-        :class:`pycuda.driver.DeviceAllocation`, or `None`.
+        expansion : numpy.ndarray, pycuda.gpuarray.GPUArray  or None
             Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if
             not already there.  Only upper triangle is relevant.  If data is
             `None`, create a new density matrix with all qubits in ground
             state.
         """
-        super().__init__(bases, data)
+        super().__init__(bases, expansion)
 
-        if isinstance(data, ga.GPUArray):
-            if self.shape != data.shape:
-                raise ValueError(
-                    "`bases` Pauli dimensionality should be the same as the "
-                    "shape of `data` array.\n"
-                    "bases shapes: {}, data shape: {}"
-                    .format(self.shape, data.shape))
-            self.data = data
-        elif isinstance(data, np.ndarray):
-            raise NotImplementedError('TODO: implement for Numpy arrays')
-        elif data is None:
-            self.data = np.zeros(self.shape, np.float64)
-            ground_state_index = [pb.comp_basis_indices[0]
-                                  for pb in self.bases]
-            self.data[tuple(ground_state_index)] = 1
-            self.data = ga.to_gpu(self.data)
+        if isinstance(expansion, ga.GPUArray):
+            self._data = expansion
         else:
-            raise ValueError("Unknown type of `data`: {}".format(type(data)))
+            if expansion is None:
+                expansion = np.zeros(self.shape, np.float64)
+            elif not isinstance(expansion, np.ndarray):
+                raise ValueError(
+                    "`expansion` should be Numpy array, PyCUDA GPU array or "
+                    "None, got type `{}`".format(type(expansion)))
+            ground_state_index = [pb.computational_basis_indices[0]
+                                  for pb in self.bases]
+            expansion[tuple(ground_state_index)] = 1
+            self._data = ga.to_gpu(expansion)
 
-        self.data.gpudata.size = self.data.nbytes
-        self._work_data = ga.empty_like(self.data)
+        self._data.gpudata.size = self._data.nbytes
+        self._work_data = ga.empty_like(self._data)
         self._work_data.gpudata.size = self._work_data.nbytes
+
+    @property
+    def expansion(self):
+        return self._data.get()
 
     def _cached_gpuarray(self, array):
         """
@@ -130,20 +128,20 @@ class DensityMatrix(DensityMatrixBase):
 
     def trace(self):
         # todo there is a smarter way of doing this with pauli-dirac basis
-        return np.sum(self.get_diag())
+        return np.sum(self.diagonal())
 
     def renormalize(self):
         """Renormalize to trace one."""
         tr = self.trace()
-        self.data *= np.float(1 / tr)
+        self._data *= np.float(1 / tr)
 
     def copy(self):
         """Return a deep copy of this Density."""
-        data_cp = self.data.copy()
+        data_cp = self._data.copy()
         cp = self.__class__(self.bases, data=data_cp)
         return cp
 
-    def to_array(self):
+    def to_density_matrix(self):
         """Return the entries of the density matrix as a dense numpy ndarray.
         """
         # dimensions = [2]*self.no_qubits
@@ -154,7 +152,7 @@ class DensityMatrix(DensityMatrixBase):
         # return host_dm
         raise NotImplementedError()
 
-    def get_diag(self, target_array=None, get_data=True, flatten=True):
+    def diagonal(self, *, get_data=True, target_array=None, flatten=True):
         """Obtain the diagonal of the density matrix.
 
         Parameters
@@ -193,7 +191,7 @@ class DensityMatrix(DensityMatrixBase):
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
         idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
 
-        xshape = np.array(self.data.shape, np.uint32)
+        xshape = np.array(self._data.shape, np.uint32)
         yshape = np.array(diag_shape, np.uint32)
 
         xshape_gpu = self._cached_gpuarray(xshape)
@@ -207,12 +205,12 @@ class DensityMatrix(DensityMatrixBase):
 
         if len(yshape) == 0:
             # brain-dead case, but should be handled according to exp.
-            target_array.set(self.data.get())
+            target_array.set(self._data.get())
         else:
             _multitake.prepared_call(
                     grid,
                     block,
-                    self.data.gpudata,
+                    self._data.gpudata,
                     target_array.gpudata,
                     idx_i_gpu.gpudata, idx_j_gpu.gpudata,
                     xshape_gpu.gpudata, yshape_gpu.gpudata,
@@ -260,7 +258,7 @@ class DensityMatrix(DensityMatrixBase):
                 basis_out = list(basis_out)
                 basis_out[1], basis_out[0] = basis_out[0], basis_out[1]
 
-        new_shape = list(self.data.shape)
+        new_shape = list(self._data.shape)
         dim1_out, dim0_out, dim1_in, dim0_in = ptm.shape
         assert new_shape[qubit0] == dim0_in
         assert new_shape[qubit1] == dim1_in
@@ -305,14 +303,14 @@ class DensityMatrix(DensityMatrixBase):
         grid_size = max(1, (new_size-1)//blocksize+1)
         grid = (grid_size, 1, 1)
 
-        dim_z = pytools.product(self.data.shape[qubit0 + 1:])
-        dim_y = pytools.product(self.data.shape[qubit1 + 1:qubit0])
+        dim_z = pytools.product(self._data.shape[qubit0 + 1:])
+        dim_y = pytools.product(self._data.shape[qubit1 + 1:qubit0])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
             grid,
             block,
-            self.data.gpudata,
+            self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
             dim1_in, dim0_in,
@@ -321,7 +319,7 @@ class DensityMatrix(DensityMatrixBase):
             dim_rho,
             shared_size=8*sh_mem_size)
 
-        self.data, self._work_data = self._work_data, self.data
+        self._data, self._work_data = self._work_data, self._data
 
         if basis_out is not None:
             self.bases[qubit0] = basis_out[0]
@@ -340,10 +338,7 @@ class DensityMatrix(DensityMatrixBase):
             If provided, will convert qubit basis to specified after the PTM
             application.
         """
-        if basis_out:
-            raise NotImplementedError('Seems like specifying output basis '
-                                      'does not work yet.')
-        new_shape = list(self.data.shape)
+        new_shape = list(self._data.shape)
         self._validate_qubit(qubit, 'bit')
 
         # TODO Refactor to use self._validate_ptm
@@ -373,20 +368,20 @@ class DensityMatrix(DensityMatrixBase):
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
-        dint = min(64, self.data.size//dim_bit_in)
+        dint = min(64, self._data.size // dim_bit_in)
         block = (1, dim_bit_out, dint)
         blocksize = dim_bit_out*dint
         grid_size = max(1, (new_size-1)//blocksize+1)
         grid = (grid_size, 1, 1)
 
-        dim_z = pytools.product(self.data.shape[qubit + 1:])
-        dim_y = pytools.product(self.data.shape[:qubit])
+        dim_z = pytools.product(self._data.shape[qubit + 1:])
+        dim_y = pytools.product(self._data.shape[:qubit])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
             grid,
             block,
-            self.data.gpudata,
+            self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
             1, dim_bit_in,
@@ -395,7 +390,7 @@ class DensityMatrix(DensityMatrixBase):
             dim_rho,
             shared_size=8 * (ptm.size + blocksize))
 
-        self.data, self._work_data = self._work_data, self.data
+        self._data, self._work_data = self._work_data, self._data
 
         if basis_out is not None:
             self.bases[qubit] = basis_out
@@ -407,13 +402,13 @@ class DensityMatrix(DensityMatrixBase):
 
         # figure out the projection matrix
         ptm = np.zeros(basis.dim_pauli)
-        ptm[basis.comp_basis_indices[state]] = 1
+        ptm[basis.computational_basis_indices[state]] = 1
 
         # make sure work_data is large enough, reshape it
         # TODO hacky as fuck: we put the allocated size
         # into the allocation object by hand
 
-        new_shape = tuple([basis.dim_pauli] + list(self.data.shape))
+        new_shape = tuple([basis.dim_pauli] + list(self._data.shape))
         new_size = pytools.product(new_shape)
         new_size_bytes = new_size * 8
 
@@ -441,14 +436,14 @@ class DensityMatrix(DensityMatrixBase):
         grid_size = max(1, (new_size_bytes // 8 - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = self.data.size  # 1
+        dim_z = self._data.size  # 1
         dim_y = 1
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
             grid,
             block,
-            self.data.gpudata,
+            self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
             1, 1,
@@ -458,8 +453,8 @@ class DensityMatrix(DensityMatrixBase):
             shared_size=8 * (ptm.size + blocksize)
         )
 
-        self.data, self._work_data = self._work_data, self.data
-        self.bases = [basis] + self.bases
+        self._data, self._work_data = self._work_data, self._data
+        self.bases.insert(0, basis)
 
     def partial_trace(self, qubit):
         """ Return the diagonal of the reduced density matrix of a qubit.
@@ -472,7 +467,7 @@ class DensityMatrix(DensityMatrixBase):
         self._validate_qubit(qubit, 'qubit')
 
         # TODO on graphics card, optimize for tracing out?
-        diag = self.get_diag(get_data=False)
+        diag = self.diagonal(get_data=False)
 
         res = []
         stride = diag.strides[qubit]//8
@@ -498,10 +493,10 @@ class DensityMatrix(DensityMatrixBase):
         """
         self._validate_qubit(qubit, 'bit')
 
-        new_shape = list(self.data.shape)
+        new_shape = list(self._data.shape)
         new_shape[qubit] = 1
 
-        new_size_bytes = self.data.nbytes//self.bases[qubit].dim_pauli
+        new_size_bytes = self._data.nbytes // self.bases[qubit].dim_pauli
 
         # TODO hack: put the allocated size into the allocation by hand
         if self._work_data.gpudata.size < new_size_bytes or not lazy_alloc:
@@ -522,14 +517,14 @@ class DensityMatrix(DensityMatrixBase):
         # TODO: can be built more efficiently
         for i, pb in enumerate(self.bases):
             if i == qubit:
-                idx.append([pb.comp_basis_indices[state]])
+                idx.append([pb.computational_basis_indices[state]])
             else:
                 idx.append(list(range(pb.dim_pauli)))
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
         idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
 
-        xshape = np.array(self.data.shape, np.uint32)
+        xshape = np.array(self._data.shape, np.uint32)
         yshape = np.array(new_shape, np.uint32)
 
         xshape_gpu = self._cached_gpuarray(xshape)
@@ -544,14 +539,14 @@ class DensityMatrix(DensityMatrixBase):
         _multitake.prepared_call(
                 grid,
                 block,
-                self.data.gpudata,
+                self._data.gpudata,
                 self._work_data.gpudata,
                 idx_i_gpu.gpudata, idx_j_gpu.gpudata,
                 xshape_gpu.gpudata, yshape_gpu.gpudata,
                 np.uint32(len(xshape))
                 )
 
-        self.data, self._work_data = self._work_data, self.data
+        self._data, self._work_data = self._work_data, self._data
 
-        subbase_idx = [self.bases[qubit].comp_basis_indices[state]]
+        subbase_idx = [self.bases[qubit].computational_basis_indices[state]]
         self.bases[qubit] = self.bases[qubit].get_subbasis(subbase_idx)

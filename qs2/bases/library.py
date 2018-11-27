@@ -71,7 +71,7 @@ def gell_mann(dim_hilbert):
 
     def diagonal(index, zeros):
         if index == 0:
-            diag = [np.ones(dim_hilbert) / np.sqrt(dim_hilbert)]
+            diag = np.ones(dim_hilbert) / np.sqrt(dim_hilbert)
         else:
             diag = np.zeros(dim_hilbert)
             diag[:index] = 1
@@ -93,6 +93,7 @@ def gell_mann(dim_hilbert):
                        dtype=complex)
     # noinspection PyTypeChecker
     labels = np.full(dim_hilbert * dim_hilbert, None, dtype=object)
+    print(labels.shape)
     counter = count()
 
     for i in range(dim_hilbert):

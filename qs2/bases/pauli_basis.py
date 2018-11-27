@@ -17,7 +17,8 @@ class PauliBasis:
            :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
            for a space of Hermitian matrices. A tensor `B` of shape
            `(dim_pauli, dim_hilbert, dim_hilbert)` read as a vector of
-           matrices must satisfy :math:`\\text{Tr} B_i \\cdot B_j = \\delta_{ij}`
+           matrices must satisfy
+           :math:`\\text{Tr} B_i \\cdot B_j = \\delta_{ij}`
     """
 
     def __init__(self, vectors, labels, superbasis=None):
@@ -36,7 +37,7 @@ class PauliBasis:
 
         # make hint on how to efficiently
         # extract the diagonal
-        self.comp_basis_indices = {
+        self.computational_basis_indices = {
             i: self._to_unit_vector(cb)
             for i, cb in enumerate(self.computational_basis_vectors)}
 
@@ -90,7 +91,7 @@ class PauliBasis:
     def __repr__(self):
         s = "<{} d_hilbert={}, d_pauli={}, {}>"
 
-        if self.labels:
+        if self.labels is not None:
             bvn_string = " ".join(self.labels)
         else:
             bvn_string = "unnamed basis"
