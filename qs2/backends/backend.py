@@ -1,9 +1,25 @@
 import abc
 import pytools
+import numpy as np
 
 
 class DensityMatrixBase(metaclass=abc.ABCMeta):
-    """A metaclass, that defines standard interface for Quantumsim backend.
+    """A metaclass, that defines standard interface for Quantumsim density
+    matrix backend.
+
+    Parameters
+    ----------
+    bases : a list of :class:`ptm.PauliBasis`
+        A descrption of the basis for the subsystems.
+    expansion : numpy.ndarray, pycuda.gpuarray.GPUArray  or None
+        Expansion of density matrix in the selected bases. If None, density
+        matrix is initialized in :math:`\\left| 0 \\cdots 0 \\right\\rangle`
+        state. Some sanity checks are done in the abstract class constructor,
+        but handling the data is a task of implementation.
+    force : bool
+        By default creation of too large density matrix (more than
+        :math:`2^22` elements currently) is not allowed. Set this to `True`
+        if you know what you are doing.
     """
     _size_max = 2**22
 
@@ -16,11 +32,18 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
                 'is probably too much. If you know what you are doing, '
                 'pass `force=True` argument to the constructor.')
 
-        if expansion is not None and self.shape != expansion.shape:
-            raise ValueError(
-                '`bases` Pauli dimensionality should be the same as the shape '
-                'of `data` array.\n - bases shapes: {}\n - data shape: {}'
-                .format(self.shape, expansion.shape))
+        if expansion is not None:
+            if self.shape != expansion.shape:
+                raise ValueError(
+                    '`bases` Pauli dimensionality should be the same as the '
+                    'shape of `data` array.\n'
+                    ' - bases shapes: {}\n - data shape: {}'
+                    .format(self.shape, expansion.shape))
+            if expansion.dtype not in (np.float16, np.float32, np.float64):
+                raise ValueError(
+                    '`expansion` must have floating point data type, got {}'
+                    .format(expansion.dtype)
+                )
 
     @property
     def n_qubits(self):
@@ -38,7 +61,6 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     def shape(self):
         return tuple([pb.dim_pauli for pb in self.bases])
 
-    @property
     @abc.abstractmethod
     def expansion(self):
         """Get data in a form of Numpy array"""

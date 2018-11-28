@@ -30,7 +30,6 @@ class DensityMatrix(DensityMatrixBase):
                 "`expansion` should be Numpy array or None, got type `{}`"
                 .format(type(expansion)))
 
-    @property
     def expansion(self):
         return self._data
 

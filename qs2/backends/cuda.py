@@ -64,17 +64,6 @@ class DensityMatrix(DensityMatrixBase):
     def __init__(self, bases, expansion=None):
         """Create a new density matrix for several qudits.
 
-        Parameters
-        ----------
-
-        bases : a list of :class:`ptm.PauliBasis`
-            A descrption of the basis for the subsystems.
-
-        expansion : numpy.ndarray, pycuda.gpuarray.GPUArray  or None
-            Must be of size (2**no_qubits, 2**no_qubits); is copied to GPU if
-            not already there.  Only upper triangle is relevant.  If data is
-            `None`, create a new density matrix with all qubits in ground
-            state.
         """
         super().__init__(bases, expansion)
 
@@ -83,20 +72,19 @@ class DensityMatrix(DensityMatrixBase):
         else:
             if expansion is None:
                 expansion = np.zeros(self.shape, np.float64)
+                ground_state_index = [pb.computational_basis_indices[0]
+                                      for pb in self.bases]
+                expansion[tuple(ground_state_index)] = 1
             elif not isinstance(expansion, np.ndarray):
                 raise ValueError(
                     "`expansion` should be Numpy array, PyCUDA GPU array or "
                     "None, got type `{}`".format(type(expansion)))
-            ground_state_index = [pb.computational_basis_indices[0]
-                                  for pb in self.bases]
-            expansion[tuple(ground_state_index)] = 1
             self._data = ga.to_gpu(expansion)
 
         self._data.gpudata.size = self._data.nbytes
         self._work_data = ga.empty_like(self._data)
         self._work_data.gpudata.size = self._work_data.nbytes
 
-    @property
     def expansion(self):
         return self._data.get()
 
@@ -160,7 +148,6 @@ class DensityMatrix(DensityMatrixBase):
         target_array : None or pycuda.gpuarray.array
             An already-allocated GPU array to which the data will be copied.
             If `None`, make a new GPU array.
-
         get_data : boolean
             Whether the data should be copied from the GPU.
         flatten : boolean
