@@ -67,7 +67,7 @@ class PauliBasis:
                           [self.labels[i] for i in indices], self)
 
     def classical_subbasis(self):
-        indices = [idx for st, idx in self.comp_basis_indices.items()
+        indices = [idx for st, idx in self.computational_basis_indices.items()
                    if idx is not None]
         return self.subbasis(indices)
 

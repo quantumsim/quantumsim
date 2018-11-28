@@ -14,6 +14,11 @@ def dm_dims(request):
     return request.param
 
 
+@pytest.fixture(params=[qs2.bases.general, qs2.bases.gell_mann])
+def dm_basis(request):
+    return request.param
+
+
 class TestBackends:
 
     def test_create_trivial(self, dm_class):
@@ -28,8 +33,8 @@ class TestBackends:
         for expansion in (None, data):
             dm = dm_class(bases, expansion)
             assert dm.n_qubits == len(dm_dims)
-            np.testing.assert_array_equal(dm.dimensions, dm_dims)
-            np.testing.assert_array_equal(dm.shape, target_shape)
+            assert dm.dimensions == pytest.approx(dm_dims)
+            assert dm.shape == pytest.approx(target_shape)
             assert dm.size == np.product(np.array(dm_dims)**2)
             if expansion is not None:
                 np.testing.assert_almost_equal(dm.expansion(), expansion)
@@ -52,5 +57,11 @@ class TestBackends:
         with pytest.raises(ValueError):
             dm_class(bases=[qs2.bases.general(2)]*16)
 
+    def test_get_diagonal(self, dm_basis, dm_class):
+        basis2 = dm_basis(2)
+        basis3 = dm_basis(3)
+        subbasis2 = basis2.classical_subbasis()
+        subbasis3 = basis3.classical_subbasis()
 
-
+        dm = dm_class([basis2, basis2])
+        diag = dm.diagonal()
