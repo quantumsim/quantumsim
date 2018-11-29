@@ -2,6 +2,8 @@ import pytest
 import qs2.bases
 import numpy as np
 
+from pytest import approx
+
 
 @pytest.fixture(params=['numpy', 'cuda'])
 def dm_class(request):
@@ -14,17 +16,23 @@ def dm_dims(request):
     return request.param
 
 
-@pytest.fixture(params=[qs2.bases.general, qs2.bases.gell_mann])
+# FIXME: Gell-Mann should also be tested, when it is supported
+# @pytest.fixture(params=[qs2.bases.general, qs2.bases.gell_mann])
+@pytest.fixture(params=[qs2.bases.general])
 def dm_basis(request):
     return request.param
 
 
 class TestBackends:
+    def test_not_implemented_raised(self, dm_class):
+        # Gell-Mann basis will certainly fail now
+        with pytest.raises(NotImplementedError):
+            dm = dm_class([qs2.bases.gell_mann(2)])
 
     def test_create_trivial(self, dm_class):
         dm = dm_class([])
-        assert dm.expansion() == pytest.approx(1)
-        assert dm.diagonal() == pytest.approx(1)
+        assert dm.expansion() == approx(1)
+        assert dm.diagonal() == approx(1)
 
     def test_create(self, dm_class, dm_dims):
         target_shape = [dim**2 for dim in dm_dims]
@@ -33,8 +41,8 @@ class TestBackends:
         for expansion in (None, data):
             dm = dm_class(bases, expansion)
             assert dm.n_qubits == len(dm_dims)
-            assert dm.dimensions == pytest.approx(dm_dims)
-            assert dm.shape == pytest.approx(target_shape)
+            assert dm.dimensions == approx(dm_dims)
+            assert dm.shape == approx(target_shape)
             assert dm.size == np.product(np.array(dm_dims)**2)
             if expansion is not None:
                 np.testing.assert_almost_equal(dm.expansion(), expansion)
@@ -65,3 +73,4 @@ class TestBackends:
 
         dm = dm_class([basis2, basis2])
         diag = dm.diagonal()
+        assert diag == approx([1., 0., 0., 0.])

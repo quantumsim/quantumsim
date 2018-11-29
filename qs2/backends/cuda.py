@@ -153,7 +153,7 @@ class DensityMatrix(DensityMatrixBase):
         flatten : boolean
             TODO docstring
         """
-        diag_bases = [pb.get_classical_subbasis() for pb in self.bases]
+        diag_bases = [pb.classical_subbasis() for pb in self.bases]
         diag_shape = [db.dim_pauli for db in diag_bases]
         diag_size = pytools.product(diag_shape)
 
@@ -170,9 +170,9 @@ class DensityMatrix(DensityMatrixBase):
                     "Should be at least {}."
                     .format(target_array.size, diag_size))
 
-        idx = [[pb.comp_basis_indices[i]
+        idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
-                if pb.comp_basis_indices[i] is not None]
+                if pb.computational_basis_indices[i] is not None]
                for pb in self.bases]
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
@@ -195,14 +195,11 @@ class DensityMatrix(DensityMatrixBase):
             target_array.set(self._data.get())
         else:
             _multitake.prepared_call(
-                    grid,
-                    block,
-                    self._data.gpudata,
-                    target_array.gpudata,
-                    idx_i_gpu.gpudata, idx_j_gpu.gpudata,
-                    xshape_gpu.gpudata, yshape_gpu.gpudata,
-                    np.uint32(len(yshape))
-                    )
+                grid, block, self._data.gpudata, target_array.gpudata,
+                idx_i_gpu.gpudata, idx_j_gpu.gpudata,
+                xshape_gpu.gpudata, yshape_gpu.gpudata,
+                np.uint32(len(yshape))
+            )
 
         if get_data:
             if flatten:

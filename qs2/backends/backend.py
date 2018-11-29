@@ -7,9 +7,13 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     """A metaclass, that defines standard interface for Quantumsim density
     matrix backend.
 
+    Every instance, that implements the interface of this class, should call
+    `super().__init__` in the beginning of its execution, because a lot of
+    sanity checks are done here.
+
     Parameters
     ----------
-    bases : a list of :class:`ptm.PauliBasis`
+    bases : list of qs2.bases.PauliBasis
         A descrption of the basis for the subsystems.
     expansion : numpy.ndarray, pycuda.gpuarray.GPUArray  or None
         Expansion of density matrix in the selected bases. If None, density
@@ -24,6 +28,16 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     _size_max = 2**22
 
     def __init__(self, bases, expansion=None, *, force=False):
+        # FIXME: We do not support anything except general basis yet
+        for b in bases:
+            for k, v in b.computational_basis_indices.items():
+                if not k == v:
+                    raise NotImplementedError(
+                        "Currently backends implicitly assume that basis is "
+                        "always `qs2.basis.general()`. This should be fixed "
+                        "as soon as possible."
+                    )
+
         self.bases = bases
 
         if self.size > self._size_max and not force:
@@ -118,5 +132,3 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
                 .format(name=name,
                         target_shape=target_shape,
                         real_shape=ptm.shape))
-
-

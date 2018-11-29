@@ -93,7 +93,6 @@ def gell_mann(dim_hilbert):
                        dtype=complex)
     # noinspection PyTypeChecker
     labels = np.full(dim_hilbert * dim_hilbert, None, dtype=object)
-    print(labels.shape)
     counter = count()
 
     for i in range(dim_hilbert):

@@ -42,6 +42,7 @@ class DensityMatrix(DensityMatrixBase):
         return cp
 
     def diagonal(self, *, get_data=True):
+        # FIXME: Works only for qs2.basis.general
         no_trace_tensors = []
         for d in self.dimensions:
             ntt = np.zeros((d**2, d))
