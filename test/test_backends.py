@@ -65,12 +65,14 @@ class TestBackends:
         with pytest.raises(ValueError):
             dm_class(bases=[qs2.bases.general(2)]*16)
 
-    def test_get_diagonal(self, dm_basis, dm_class):
-        basis2 = dm_basis(2)
-        basis3 = dm_basis(3)
-        subbasis2 = basis2.classical_subbasis()
-        subbasis3 = basis3.classical_subbasis()
+    @pytest.mark.parametrize('dim1,dim2', [[2, 2], [2, 3], [3, 3]])
+    def test_get_diagonal(self, dm_class, dm_basis, dim1, dim2):
+        basis1 = dm_basis(dim1)
+        basis2 = dm_basis(dim2)
 
-        dm = dm_class([basis2, basis2])
+        # Default initialization
+        dm = dm_class([basis1, basis2])
         diag = dm.diagonal()
-        assert diag == approx([1., 0., 0., 0.])
+        diag_ref = np.zeros(dim1*dim2)
+        diag_ref[0] = 1.
+        assert diag == approx(diag_ref)

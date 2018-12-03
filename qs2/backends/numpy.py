@@ -42,22 +42,17 @@ class DensityMatrix(DensityMatrixBase):
         return cp
 
     def diagonal(self, *, get_data=True):
-        # FIXME: Works only for qs2.basis.general
-        no_trace_tensors = []
-        for d in self.dimensions:
-            ntt = np.zeros((d**2, d))
-            ntt[:d, :] = np.eye(d)
-            no_trace_tensors.append(ntt)
+        no_trace_tensors = [basis.computational_basis_vectors
+                            for basis in self.bases]
 
         trace_argument = []
         n_qubits = self.n_qubits
         for i, ntt in enumerate(no_trace_tensors):
             trace_argument.append(ntt)
-            trace_argument.append([i, i + n_qubits])
+            trace_argument.append([i + n_qubits, i])
 
-        indices = list(reversed(range(n_qubits)))
-        out_indices = list(reversed(range(n_qubits, 2 * n_qubits)))
-
+        indices = list(range(n_qubits))
+        out_indices = list(range(n_qubits, 2 * n_qubits))
         complex_dm_dimension = pytools.product(self.dimensions)
         return np.einsum(self._data, indices, *trace_argument, out_indices,
                          optimize=True).reshape(complex_dm_dimension)
