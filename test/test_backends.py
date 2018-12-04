@@ -1,3 +1,8 @@
+"""Purpose of the tests in this file is mostly to check, that all interface
+methods in the bachends can be called and exceptions are raised,
+where necessary. Result sanity validation are done in test_state.py and
+test_operations.py
+"""
 import pytest
 import qs2.bases
 import numpy as np
@@ -27,7 +32,7 @@ class TestBackends:
     def test_not_implemented_raised(self, dm_class):
         # Gell-Mann basis will certainly fail now
         with pytest.raises(NotImplementedError):
-            dm = dm_class([qs2.bases.gell_mann(2)])
+            dm_class([qs2.bases.gell_mann(2)])
 
     def test_create_trivial(self, dm_class):
         dm = dm_class([])
@@ -41,8 +46,8 @@ class TestBackends:
         for expansion in (None, data):
             dm = dm_class(bases, expansion)
             assert dm.n_qubits == len(dm_dims)
-            assert dm.dimensions == approx(dm_dims)
-            assert dm.shape == approx(target_shape)
+            assert dm.dim_hilbert == approx(dm_dims)
+            assert dm.dim_pauli == approx(target_shape)
             assert dm.size == np.product(np.array(dm_dims)**2)
             if expansion is not None:
                 np.testing.assert_almost_equal(dm.expansion(), expansion)
@@ -76,3 +81,19 @@ class TestBackends:
         diag_ref = np.zeros(dim1*dim2)
         diag_ref[0] = 1.
         assert diag == approx(diag_ref)
+
+    def test_add_qubit(self, dm_class, dm_basis):
+        dm = dm_class([])
+        bases = []
+        expected_dim_pauli = []
+        assert dm.n_qubits == 0
+        assert dm.dim_pauli == approx(expected_dim_pauli)
+
+        for dim in (2, 2, 3):
+            basis = dm_basis(dim)
+            bases.append(basis)
+            expected_dim_pauli.insert(0, dim**2)
+            dm.add_qubit(basis, 0)
+            assert dm.n_qubits == len(bases)
+            assert dm.dim_pauli == approx(expected_dim_pauli)
+            assert dm.expansion().shape == approx(expected_dim_pauli)
