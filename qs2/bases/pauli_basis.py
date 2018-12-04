@@ -4,6 +4,7 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
+import warnings
 
 
 class PauliBasis:
@@ -31,9 +32,12 @@ class PauliBasis:
         self.labels = labels
         self._superbasis = superbasis
 
-        # TODO: rename? Or may be refactor to avoid needs to hint?
-        self.computational_basis_vectors = np.einsum(
-            "xii -> ix", self.vectors, optimize=True)
+        with warnings.catch_warnings():
+            # We are taking diagonals of a Hermitean matrix, which must be real
+            warnings.simplefilter('ignore')
+            # TODO: rename? Or may be refactor to avoid needs to hint?
+            self.computational_basis_vectors = np.einsum(
+                "xii -> ix", self.vectors, optimize=True).astype(np.float64)
 
         # make hint on how to efficiently
         # extract the diagonal
