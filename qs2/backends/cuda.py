@@ -71,7 +71,7 @@ class DensityMatrix(DensityMatrixBase):
             self._data = expansion
         else:
             if expansion is None:
-                expansion = np.zeros(self.shape, np.float64)
+                expansion = np.zeros(self.dim_pauli, np.float64)
                 ground_state_index = [pb.computational_basis_indices[0]
                                       for pb in self.bases]
                 expansion[tuple(ground_state_index)] = 1
@@ -115,7 +115,7 @@ class DensityMatrix(DensityMatrixBase):
             assert hash(a) == k
 
     def trace(self):
-        # todo there is a smarter way of doing this with pauli-dirac basis
+        # TODO: there is a smarter way of doing this with pauli-dirac basis
         return np.sum(self.diagonal())
 
     def renormalize(self):
@@ -128,17 +128,6 @@ class DensityMatrix(DensityMatrixBase):
         data_cp = self._data.copy()
         cp = self.__class__(self.bases, data=data_cp)
         return cp
-
-    def to_density_matrix(self):
-        """Return the entries of the density matrix as a dense numpy ndarray.
-        """
-        # dimensions = [2]*self.no_qubits
-        #
-        # host_dm = dm_general_np.DensityGeneralNP(
-        #     dimensions, data=self.data.get()).to_array()
-        #
-        # return host_dm
-        raise NotImplementedError()
 
     def diagonal(self, *, get_data=True, target_array=None, flatten=True):
         """Obtain the diagonal of the density matrix.
@@ -379,14 +368,14 @@ class DensityMatrix(DensityMatrixBase):
         if basis_out is not None:
             self.bases[qubit] = basis_out
 
-    def add_ancilla(self, basis, state):
-        """Add an ancilla with `basis` and with state state."""
+    def add_qubit(self, basis, classical_state):
+        """Add a qubit with `basis` and with state state."""
 
         # TODO: express in terms off `apply_ptm`
 
         # figure out the projection matrix
         ptm = np.zeros(basis.dim_pauli)
-        ptm[basis.computational_basis_indices[state]] = 1
+        ptm[basis.computational_basis_indices[classical_state]] = 1
 
         # make sure work_data is large enough, reshape it
         # TODO hacky as fuck: we put the allocated size

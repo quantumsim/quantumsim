@@ -47,12 +47,12 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
                 'pass `force=True` argument to the constructor.')
 
         if expansion is not None:
-            if self.shape != expansion.shape:
+            if self.dim_pauli != expansion.shape:
                 raise ValueError(
                     '`bases` Pauli dimensionality should be the same as the '
                     'shape of `data` array.\n'
                     ' - bases shapes: {}\n - data shape: {}'
-                    .format(self.shape, expansion.shape))
+                    .format(self.dim_pauli, expansion.shape))
             if expansion.dtype not in (np.float16, np.float32, np.float64):
                 raise ValueError(
                     '`expansion` must have floating point data type, got {}'
@@ -64,15 +64,15 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
         return len(self.bases)
 
     @property
-    def dimensions(self):
+    def dim_hilbert(self):
         return tuple((b.dim_hilbert for b in self.bases))
 
     @property
     def size(self):
-        return pytools.product(self.dimensions)**2
+        return pytools.product(self.dim_hilbert) ** 2
 
     @property
-    def shape(self):
+    def dim_pauli(self):
         return tuple([pb.dim_pauli for pb in self.bases])
 
     @abc.abstractmethod
@@ -102,6 +102,19 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def partial_trace(self, qubit):
+        pass
+
+    @abc.abstractmethod
+    def add_qubit(self, basis, classical_state):
+        """Add a qubit to the density matrix and initialize it.
+
+        Parameters
+        ----------
+        basis: qs2.bases.PauliBasis
+            Initial basis for a qubit
+        classical_state: int
+            State of the qubit
+        """
         pass
 
     @abc.abstractmethod

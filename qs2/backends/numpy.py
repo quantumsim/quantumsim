@@ -23,7 +23,7 @@ class DensityMatrix(DensityMatrixBase):
         if isinstance(expansion, np.ndarray):
             self._data = expansion
         elif expansion is None:
-            self._data = np.zeros(self.shape)
+            self._data = np.zeros(self.dim_pauli)
             self._data[tuple([0] * self.n_qubits)] = 1
         else:
             raise ValueError(
@@ -37,7 +37,7 @@ class DensityMatrix(DensityMatrixBase):
         self._data /= self.trace()
 
     def copy(self):
-        cp = self.__class__(self.dimensions)
+        cp = self.__class__(self.dim_hilbert)
         cp._data = self._data.copy()
         return cp
 
@@ -53,13 +53,13 @@ class DensityMatrix(DensityMatrixBase):
 
         indices = list(range(n_qubits))
         out_indices = list(range(n_qubits, 2 * n_qubits))
-        complex_dm_dimension = pytools.product(self.dimensions)
+        complex_dm_dimension = pytools.product(self.dim_hilbert)
         return np.einsum(self._data, indices, *trace_argument, out_indices,
                          optimize=True).reshape(complex_dm_dimension)
 
     def apply_two_qubit_ptm(self, qubit0, qubit1, two_ptm, basis_out=None):
-        d0 = self.shape[qubit0]
-        d1 = self.shape[qubit1]
+        d0 = self.dim_pauli[qubit0]
+        d1 = self.dim_pauli[qubit1]
 
         two_ptm = two_ptm.reshape((d1, d0, d1, d0))
 
@@ -83,7 +83,7 @@ class DensityMatrix(DensityMatrixBase):
 
     def apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
         self._validate_qubit(qubit, 'bit')
-        dim = self.shape[qubit]
+        dim = self.dim_pauli[qubit]
         self._validate_ptm_shape(ptm, (dim, dim), 'ptm')
 
         n_qubits = self.n_qubits
@@ -98,18 +98,18 @@ class DensityMatrix(DensityMatrixBase):
         if basis_out is not None:
             self.bases[qubit] = basis_out
 
-    def add_ancilla(self, basis, state):
-        raise NotImplementedError("TODO for Numpy backend")
-        # self.dm = np.einsum(
-        #     anc_dm, [0], self.dm, list(range(1, self.no_qubits + 1)),
-        #     optimize=True)
-        # self.bases.insert(0, basis)
+    def add_qubit(self, basis, classical_state):
+        self._data = np.einsum(
+            basis.computational_basis_vectors[classical_state], [0],
+            self._data, list(range(1, self.n_qubits + 1)),
+            optimize=True)
+        self.bases.insert(0, basis)
 
     def partial_trace(self, qubit):
         self._validate_qubit(qubit, 'qubit')
 
         trace_argument = []
-        for i, d in enumerate(self.dimensions):
+        for i, d in enumerate(self.dim_hilbert):
             if i == qubit:
                 ntt = np.zeros((d, d**2))
                 ntt[:, :d] = np.eye(d)
@@ -126,9 +126,8 @@ class DensityMatrix(DensityMatrixBase):
         return np.einsum(self._data, indices, *trace_argument, optimize=True)
 
     def trace(self):
-
         trace_argument = []
-        for i, d in enumerate(self.dimensions):
+        for i, d in enumerate(self.dim_hilbert):
             tt = np.zeros(d**2)
             tt[:d] = 1
             trace_argument.append(tt)
@@ -142,7 +141,7 @@ class DensityMatrix(DensityMatrixBase):
 
         # the behaviour is a bit weird: swap the MSB to bit and then project
         # out the highest one!
-        dim = self.shape[qubit]
+        dim = self.dim_pauli[qubit]
         projector = np.zeros(dim)
         projector[state] = 1
 
