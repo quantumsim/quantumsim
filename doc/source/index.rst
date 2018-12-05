@@ -10,6 +10,7 @@ Welcome to Quantumsim v2 documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   install
    architecture/index
    reference/index
 
