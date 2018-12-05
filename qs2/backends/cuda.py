@@ -2,6 +2,7 @@
 # (c) 2016 Brian Tarasinski
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
+import warnings
 
 from .backend import DensityMatrixBase
 
@@ -121,7 +122,12 @@ class DensityMatrix(DensityMatrixBase):
     def renormalize(self):
         """Renormalize to trace one."""
         tr = self.trace()
-        self._data *= np.float(1 / tr)
+        if tr > 1e-8:
+            self._data *= np.float(1 / tr)
+        else:
+            warnings.warn(
+                "Density matrix trace is 0; likely your further computation "
+                "will fail. Have you projected DM on a state with zero weight?")
 
     def copy(self):
         """Return a deep copy of this Density."""
@@ -142,7 +148,7 @@ class DensityMatrix(DensityMatrixBase):
         flatten : boolean
             TODO docstring
         """
-        diag_bases = [pb.classical_subbasis() for pb in self.bases]
+        diag_bases = [pb.computational_subbasis() for pb in self.bases]
         diag_shape = [db.dim_pauli for db in diag_bases]
         diag_size = pytools.product(diag_shape)
 
@@ -451,7 +457,8 @@ class DensityMatrix(DensityMatrixBase):
 
         return [p.get() for p in res]
 
-    def project(self, qubit, state, lazy_alloc=True):
+    # noinspection PyMethodOverriding
+    def project(self, qubit, state, *, lazy_alloc=True):
         """Remove a qubit from the density matrix by projecting
         on a computational basis state.
 
@@ -465,6 +472,13 @@ class DensityMatrix(DensityMatrixBase):
             future increase in size.
         """
         self._validate_qubit(qubit, 'bit')
+        target_qubit_state_index = self.bases[qubit] \
+                                       .computational_basis_indices[state]
+        if target_qubit_state_index is None:
+            raise RuntimeError(
+                'Projected state is not in the computational basis indices; '
+                'this is not supported.'
+            )
 
         new_shape = list(self._data.shape)
         new_shape[qubit] = 1
@@ -479,18 +493,15 @@ class DensityMatrix(DensityMatrixBase):
             self._work_data.gpudata.size = self._work_data.nbytes
         else:
             # reallocation not required,
-            # reshape but reeuse allocation
-            self._work_data = ga.GPUArray(
-                    shape=new_shape,
-                    dtype=np.float64,
-                    gpudata=self._work_data.gpudata,
-                    )
+            # reshape but reuse allocation
+            self._work_data = ga.GPUArray(shape=new_shape, dtype=np.float64,
+                                          gpudata=self._work_data.gpudata)
 
         idx = []
         # TODO: can be built more efficiently
         for i, pb in enumerate(self.bases):
             if i == qubit:
-                idx.append([pb.computational_basis_indices[state]])
+                idx.append([target_qubit_state_index])
             else:
                 idx.append(list(range(pb.dim_pauli)))
 
@@ -522,4 +533,4 @@ class DensityMatrix(DensityMatrixBase):
         self._data, self._work_data = self._work_data, self._data
 
         subbase_idx = [self.bases[qubit].computational_basis_indices[state]]
-        self.bases[qubit] = self.bases[qubit].get_subbasis(subbase_idx)
+        self.bases[qubit] = self.bases[qubit].subbasis(subbase_idx)

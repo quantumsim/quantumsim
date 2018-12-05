@@ -81,12 +81,12 @@ class PauliBasis:
         Parameters
         ----------
         indices: list of int
-            Indices of basis elements, that need to be included in the subbasis
+            Indices of basis elements, that need to be included in the subbasis.
 
         Returns
         -------
         PauliBasis
-            Subbasis of this basis
+            Subbasis of this basis.
 
         Raises
         ------
@@ -103,7 +103,15 @@ class PauliBasis:
                           [self.labels[i] for i in indices],
                           self.superbasis or self)
 
-    def classical_subbasis(self):
+    def computational_subbasis(self):
+        """Return a subbasis, that corresponds to computational states of
+        this basis.
+
+        Returns
+        -------
+        PauliBasis
+            A computational subbasis of this basis.
+        """
         indices = [idx for st, idx in self.computational_basis_indices.items()
                    if idx is not None]
         return self.subbasis(indices)
