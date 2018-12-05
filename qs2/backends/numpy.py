@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytools
 from .backend import DensityMatrixBase
@@ -34,7 +36,13 @@ class DensityMatrix(DensityMatrixBase):
         return self._data
 
     def renormalize(self):
-        self._data /= self.trace()
+        tr = self.trace()
+        if tr > 1e-8:
+            self._data /= self.trace()
+        else:
+            warnings.warn(
+                "Density matrix trace is 0; likely your further computation "
+                "will fail. Have you projected DM on a state with zero weight?")
 
     def copy(self):
         cp = self.__class__(self.dim_hilbert)
@@ -126,31 +134,20 @@ class DensityMatrix(DensityMatrixBase):
         return np.einsum(self._data, indices, *trace_argument, optimize=True)
 
     def trace(self):
-        trace_argument = []
-        for i, d in enumerate(self.dim_hilbert):
-            tt = np.zeros(d**2)
-            tt[:d] = 1
-            trace_argument.append(tt)
-            trace_argument.append([i])
-
-        return np.einsum(self._data, list(range(self.n_qubits)),
-                         *trace_argument, optimize=True)
+        # TODO: can be made more effective
+        return np.sum(self.diagonal())
 
     def project(self, qubit, state):
-        self._validate_qubit(qubit, 'qubit')
+        self._validate_qubit(qubit, 'bit')
+        target_qubit_state_index = self.bases[qubit] \
+            .computational_basis_indices[state]
+        if target_qubit_state_index is None:
+            raise RuntimeError(
+                'Projected state is not in the computational basis indices; '
+                'this is not supported.'
+            )
 
-        # the behaviour is a bit weird: swap the MSB to bit and then project
-        # out the highest one!
-        dim = self.dim_pauli[qubit]
-        projector = np.zeros(dim)
-        projector[state] = 1
-
-        n_qubits = self.n_qubits
-        in_indices = list(reversed(range(n_qubits)))
-        projector_indices = [qubit]
-        out_indices = list(reversed(range(n_qubits - 1)))
-        if qubit != n_qubits - 1:
-            out_indices[-qubit - 1] = n_qubits - 1
-
-        self._data = np.einsum(self._data, in_indices, projector,
-                               projector_indices, out_indices, optimize=True)
+        idx = [tuple(range(dp)) for dp in self.dim_pauli]
+        idx[qubit] = (target_qubit_state_index,)
+        self._data = self._data[np.ix_(*idx)]
+        self.bases[qubit] = self.bases[qubit].subbasis([state])

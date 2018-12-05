@@ -106,20 +106,28 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def add_qubit(self, basis, classical_state):
-        """Add a qubit to the density matrix and initialize it.
+        """Add a qubit to the density matrix and initialize it in a
+        computational basis state.
 
         Parameters
         ----------
         basis: qs2.bases.PauliBasis
             Initial basis for a qubit
         classical_state: int
-            State of the qubit
+            Computational basis state of the qubit
         """
         pass
 
     @abc.abstractmethod
     def project(self, qubit, state):
-        """Project a qubit to a state."""
+        """Project a qubit to a state.
+
+        Raises
+        ------
+        RuntimeError
+            If the state, which is going to be projected onto, has zero
+            probability.
+        """
         pass
 
     @abc.abstractmethod

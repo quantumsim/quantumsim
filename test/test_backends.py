@@ -97,3 +97,38 @@ class TestBackends:
             assert dm.n_qubits == len(bases)
             assert dm.dim_pauli == approx(expected_dim_pauli)
             assert dm.expansion().shape == approx(expected_dim_pauli)
+
+    def test_project(self, dm_class, dm_basis):
+        # matrix in |0, 0, 0> state
+        dim_hilbert = [2, 2, 3]
+        dm = dm_class([dm_basis(d) for d in dim_hilbert])
+        assert dm.trace() == 1
+        assert dm.dim_pauli == approx([4, 4, 9])
+        dm.project(0, 0)
+        data = dm.expansion().copy()
+        assert dm.dim_pauli == approx([1, 4, 9])
+        assert dm.trace() == 1
+        dm.project(0, 0)  # should do nothing
+        assert dm.expansion() == approx(data)
+        assert dm.dim_pauli == approx([1, 4, 9])
+        with pytest.raises(RuntimeError):
+            dm.project(0, 1)
+
+        # matrix in 0.8 |0, 0, 0> + 0.2 |1, 1, 0> state
+        dim_hilbert = [3, 2, 2]
+        bases = [dm_basis(d) for d in dim_hilbert]
+        data = np.zeros([b.dim_pauli for b in bases], dtype=float)
+        data[0, 0, 0] = 0.8
+        data[1, 1, 0] = 0.2
+        dm = dm_class(bases, data)
+        assert dm.trace() == approx(1)
+        assert dm.dim_pauli == approx([9, 4, 4])
+        dm.project(0, 0)
+        assert dm.trace() == approx(0.8)
+        assert dm.dim_pauli == approx([1, 4, 4])
+        dm.project(2, 0)
+        assert dm.trace() == approx(0.8)
+        assert dm.dim_pauli == approx([1, 4, 1])
+        dm.project(1, 1)
+        assert dm.trace() == approx(0.)
+        assert dm.dim_pauli == approx([1, 1, 1])
