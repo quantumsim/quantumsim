@@ -61,14 +61,47 @@ class PauliBasis:
 
     @property
     def superbasis(self):
+        """Return a parent basis of this basis or `self`, if this basis has
+        no parent. Is supposed to be full, if all subbases are derived by
+        :func:`qs2.PauliBasis.subbasis` from the full basis.
+
+        Returns
+        -------
+        PauliBasis
+            A parent of this basis.
+        """
         return self._superbasis or self
 
     def subbasis(self, indices):
+        """Return a subbasis of this basis.
+
+        Superbasis of the constructed subbasis is set to the superbasis of
+        `self` or to `self`, if it has no superbasis.
+
+        Parameters
+        ----------
+        indices: list of int
+            Indices of basis elements, that need to be included in the subbasis
+
+        Returns
+        -------
+        PauliBasis
+            Subbasis of this basis
+
+        Raises
+        ------
+        RuntimeError
+            If index requested is not present in the basis.
         """
-        return a subbasis of this basis
-        """
+        dim = self.dim_pauli
+        for i in indices:
+            if not 0 <= i < dim:
+                raise RuntimeError('Found index {} in indices, but this basis '
+                                   'has only {} elements.'.format(i, dim))
+
         return PauliBasis(self.vectors[indices],
-                          [self.labels[i] for i in indices], self)
+                          [self.labels[i] for i in indices],
+                          self.superbasis or self)
 
     def classical_subbasis(self):
         indices = [idx for st, idx in self.computational_basis_indices.items()
