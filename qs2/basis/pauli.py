@@ -20,7 +20,7 @@ class PauliBasis():
     "must satisfy Tr(B[i] @ B[j]) = delta(i, j)"
     """
 
-    def __init__(self, vectors, labels, superbasis=None):
+    def __init__(self, vectors, labels, superbasis=None, subsys_dims=None):
         if vectors.shape[1] != vectors.shape[2]:
             raise ValueError(
                 "Pauli basis vectors must be square matrices, got shape {}x{}"
@@ -29,6 +29,7 @@ class PauliBasis():
         self.vectors = vectors
         self.labels = labels
         self._superbasis = superbasis
+        self.subsys_dims = subsys_dims or np.array([self.vectors.shape[:2]])
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
@@ -42,9 +43,22 @@ class PauliBasis():
 
         # make hint on how to trace
         traces = np.einsum("xii", self.vectors, optimize=True) / \
-                 np.sqrt(self.dim_hilbert)
+            np.sqrt(self.dim_hilbert)
 
         self.trace_index = self._to_unit_vector(traces)
+
+    def __mul__(self, pauli_basis):
+        expanded_vectors = np.kron(self.vectors, pauli_basis.vectors)
+
+        expanded_labels = np.array(
+            [label_1+label_2 for label_1 in self.labels for label_2 in pauli_basis.labels])
+
+        expanded_superbasis = None
+
+        expanded_subsys_dims = np.concatenate(
+            (self.subsys_dims, pauli_basis.subsys_dims))
+
+        return PauliBasis(expanded_vectors, expanded_labels, expanded_superbasis, expanded_subsys_dims)
 
     @property
     def dim_hilbert(self):
@@ -53,6 +67,22 @@ class PauliBasis():
     @property
     def dim_pauli(self):
         return self.vectors.shape[0]
+
+    @property
+    def subsys_dims(self):
+        return self.subsys_dims.shape[0]
+
+    @property
+    def subsys_pauli_dims(self):
+        return self.subsys_dims[:, 0]
+
+    @property
+    def subsys_hilbert_dims(self):
+        return self.subsys_dims[:, 1]
+
+    @property
+    def num_subsys(self):
+        return self.subsys_dims.shape[0]
 
     @property
     def superbasis(self):

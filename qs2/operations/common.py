@@ -1,40 +1,93 @@
 import numpy as np
 from qs2.basis import basis
 
+ERR_MSGS = dict(
+    basis_dim_mismatch='The dimensions of the given basis do not match the provided operators: operator shape is {}, while basis has dimensions {}',
+    not_sqr_='Only square {} matrices can be transformed: provided matrix shape is {}',
+    wrong_dim='Incorred dimensionality of the provided operator: operator dimensions are: {}'
+)
 
-def kraus_to_transfer_matrix(kraus, pauli_basis=None, double_kraus=False):
-    '''Transforms a kraus operator to a Pauli Transfer Matrix (PTM)
 
-    Arguments:
-        kraus {ndarray} -- The Kraus operator
+def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
+    if kraus.ndim not in (2, 3):
+        raise ValueError(ERR_MSGS['wrong_dim'].format(kraus.ndim))
 
-    Keyword Arguments:
-        pauli_basis {PauliBasis} -- the basis of the resulting ptm (default: {None})
-        double_kraus {bool} -- whether the given kraus corresponds to a single-qubit or two-qubit operator (default: {False})
+    # If a single Kraus convert to list to keep generality
+    if kraus.ndim == 2:
+        kraus = np.array([kraus])
 
-    Raises:
-        ValueError -- if kraus is not square
-        ValueError -- if mismatch between basis and kraus dimensions
-
-    Returns:
-        ndarray -- the ptm representation of the kraus
-    '''
-
-    dim = kraus.shape[0]
-    if kraus.shape() != (dim, dim):
-        raise ValueError(
-            'Only square kraus matrices can be transformed: input matrix shape is {}'.format(kraus.shape))
+    dim = kraus.shape[1]
+    if kraus.shape[1:] != (dim, dim):
+        raise ValueError(ERR_MSGS['not_sqr'].format('Kraus', kraus.shape))
 
     if pauli_basis is not None:
-        if dim != pauli_basis.dim_hilbert:
-            raise ValueError(
-                'The dimensions of the given basis do not match the kraus operators: kraus_ops shape is {}, while basis has dimensions {}'.format(kraus.shape, pauli_basis.dim_hilbert))
-        tensor = pauli_basis.vectors
+        basis_dim = pauli_basis.dim_hilbert
+        if dim != basis_dim:
+            raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+                kraus.shape, basis_dim))
+        vectors = pauli_basis.vectors
     else:
-        tensor = basis.general(dim).vectors
+        if subs_dim_hilbert:
+            if dim != np.prod(subs_dim_hilbert):
+                raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+                    kraus.shape, basis_dim))
+            vectors = np.prod([basis.gell_mann(dim_hilbert)
+                               for dim_hilbert in subs_dim_hilbert])
+        else:
+            vectors = basis.gell_mann(dim).vectors
 
-    # NOTE: If we agree not to have 4-dim qubits maybe we can get rid this of this flag, that will pop up in a few places
-    if double_kraus:
-        tensor = np.kron(tensor, tensor)
+    ptm = np.einsum("xab, zbc, ycd, zad -> xy", vectors, kraus,
+                    vectors, kraus.conj(), optimize=True).real
+    return ptm
 
-    return np.einsum("xab, bc, ycd, ad -> xy", tensor, kraus, tensor, kraus.conj(), optimize=True).real
+
+def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=1):
+    if ptm.ndim != 2:
+        raise ValueError(ERR_MSGS['wrong_dim'].format(ptm.ndim))
+
+    dim = ptm.shape[0]
+    if ptm.shape != (dim, dim):
+        raise ValueError(ERR_MSGS['not_sqr'].format('PTM', ptm.shape))
+
+    if pauli_basis is not None:
+        basis_dim = pauli_basis.dim_pauli
+        if dim != basis_dim:
+            raise ValueError(
+                ERR_MSGS['basis_dim_mismatch'].format(ptm.shape, basis_dim))
+        vectors = pauli_basis.vectors
+    else:
+        if subs_dim_hilbert:
+            if dim != np.prod(subs_dim_hilbert)**2:
+                raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+                    ptm.shape, basis_dim))
+            vectors = np.prod([basis.gell_mann(dim_hilbert)
+                               for dim_hilbert in subs_dim_hilbert])
+        else:
+            dim_hilbert = np.sqrt(dim)
+            assert dim == dim_hilbert*dim_hilbert
+            vectors = basis.gell_mann(dim_hilbert).vectors
+
+    tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
+        (dim, dim, dim, dim), order='F')
+    choi = np.einsum('ij, ijkl -> kl', ptm, tensor, optimize=True).real
+    return choi
+
+
+def choi_to_ptm(choi):
+    raise NotImplementedError
+
+
+def choi_to_kraus(choi):
+    raise NotImplementedError
+
+
+def kraus_to_choi(kraus):
+    raise NotImplementedError
+
+
+def choi_to_pm(choi):
+    raise NotImplementedError
+
+
+def pm_to_ptm(choi):
+    raise NotImplementedError
