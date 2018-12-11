@@ -29,7 +29,7 @@ class PauliBasis():
         self.vectors = vectors
         self.labels = labels
         self._superbasis = superbasis
-        self.subsys_dims = subsys_dims or np.array([self.vectors.shape[:2]])
+        self._subsys_dims = subsys_dims
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
@@ -49,16 +49,15 @@ class PauliBasis():
 
     def __mul__(self, pauli_basis):
         expanded_vectors = np.kron(self.vectors, pauli_basis.vectors)
+        # NOTE: superbasis still not handled, thinking about it.
 
         expanded_labels = np.array(
-            [label_1+label_2 for label_1 in self.labels for label_2 in pauli_basis.labels])
-
-        expanded_superbasis = None
+            [label_1+label_2 for label_1 in self.labels for label_2 in pauli_basis.labels], dtype=object)
 
         expanded_subsys_dims = np.concatenate(
             (self.subsys_dims, pauli_basis.subsys_dims))
 
-        return PauliBasis(expanded_vectors, expanded_labels, expanded_superbasis, expanded_subsys_dims)
+        return PauliBasis(expanded_vectors, expanded_labels, None, expanded_subsys_dims)
 
     @property
     def dim_hilbert(self):
@@ -70,19 +69,21 @@ class PauliBasis():
 
     @property
     def subsys_dims(self):
-        return self.subsys_dims.shape[0]
+        if self._subsys_dims is not None:
+            return self._subsys_dims
+        return np.array([self.vectors.shape[:2]])
 
     @property
     def subsys_pauli_dims(self):
-        return self.subsys_dims[:, 0]
+        return self._subsys_dims[:, 0]
 
     @property
     def subsys_hilbert_dims(self):
-        return self.subsys_dims[:, 1]
+        return self._subsys_dims[:, 1]
 
     @property
     def num_subsys(self):
-        return self.subsys_dims.shape[0]
+        return self._subsys_dims.shape[0]
 
     @property
     def superbasis(self):
@@ -121,7 +122,7 @@ class PauliBasis():
     def __repr__(self):
         s = "<{} d_hilbert={}, d_pauli={}, {}>"
 
-        if self.labels:
+        if self.labels is not None:
             bvn_string = " ".join(self.labels)
         else:
             bvn_string = "unnamed basis"

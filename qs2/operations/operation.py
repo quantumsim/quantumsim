@@ -1,6 +1,6 @@
 import abc
 from ..state import State
-from .common import kraus_to_transfer_matrix
+from .common import kraus_to_ptm
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -64,9 +64,7 @@ class TracePreservingOperation(Operation):
         if transfer_matrix is not None:
             self._transfer_matrix = transfer_matrix
         elif kraus is not None:
-            self._transfer_matrix =
-            kraus_to_transfer_matrix(
-                kraus=kraus, basis=basis, double_kraus=double_kraus)
+            self._transfer_matrix = kraus_to_ptm(kraus, basis)
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
         self._basis = basis

@@ -72,7 +72,7 @@ def gell_mann(dim_hilbert):
 
     def diagonal(index, zeros):
         if index == 0:
-            diag = [np.ones(dim_hilbert) / np.sqrt(dim_hilbert)]
+            diag = np.ones(dim_hilbert) / np.sqrt(dim_hilbert)
         else:
             diag = np.zeros(dim_hilbert)
             diag[:index] = 1
