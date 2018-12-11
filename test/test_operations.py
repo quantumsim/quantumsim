@@ -231,3 +231,19 @@ class TestOperations:
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
             wrong_ptm = common.kraus_to_choi(not_sqr_kraus)
+
+    def test_convert_ptm_basis(self):
+        p_damp = 0.5
+        damp_kraus = np.array(
+            [[[1, 0], [0, np.sqrt(1-p_damp)]],
+             [[0, np.sqrt(p_damp)], [0, 0]]])
+        gell_man_basis = basis.gell_mann(2)
+        general_basis = basis.general(2)
+
+        ptm_gell_man = common.kraus_to_ptm(damp_kraus, gell_man_basis)
+        ptm_general = common.kraus_to_ptm(damp_kraus, general_basis)
+
+        converted_ptm = common.convert_ptm_basis(
+            ptm_gell_man, gell_man_basis, general_basis)
+
+        assert np.allclose(ptm_general, converted_ptm)

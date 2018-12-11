@@ -270,3 +270,52 @@ def kraus_to_choi(kraus):
     choi = np.einsum("ijk, ilm -> kjml", kraus, kraus.conj()
                      ).reshape(dim_pauli, dim_pauli)
     return choi
+
+
+def convert_ptm_basis(ptm, cur_basis, new_basis):
+    """Function to change the pauli basis of a Pauli transfer matrix (PTM) from the current one to a new basis
+
+    Parameters
+    ----------
+    ptm : ndarray
+        The PTM
+    cur_basis : PauliBasis
+        The current basis used for the PTM
+    new_basis : PauliBasis
+        The new basis the the PTM will be expanded in
+
+    Raises
+    ------
+    ValueError
+        If PTM is not a square matrix
+    ValueError
+        If the provided cur_matrix does not match the dimensions of the PTM
+    ValueError
+        If the new basis does not match the dimensions of the PTM
+
+    Returns
+    -------
+    ndarray
+        The PTM expressed in the new basis
+    """
+
+    dim = ptm.shape[0]
+    if ptm.shape != (dim, dim):
+        raise ValueError(ERR_MSGS['not_sqr'].format('PTM', ptm.shape))
+
+    cur_basis_dim = cur_basis.dim_pauli
+    if dim != cur_basis_dim:
+        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+            ptm.shape, cur_basis_dim))
+    cur_vectors = cur_basis.vectors
+
+    new_basis_dim = new_basis.dim_pauli
+    if dim != new_basis_dim:
+        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+            ptm.shape, new_basis_dim))
+    new_vectors = new_basis.vectors
+
+    converted_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", new_vectors,
+                              cur_vectors, ptm, cur_vectors, new_vectors, optimize=True).real
+
+    return converted_ptm
