@@ -1,5 +1,5 @@
 import numpy as np
-from qs2.basis import basis
+from .. import bases
 
 ERR_MSGS = dict(
     basis_dim_mismatch='The dimensions of the given basis do not match the provided operators: operator shape is {}, while basis has dimensions {}',
@@ -61,10 +61,10 @@ def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
             if dim != basis_dim:
                 raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                     kraus.shape, basis_dim))
-            vectors = np.prod([basis.general(dim_hilbert)
+            vectors = np.prod([bases.general(dim_hilbert)
                                for dim_hilbert in subs_dim_hilbert])
         else:
-            vectors = basis.general(dim).vectors
+            vectors = bases.general(dim).vectors
 
     ptm = np.einsum("xab, zbc, ycd, zad -> xy", vectors, kraus,
                     vectors, kraus.conj(), optimize=True).real
@@ -113,12 +113,12 @@ def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
             if dim != basis_dim:
                 raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                     ptm.shape, basis_dim))
-            vectors = np.prod([basis.general(dim_hilbert)
+            vectors = np.prod([bases.general(dim_hilbert)
                                for dim_hilbert in subs_dim_hilbert])
         else:
             ptm_dim_hilbert = int(np.sqrt(dim))
             assert dim == ptm_dim_hilbert*ptm_dim_hilbert
-            vectors = basis.general(ptm_dim_hilbert).vectors
+            vectors = bases.general(ptm_dim_hilbert).vectors
 
     tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
         (dim, dim, dim, dim), order='F')
@@ -169,12 +169,12 @@ def choi_to_ptm(choi, pauli_basis=None, subs_dim_hilbert=None):
             if dim != basis_dim:
                 raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                     choi.shape, basis_dim))
-            vectors = np.prod([basis.general(dim_hilbert)
+            vectors = np.prod([bases.general(dim_hilbert)
                                for dim_hilbert in subs_dim_hilbert])
         else:
             choi_dim_hilbert = int(np.sqrt(dim))
             assert dim == choi_dim_hilbert*choi_dim_hilbert
-            vectors = basis.general(choi_dim_hilbert).vectors
+            vectors = bases.general(choi_dim_hilbert).vectors
 
     tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
         (dim, dim, dim, dim), order='F')

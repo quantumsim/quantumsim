@@ -9,7 +9,7 @@ from numpy import pi
 
 import qs2.operations as op
 from qs2.operations import common
-from qs2.basis import basis
+from qs2 import bases
 from qs2.state import State
 
 
@@ -29,10 +29,6 @@ class TestOperations:
 
         combined_rotation_2q = rot_pi2.at(0) @ rot_pi2.at(1)
         assert combined_rotation_2q.n_qubits == 2
-
-        with pytest.raises(ValueError):
-            # indices must be ordered
-            rot_pi2.at(0) @ rot_pi2.at(2)
 
         combined_rotation_3q = rot_pi2[0] @ rot_pi2[1] @ rot_pi2[2]
         the_same_rotation = combined_rotation_2q.at(0, 2) @ rot_pi2.at(1)
@@ -86,7 +82,7 @@ class TestOperations:
         p_damp = 0.5
         damp_kraus = np.array(
             [[[1, 0], [0, np.sqrt(1-p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]])
-        qubit_basis = basis.gell_mann(2)
+        qubit_basis = bases.gell_mann(2)
         ptm_damp = common.kraus_to_ptm(damp_kraus, qubit_basis)
 
         assert ptm_damp.shape == (4, 4)
@@ -110,7 +106,7 @@ class TestOperations:
 
     def test_kraus_to_ptm_qutrits(self):
         cz_kraus = np.diag([1, 1, 1, 1, -1, 1, -1, 1, 1])
-        qutrit_basis = basis.gell_mann(3)
+        qutrit_basis = bases.gell_mann(3)
         system_basis = qutrit_basis * qutrit_basis
         cz_ptm = common.kraus_to_ptm(cz_kraus, system_basis)
 
@@ -120,7 +116,7 @@ class TestOperations:
         assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
-        qubit_basis = basis.gell_mann(2)
+        qubit_basis = bases.gell_mann(2)
         cz_kraus = np.diag([1, 1, 1, -1])
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
@@ -133,7 +129,7 @@ class TestOperations:
         with pytest.raises(ValueError):
             _ = common.kraus_to_ptm(
                 basis_mismatch_kraus, qubit_basis)
-        wrong_basis = basis.gell_mann(3)
+        wrong_basis = bases.gell_mann(3)
         with pytest.raises(ValueError):
             _ = common.kraus_to_ptm(cz_kraus, wrong_basis)
         wrong_subdims = np.array([2, 2, 2])
@@ -143,7 +139,7 @@ class TestOperations:
 
     def test_ptm_to_choi(self):
         p_damp = 0.5
-        qubit_basis = basis.gell_mann(2)
+        qubit_basis = bases.gell_mann(2)
         ptm_damp = np.array([[1, 0, 0, 0],
                              [0, np.sqrt(1-p_damp), 0, 0],
                              [0, 0, np.sqrt(1-p_damp), 0],
@@ -165,7 +161,7 @@ class TestOperations:
         wrong_dim_ptm = np.random.random((2, 4, 4))
         with pytest.raises(ValueError):
             _ = common.ptm_to_choi(wrong_dim_ptm)
-        wrong_basis = basis.gell_mann(3)
+        wrong_basis = bases.gell_mann(3)
         test_ptm = np.diag((1, 1, 1, 1))
         with pytest.raises(ValueError):
             _ = common.ptm_to_choi(test_ptm, wrong_basis)
@@ -241,8 +237,8 @@ class TestOperations:
         damp_kraus = np.array(
             [[[1, 0], [0, np.sqrt(1-p_damp)]],
              [[0, np.sqrt(p_damp)], [0, 0]]])
-        gell_man_basis = basis.gell_mann(2)
-        general_basis = basis.general(2)
+        gell_man_basis = bases.gell_mann(2)
+        general_basis = bases.general(2)
 
         ptm_gell_man = common.kraus_to_ptm(damp_kraus, gell_man_basis)
         ptm_general = common.kraus_to_ptm(damp_kraus, general_basis)

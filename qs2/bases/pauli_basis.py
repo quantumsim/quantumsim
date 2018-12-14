@@ -4,10 +4,9 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
-import collections
 
 
-class PauliBasis():
+class PauliBasis:
     """Defines a Pauli basis [1]_ . TODO.
 
     References
@@ -37,13 +36,13 @@ class PauliBasis():
 
         # make hint on how to efficiently
         # extract the diagonal
-        self.comp_basis_indices = {
+        self.computational_basis_indices = {
             i: self._to_unit_vector(cb)
             for i, cb in enumerate(self.computational_basis_vectors)}
 
         # make hint on how to trace
-        traces = np.einsum("xii", self.vectors, optimize=True) / \
-            np.sqrt(self.dim_hilbert)
+        traces = (np.einsum("xii", self.vectors, optimize=True) /
+                  np.sqrt(self.dim_hilbert))
 
         self.trace_index = self._to_unit_vector(traces)
 
@@ -52,12 +51,14 @@ class PauliBasis():
         # NOTE: superbasis still not handled, thinking about it.
 
         expanded_labels = np.array(
-            [label_1+label_2 for label_1 in self.labels for label_2 in pauli_basis.labels], dtype=object)
+            [label_1 + label_2 for label_1 in self.labels for label_2 in
+             pauli_basis.labels], dtype=object)
 
         expanded_subsys_dims = np.concatenate(
             (self.subsys_dims, pauli_basis.subsys_dims))
 
-        return PauliBasis(expanded_vectors, expanded_labels, None, expanded_subsys_dims)
+        return PauliBasis(expanded_vectors, expanded_labels, None,
+                          expanded_subsys_dims)
 
     @property
     def dim_hilbert(self):
@@ -96,9 +97,9 @@ class PauliBasis():
         return PauliBasis(self.vectors[indices],
                           [self.labels[i] for i in indices], self)
 
-    def classical_subbasis(self):
+    def computational_subbasis(self):
         idxes = [idx
-                 for st, idx in self.comp_basis_indices.items()
+                 for st, idx in self.computational_basis_indices.items()
                  if idx is not None]
         return self.subbasis(idxes)
 
