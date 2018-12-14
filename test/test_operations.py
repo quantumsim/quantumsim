@@ -7,12 +7,14 @@ import pytest
 import numpy as np
 from numpy import pi
 
+import qs2.operations as op
 from qs2.operations import common
 from qs2.basis import basis
 from qs2.state import State
 
 
 class TestOperations:
+    @pytest.mark.skip(reason='Not implemented yet')
     def test_algebra(self):
         s = State(3)
         rot_pi2 = op.rotate_y(0.5*pi)
@@ -40,6 +42,7 @@ class TestOperations:
         assert rot_pi2.n_qubits == 3
         assert np.allclose(s.probability(axis='x'), [(1, 0), (1, 0), (1, 0)])
 
+    @pytest.mark.skip(reason='Not implemented yet')
     def test_rotate_z(self):
         s = State(3)
 
@@ -56,6 +59,7 @@ class TestOperations:
         rotate90(s, 0)
         assert np.allclose(s.probability(0, axis='z'), [(0.5, 0.5)])
 
+    @pytest.mark.skip(reason='Not implemented yet')
     def test_rotate_x(self):
         s = State(3)
 
@@ -74,6 +78,7 @@ class TestOperations:
         rotate90(s, 0)
         assert np.allclose(s.probability(0, axis='x'), [(0.5, 0.5)])
 
+    @pytest.mark.skip(reason='Not implemented yet')
     def test_rotate_y(self):
         raise NotImplementedError()
 
@@ -120,20 +125,20 @@ class TestOperations:
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_ptm(wrong_dim_kraus)
+            _ = common.kraus_to_ptm(wrong_dim_kraus)
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_ptm(not_sqr_kraus)
+            _ = common.kraus_to_ptm(not_sqr_kraus)
         basis_mismatch_kraus = np.random.random((9, 3, 3))
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_ptm(
+            _ = common.kraus_to_ptm(
                 basis_mismatch_kraus, qubit_basis)
         wrong_basis = basis.gell_mann(3)
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_ptm(cz_kraus, wrong_basis)
+            _ = common.kraus_to_ptm(cz_kraus, wrong_basis)
         wrong_subdims = np.array([2, 2, 2])
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_ptm(
+            _ = common.kraus_to_ptm(
                 cz_kraus, subs_dim_hilbert=wrong_subdims)
 
     def test_ptm_to_choi(self):
@@ -156,17 +161,17 @@ class TestOperations:
     def test_ptm_to_choi_errors(self):
         not_sqr_ptm = np.random.random((4, 9))
         with pytest.raises(ValueError):
-            wrong_choi = common.ptm_to_choi(not_sqr_ptm)
+            _ = common.ptm_to_choi(not_sqr_ptm)
         wrong_dim_ptm = np.random.random((2, 4, 4))
         with pytest.raises(ValueError):
-            wrong_choi = common.ptm_to_choi(wrong_dim_ptm)
+            _ = common.ptm_to_choi(wrong_dim_ptm)
         wrong_basis = basis.gell_mann(3)
         test_ptm = np.diag((1, 1, 1, 1))
         with pytest.raises(ValueError):
-            wrong_choi = common.ptm_to_choi(test_ptm, wrong_basis)
+            _ = common.ptm_to_choi(test_ptm, wrong_basis)
         wrong_subs_dims = np.array([2, 2])
         with pytest.raises(ValueError):
-            wrong_choi = common.ptm_to_choi(
+            _ = common.ptm_to_choi(
                 test_ptm, subs_dim_hilbert=wrong_subs_dims)
 
     def test_choi_to_kraus_qubits(self):
@@ -187,14 +192,13 @@ class TestOperations:
     def test_choi_to_kraus_errors(self):
         not_sqr_choi = np.random.random((4, 9))
         with pytest.raises(ValueError):
-            wrong_kraus = common.choi_to_kraus(not_sqr_choi)
+            _ = common.choi_to_kraus(not_sqr_choi)
         wrong_dim_choi = np.random.random((2, 4, 4))
         with pytest.raises(ValueError):
-            wrong_kraus = common.choi_to_kraus(wrong_dim_choi)
+            _ = common.choi_to_kraus(wrong_dim_choi)
 
     def test_ptm_to_kraus_qubits(self):
         p_damp = 0.5
-        qubit_basis = basis.gell_mann(2)
         ptm_damp = np.array([[1, 0, 0, 0],
                              [0, np.sqrt(1-p_damp), 0, 0],
                              [0, 0, np.sqrt(1-p_damp), 0],
@@ -227,10 +231,10 @@ class TestOperations:
     def test_kraus_to_choi_errors(self):
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_choi(wrong_dim_kraus)
+            _ = common.kraus_to_choi(wrong_dim_kraus)
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            wrong_ptm = common.kraus_to_choi(not_sqr_kraus)
+            _ = common.kraus_to_choi(not_sqr_kraus)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5

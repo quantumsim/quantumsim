@@ -12,8 +12,8 @@ def general(dim_hilbert):
     """The vector of 'Pauli matrices' in dimension n.
 
     First `n` matrices are matrices with 1 at the position [i, i] and zeros
-    elsewhere. They are followed by a pairs of :math:`\sigma_x`-like and
-    :math:`\sigma_y`-like matrices.
+    elsewhere. They are followed by a pairs of :math:`\\sigma_x`-like and
+    :math:`\\sigma_y`-like matrices.
 
     Parameters
     ----------
