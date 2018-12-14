@@ -4,25 +4,22 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
-import warnings
 
 
 class PauliBasis:
-    """Defines a Pauli basis.
-
-    TODO [1]_ .
+    """Defines a Pauli basis [1]_ . TODO.
 
     References
     ----------
-    .. [1] A Pauli basis is an orthonormal basis (w.r.t
-           :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
-           for a space of Hermitian matrices. A tensor `B` of shape
-           `(dim_pauli, dim_hilbert, dim_hilbert)` read as a vector of
-           matrices must satisfy
-           :math:`\\text{Tr} B_i \\cdot B_j = \\delta_{ij}`
+    .. [1] A "Pauli basis" is an orthonormal basis (w.r.t
+        :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
+        for a space of Hermitian matrices.
+    "a tensor B of shape (dim_pauli, dim_hilbert, dim_hilbert)"
+    "read as a vector of matrices"
+    "must satisfy Tr(B[i] @ B[j]) = delta(i, j)"
     """
 
-    def __init__(self, vectors, labels, superbasis=None):
+    def __init__(self, vectors, labels, superbasis=None, subsys_dims=None):
         if vectors.shape[1] != vectors.shape[2]:
             raise ValueError(
                 "Pauli basis vectors must be square matrices, got shape {}x{}"
@@ -31,13 +28,11 @@ class PauliBasis:
         self.vectors = vectors
         self.labels = labels
         self._superbasis = superbasis
+        self._subsys_dims = subsys_dims
 
-        with warnings.catch_warnings():
-            # We are taking diagonals of a Hermitean matrix, which must be real
-            warnings.simplefilter('ignore')
-            # TODO: rename? Or may be refactor to avoid needs to hint?
-            self.computational_basis_vectors = np.einsum(
-                "xii -> ix", self.vectors, optimize=True).astype(np.float64)
+        # TODO: rename? Or may be refactor to avoid needs to hint?
+        self.computational_basis_vectors = np.einsum(
+            "xii -> ix", self.vectors, optimize=True)
 
         # make hint on how to efficiently
         # extract the diagonal
@@ -51,6 +46,20 @@ class PauliBasis:
 
         self.trace_index = self._to_unit_vector(traces)
 
+    def __mul__(self, pauli_basis):
+        expanded_vectors = np.kron(self.vectors, pauli_basis.vectors)
+        # NOTE: superbasis still not handled, thinking about it.
+
+        expanded_labels = np.array(
+            [label_1 + label_2 for label_1 in self.labels for label_2 in
+             pauli_basis.labels], dtype=object)
+
+        expanded_subsys_dims = np.concatenate(
+            (self.subsys_dims, pauli_basis.subsys_dims))
+
+        return PauliBasis(expanded_vectors, expanded_labels, None,
+                          expanded_subsys_dims)
+
     @property
     def dim_hilbert(self):
         return self.vectors.shape[1]
@@ -60,61 +69,39 @@ class PauliBasis:
         return self.vectors.shape[0]
 
     @property
-    def superbasis(self):
-        """Return a parent basis of this basis or `self`, if this basis has
-        no parent. Is supposed to be full, if all subbases are derived by
-        :func:`qs2.PauliBasis.subbasis` from the full basis.
+    def subsys_dims(self):
+        if self._subsys_dims is not None:
+            return self._subsys_dims
+        return np.array([self.vectors.shape[:2]])
 
-        Returns
-        -------
-        PauliBasis
-            A parent of this basis.
-        """
+    @property
+    def subsys_pauli_dims(self):
+        return self._subsys_dims[:, 0]
+
+    @property
+    def subsys_hilbert_dims(self):
+        return self._subsys_dims[:, 1]
+
+    @property
+    def num_subsys(self):
+        return self._subsys_dims.shape[0]
+
+    @property
+    def superbasis(self):
         return self._superbasis or self
 
     def subbasis(self, indices):
-        """Return a subbasis of this basis.
-
-        Superbasis of the constructed subbasis is set to the superbasis of
-        `self` or to `self`, if it has no superbasis.
-
-        Parameters
-        ----------
-        indices: list of int
-            Indices of basis elements, that need to be included in the subbasis.
-
-        Returns
-        -------
-        PauliBasis
-            Subbasis of this basis.
-
-        Raises
-        ------
-        RuntimeError
-            If index requested is not present in the basis.
         """
-        dim = self.dim_pauli
-        for i in indices:
-            if not 0 <= i < dim:
-                raise RuntimeError('Found index {} in indices, but this basis '
-                                   'has only {} elements.'.format(i, dim))
-
+        return a subbasis of this basis
+        """
         return PauliBasis(self.vectors[indices],
-                          [self.labels[i] for i in indices],
-                          self.superbasis or self)
+                          [self.labels[i] for i in indices], self)
 
     def computational_subbasis(self):
-        """Return a subbasis, that corresponds to computational states of
-        this basis.
-
-        Returns
-        -------
-        PauliBasis
-            A computational subbasis of this basis.
-        """
-        indices = [idx for st, idx in self.computational_basis_indices.items()
-                   if idx is not None]
-        return self.subbasis(indices)
+        idxes = [idx
+                 for st, idx in self.computational_basis_indices.items()
+                 if idx is not None]
+        return self.subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
         return np.einsum("xab, ba -> x", self.vectors, rho, optimize=True)
