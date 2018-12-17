@@ -78,6 +78,7 @@ class _DumbIndexedOperation:
     """Internal representation of an operations during their multiplications.
     Contains an operation itself and dumb indices of qubits it acts on.
     """
+
     def __init__(self, operation, indices):
         self._operation = operation
         self._indices = indices
@@ -96,6 +97,7 @@ class TracePreservingOperation(Operation):
         Basis, in which the operation is provided.
         TODO: expand.
     """
+
     def __init__(self, *, transfer_matrix=None, kraus=None, basis=None):
         if transfer_matrix and kraus:
             raise ValueError(
@@ -114,7 +116,7 @@ class TracePreservingOperation(Operation):
 
     @property
     def n_qubits(self):
-        raise NotImplementedError()
+        return self._basis.num_subsystems
 
 
 class Initialization(Operation):

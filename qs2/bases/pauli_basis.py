@@ -28,7 +28,10 @@ class PauliBasis:
         self.vectors = vectors
         self.labels = labels
         self._superbasis = superbasis
-        self._subsys_dims = subsys_dims
+        if subsys_dims is not None:
+            self._subsys_dims = subsys_dims
+        else:
+            self._subsys_dims = np.array([self.vectors.shape])
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
@@ -69,22 +72,20 @@ class PauliBasis:
         return self.vectors.shape[0]
 
     @property
-    def subsys_dims(self):
-        if self._subsys_dims is not None:
-            return self._subsys_dims
-        return np.array([self.vectors.shape[:2]])
-
-    @property
-    def subsys_pauli_dims(self):
+    def sub_dim_pauli(self):
         return self._subsys_dims[:, 0]
 
     @property
-    def subsys_hilbert_dims(self):
+    def sub_dim_hilbert(self):
         return self._subsys_dims[:, 1]
 
     @property
-    def num_subsys(self):
-        return self._subsys_dims.shape[0]
+    def subsys_dims(self):
+        return self._subsys_dims
+
+    @property
+    def num_subsystems(self):
+        return len(self._subsys_dims)
 
     @property
     def superbasis(self):
