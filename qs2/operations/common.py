@@ -3,8 +3,9 @@ from .. import bases
 
 ERR_MSGS = dict(
     basis_dim_mismatch='The dimensions of the given basis do not match the provided operators: operator shape is {}, while basis has dimensions {}',
-    not_sqr='Only square {} matrices can be transformed: provided matrix shape is {}',
-    wrong_dim='Incorred dimensionality of the provided operator: operator dimensions are: {}'
+    not_sqr='Provided matrices are not square: provided matrix shape is {}',
+    wrong_dim='Incorred dimensionality of the provided operator: operator dimensions are: {}',
+    pauli_not_sqr='The Pauli dimension is not an exact square of some HIlbert dimension, got Pauli dimension of {}'
 )
 
 
@@ -37,16 +38,8 @@ def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
         The PTM representation of the process
     """
 
-    if kraus.ndim not in (2, 3):
-        raise ValueError(ERR_MSGS['wrong_dim'].format(kraus.ndim))
-
-    # If a single Kraus extend dimension by one
-    if kraus.ndim == 2:
-        kraus = np.array([kraus])
-
+    kraus = _check_kraus_dims(kraus)
     dim = kraus.shape[1]
-    if kraus.shape[1:] != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('Kraus', kraus.shape))
 
     # Generate the basis vectors of the full system
     if pauli_basis is not None:
@@ -97,9 +90,8 @@ def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
     ndarray
         The Choi matrix representation of the process
     """
+    _check_ptm_or_choi_dims(ptm)
     dim = ptm.shape[0]
-    if ptm.shape != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('PTM', ptm.shape))
 
     if pauli_basis is not None:
         basis_dim = pauli_basis.dim_pauli
@@ -117,7 +109,6 @@ def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
                                for dim_hilbert in subs_dim_hilbert])
         else:
             ptm_dim_hilbert = int(np.sqrt(dim))
-            assert dim == ptm_dim_hilbert*ptm_dim_hilbert
             vectors = bases.general(ptm_dim_hilbert).vectors
 
     tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
@@ -153,9 +144,8 @@ def choi_to_ptm(choi, pauli_basis=None, subs_dim_hilbert=None):
         The PTM of the process
     """
 
+    _check_ptm_or_choi_dims(choi)
     dim = choi.shape[0]
-    if choi.shape != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('Choi', choi.shape))
 
     if pauli_basis is not None:
         basis_dim = pauli_basis.dim_pauli
@@ -202,12 +192,10 @@ def choi_to_kraus(choi):
     ndarray
         The array containing the decomposed Kraus matrices.
     """
+    _check_ptm_or_choi_dims(choi)
     dim = choi.shape[0]
-    if choi.shape != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('Choi', choi.shape))
 
     dim_hilbert = int(np.sqrt(dim))
-    assert dim == dim_hilbert*dim_hilbert
 
     einvals, einvecs = np.linalg.eig(choi)
     kraus = np.einsum("i, ijk -> ikj", np.sqrt(einvals.astype(complex)),
@@ -255,16 +243,8 @@ def kraus_to_choi(kraus):
         The Choi of the process
     """
 
-    if kraus.ndim not in (2, 3):
-        raise ValueError(ERR_MSGS['wrong_dim'].format(kraus.ndim))
-
-    # If a single Kraus extend dimension by one
-    if kraus.ndim == 2:
-        kraus = np.array([kraus])
-
+    kraus = _check_kraus_dims(kraus)
     dim = kraus.shape[1]
-    if kraus.shape[1:] != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('Kraus', kraus.shape))
 
     dim_pauli = dim * dim
     choi = np.einsum("ijk, ilm -> kjml", kraus, kraus.conj()
@@ -299,9 +279,8 @@ def convert_ptm_basis(ptm, cur_basis, new_basis):
         The PTM expressed in the new basis
     """
 
+    _check_ptm_or_choi_dims(ptm)
     dim = ptm.shape[0]
-    if ptm.shape != (dim, dim):
-        raise ValueError(ERR_MSGS['not_sqr'].format('PTM', ptm.shape))
 
     cur_basis_dim = cur_basis.dim_pauli
     if dim != cur_basis_dim:
@@ -319,3 +298,33 @@ def convert_ptm_basis(ptm, cur_basis, new_basis):
                               cur_vectors, ptm, cur_vectors, new_vectors, optimize=True).real
 
     return converted_ptm
+
+
+def _check_kraus_dims(kraus):
+    assert isinstance(kraus, np.ndarray)
+    if kraus.ndim not in (2, 3):
+        raise ValueError(ERR_MSGS['wrong_dim'].format(kraus.ndim))
+
+    # If a single Kraus extend dimension by one
+    if kraus.ndim == 2:
+        kraus = np.array([kraus])
+
+    dim_hilbert = kraus.shape[1]
+    if kraus.shape[1:] != (dim_hilbert, dim_hilbert):
+        raise ValueError(ERR_MSGS['not_sqr'].format('Kraus', kraus.shape))
+
+    return kraus
+
+
+def _check_ptm_or_choi_dims(matrix):
+    assert isinstance(matrix, np.ndarray)
+    dim_pauli = matrix.shape[0]
+    if dim_pauli == 1:
+        raise ValueError(ERR_MSGS['wrong_dim'].format(matrix.shape))
+
+    if matrix.shape != (dim_pauli, dim_pauli):
+        raise ValueError(ERR_MSGS['not_sqr'].format(matrix.shape))
+
+    dim_hilbert = int(np.sqrt(dim_pauli))
+    if dim_pauli != dim_hilbert*dim_hilbert:
+        raise ValueError(ERR_MSGS['pauli_not_sqr'].format(dim_pauli))

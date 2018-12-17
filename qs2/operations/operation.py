@@ -1,6 +1,8 @@
 import abc
 from ..state import State
 from .common import kraus_to_ptm
+from .common import _check_ptm_dims
+from ..bases import general
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -98,18 +100,22 @@ class TracePreservingOperation(Operation):
         TODO: expand.
     """
 
-    def __init__(self, *, transfer_matrix=None, kraus=None, basis=None):
-        if transfer_matrix and kraus:
+    def __init__(self, *, ptm=None, kraus=None, basis=None):
+        if ptm is not None and kraus is not None:
             raise ValueError(
-                '`transfer_matrix` and `kraus` are exclusive parameters, '
+                '`ptm` and `kraus` are exclusive parameters, '
                 'specify only one of them.')
-        if transfer_matrix is not None:
-            self._transfer_matrix = transfer_matrix
+        if ptm is not None:
+            _check_ptm_dims(ptm)
+            ptm_dim_hilbert = ptm.shape[0]
+            self._basis = basis or general(ptm_dim_hilbert)
+            self._ptm = ptm
         elif kraus is not None:
-            self._transfer_matrix = kraus_to_ptm(kraus, basis)
+            kraus_dim_hilbert = kraus.shape[-1]
+            self._basis = basis or general(kraus_dim_hilbert)
+            self._ptm = kraus_to_ptm(kraus, self._basis)
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
-        self._basis = basis
 
     def __call__(self, state, *indices):
         raise NotImplementedError()
