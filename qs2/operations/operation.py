@@ -1,7 +1,7 @@
 import abc
 from ..state import State
 from .common import kraus_to_ptm
-from .common import _check_ptm_dims
+from .common import _check_ptm_or_choi_dims, _check_kraus_dims, _check_ptm_or_choi_basis_consistency
 from ..bases import general
 
 
@@ -106,23 +106,40 @@ class TracePreservingOperation(Operation):
                 '`ptm` and `kraus` are exclusive parameters, '
                 'specify only one of them.')
         if ptm is not None:
-            _check_ptm_dims(ptm)
+            _check_ptm_or_choi_dims(ptm)
             ptm_dim_hilbert = ptm.shape[0]
             self._basis = basis or general(ptm_dim_hilbert)
+            _check_ptm_or_choi_basis_consistency(ptm, self._basis)
             self._ptm = ptm
         elif kraus is not None:
+            kraus = _check_kraus_dims(kraus)
             kraus_dim_hilbert = kraus.shape[-1]
             self._basis = basis or general(kraus_dim_hilbert)
+            # basis check already done in the conversion
             self._ptm = kraus_to_ptm(kraus, self._basis)
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
 
-    def __call__(self, state, *indices):
-        raise NotImplementedError()
+        if self._basis.num_subsystems not in [1, 2]:
+            raise NotImplementedError
 
     @property
     def n_qubits(self):
         return self._basis.num_subsystems
+
+    def __call__(self, state, *qubit_indices):
+        if self.n_qubits == 1:
+            if len(qubit_indices) != 1:
+                raise ValueError(
+                    'Incorrect number of indicies for a single qubit PTM')
+            state.apply_single_qubit_ptm(*qubit_indices, self._ptm)
+        elif self.n_qubits == 2:
+            if len(qubit_indices) != 2:
+                raise ValueError(
+                    'Incorrect number of indicies for a single qubit PTM')
+            state.apply_two_qubit_ptm(*qubit_indices, self._ptm)
+        else:
+            raise NotImplementedError
 
 
 class Initialization(Operation):
@@ -170,16 +187,18 @@ def join(*operations):
         input.
     """
     # input validation
-    if len(operations) == 0:
+    if len(operations) <= 1:
         raise ValueError('Specify at least two operations to join.')
-    op0 = operations[0]
-    if isinstance(op0, Operation):
+
+    op_0 = operations[0]
+    if isinstance(op_0, Operation):
         cls = Operation
-    elif isinstance(op0, _DumbIndexedOperation):
+    elif isinstance(op_0, _DumbIndexedOperation):
         cls = _DumbIndexedOperation
     else:
         raise ValueError(
-            'Expected an operation, got {}'.format(type(op0)))
+            'Expected an operation, got {}'.format(type(op_0)))
+
     for op in operations[1:]:
         if not isinstance(op, cls):
             raise ValueError(

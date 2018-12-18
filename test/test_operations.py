@@ -132,10 +132,6 @@ class TestOperations:
         wrong_basis = bases.gell_mann(3)
         with pytest.raises(ValueError):
             _ = common.kraus_to_ptm(cz_kraus, wrong_basis)
-        wrong_subdims = np.array([2, 2, 2])
-        with pytest.raises(ValueError):
-            _ = common.kraus_to_ptm(
-                cz_kraus, subs_dim_hilbert=wrong_subdims)
 
     def test_ptm_to_choi(self):
         p_damp = 0.5
@@ -165,10 +161,6 @@ class TestOperations:
         test_ptm = np.diag((1, 1, 1, 1))
         with pytest.raises(ValueError):
             _ = common.ptm_to_choi(test_ptm, wrong_basis)
-        wrong_subs_dims = np.array([2, 2])
-        with pytest.raises(ValueError):
-            _ = common.ptm_to_choi(
-                test_ptm, subs_dim_hilbert=wrong_subs_dims)
 
     def test_choi_to_kraus_qubits(self):
         p_damp = 0.5

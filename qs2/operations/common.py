@@ -9,7 +9,7 @@ ERR_MSGS = dict(
 )
 
 
-def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
+def kraus_to_ptm(kraus, pauli_basis=None):
     """Converts a kraus matrix or an array of kraus matrices to the Pauli transfer matrix (PTM) representation.
 
     Parameters
@@ -18,8 +18,6 @@ def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
         Either the square kraus operator or an array of square kraus operators representing a process.
     pauli_basis : PauliBasis, optional
         The provided pauli basis in which the PTM is expanded (the default is None, which corrsponds to an automatically generated general Pauli basis)
-    subs_dim_hilbert : ndarray, optional
-        Array of the hilbert dimensionalities of each subsystem (the default is None, which corresponds to 1 subsystem with the same dimensionality as that of the Kraus operator)
 
     Raises
     ------
@@ -43,28 +41,17 @@ def kraus_to_ptm(kraus, pauli_basis=None, subs_dim_hilbert=None):
 
     # Generate the basis vectors of the full system
     if pauli_basis is not None:
-        basis_dim = pauli_basis.dim_hilbert
-        if dim != basis_dim:
-            raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-                kraus.shape, basis_dim))
+        _check_kraus_basis_consistency(kraus, pauli_basis)
         vectors = pauli_basis.vectors
     else:
-        if subs_dim_hilbert:
-            basis_dim = np.prod(subs_dim_hilbert)
-            if dim != basis_dim:
-                raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-                    kraus.shape, basis_dim))
-            vectors = np.prod([bases.general(dim_hilbert)
-                               for dim_hilbert in subs_dim_hilbert])
-        else:
-            vectors = bases.general(dim).vectors
+        vectors = bases.general(dim).vectors
 
     ptm = np.einsum("xab, zbc, ycd, zad -> xy", vectors, kraus,
                     vectors, kraus.conj(), optimize=True).real
     return ptm
 
 
-def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
+def ptm_to_choi(ptm, pauli_basis=None):
     """Converts a Pauli transfer matrix representation (PTM) of a process to the corresponding choi matrix representation (Choi).
 
     Parameters
@@ -94,22 +81,11 @@ def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
     dim = ptm.shape[0]
 
     if pauli_basis is not None:
-        basis_dim = pauli_basis.dim_pauli
-        if dim != basis_dim:
-            raise ValueError(
-                ERR_MSGS['basis_dim_mismatch'].format(ptm.shape, basis_dim))
+        _check_ptm_or_choi_basis_consistency(ptm, pauli_basis)
         vectors = pauli_basis.vectors
     else:
-        if subs_dim_hilbert:
-            basis_dim = np.prod(subs_dim_hilbert)**2
-            if dim != basis_dim:
-                raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-                    ptm.shape, basis_dim))
-            vectors = np.prod([bases.general(dim_hilbert)
-                               for dim_hilbert in subs_dim_hilbert])
-        else:
-            ptm_dim_hilbert = int(np.sqrt(dim))
-            vectors = bases.general(ptm_dim_hilbert).vectors
+        ptm_dim_hilbert = int(np.sqrt(dim))
+        vectors = bases.general(ptm_dim_hilbert).vectors
 
     tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
         (dim, dim, dim, dim), order='F')
@@ -117,7 +93,7 @@ def ptm_to_choi(ptm, pauli_basis=None, subs_dim_hilbert=None):
     return choi
 
 
-def choi_to_ptm(choi, pauli_basis=None, subs_dim_hilbert=None):
+def choi_to_ptm(choi, pauli_basis=None):
     """Converts a choi matrix representation (Choi) of a process to the corresponding Pauli transfer matrix representation (PTM).
 
     Parameters
@@ -148,23 +124,12 @@ def choi_to_ptm(choi, pauli_basis=None, subs_dim_hilbert=None):
     dim = choi.shape[0]
 
     if pauli_basis is not None:
-        basis_dim = pauli_basis.dim_pauli
-        if dim != basis_dim:
-            raise ValueError(
-                ERR_MSGS['basis_dim_mismatch'].format(choi.shape, basis_dim))
+        _check_ptm_or_choi_basis_consistency(choi, pauli_basis)
         vectors = pauli_basis.vectors
     else:
-        if subs_dim_hilbert:
-            basis_dim = np.prod(subs_dim_hilbert)**2
-            if dim != basis_dim:
-                raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-                    choi.shape, basis_dim))
-            vectors = np.prod([bases.general(dim_hilbert)
-                               for dim_hilbert in subs_dim_hilbert])
-        else:
-            choi_dim_hilbert = int(np.sqrt(dim))
-            assert dim == choi_dim_hilbert*choi_dim_hilbert
-            vectors = bases.general(choi_dim_hilbert).vectors
+        choi_dim_hilbert = int(np.sqrt(dim))
+        assert dim == choi_dim_hilbert*choi_dim_hilbert
+        vectors = bases.general(choi_dim_hilbert).vectors
 
     tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
         (dim, dim, dim, dim), order='F')
@@ -282,16 +247,10 @@ def convert_ptm_basis(ptm, cur_basis, new_basis):
     _check_ptm_or_choi_dims(ptm)
     dim = ptm.shape[0]
 
-    cur_basis_dim = cur_basis.dim_pauli
-    if dim != cur_basis_dim:
-        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-            ptm.shape, cur_basis_dim))
+    _check_ptm_or_choi_basis_consistency(ptm, cur_basis)
     cur_vectors = cur_basis.vectors
 
-    new_basis_dim = new_basis.dim_pauli
-    if dim != new_basis_dim:
-        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-            ptm.shape, new_basis_dim))
+    _check_ptm_or_choi_basis_consistency(ptm, new_basis)
     new_vectors = new_basis.vectors
 
     converted_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", new_vectors,
@@ -328,3 +287,19 @@ def _check_ptm_or_choi_dims(matrix):
     dim_hilbert = int(np.sqrt(dim_pauli))
     if dim_pauli != dim_hilbert*dim_hilbert:
         raise ValueError(ERR_MSGS['pauli_not_sqr'].format(dim_pauli))
+
+
+def _check_ptm_or_choi_basis_consistency(mat, basis):
+    mat_dim_pauli = mat.shape[0]
+    basis_dim_pauli = basis.dim_pauli
+    if mat_dim_pauli != basis_dim_pauli:
+        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+            mat_dim_pauli, basis_dim_pauli))
+
+
+def _check_kraus_basis_consistency(kraus, basis):
+    kraus_dim_hilbert = kraus.shape[1]
+    basis_dim_hilbert = basis.dim_hilbert
+    if kraus_dim_hilbert != basis_dim_hilbert:
+        raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+            kraus_dim_hilbert, basis_dim_hilbert))
