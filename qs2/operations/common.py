@@ -1,4 +1,5 @@
 import numpy as np
+from functools import reduce
 from .. import bases
 
 ERR_MSGS = dict(
@@ -9,7 +10,7 @@ ERR_MSGS = dict(
 )
 
 
-def kraus_to_ptm(kraus, pauli_basis=None):
+def kraus_to_ptm(kraus, pauli_bases=None):
     """Converts a kraus matrix or an array of kraus matrices to the Pauli transfer matrix (PTM) representation.
 
     Parameters
@@ -37,21 +38,23 @@ def kraus_to_ptm(kraus, pauli_basis=None):
     """
 
     kraus = _check_kraus_dims(kraus)
-    dim = kraus.shape[1]
+    kraus_dim_hilbert = kraus.shape[1]
 
     # Generate the basis vectors of the full system
-    if pauli_basis is not None:
-        _check_kraus_basis_consistency(kraus, pauli_basis)
-        vectors = pauli_basis.vectors
+    if pauli_bases is not None:
+        _check_kraus_basis_consistency(kraus, pauli_bases)
+        vectors = [basis.vectors for basis in pauli_bases]
     else:
-        vectors = bases.general(dim).vectors
+        vectors = [bases.general(kraus_dim_hilbert).vectors]
 
-    ptm = np.einsum("xab, zbc, ycd, zad -> xy", vectors, kraus,
-                    vectors, kraus.conj(), optimize=True).real
+    tensor = reduce(np.kron, vectors)
+
+    ptm = np.einsum("xab, zbc, ycd, zad -> xy", tensor, kraus,
+                    tensor, kraus.conj(), optimize=True).real
     return ptm
 
 
-def ptm_to_choi(ptm, pauli_basis=None):
+def ptm_to_choi(ptm, pauli_bases=None):
     """Converts a Pauli transfer matrix representation (PTM) of a process to the corresponding choi matrix representation (Choi).
 
     Parameters
@@ -77,23 +80,26 @@ def ptm_to_choi(ptm, pauli_basis=None):
     ndarray
         The Choi matrix representation of the process
     """
-    _check_ptm_or_choi_dims(ptm)
+    _check_ptm_dims(ptm)
     dim = ptm.shape[0]
 
-    if pauli_basis is not None:
-        _check_ptm_or_choi_basis_consistency(ptm, pauli_basis)
-        vectors = pauli_basis.vectors
+    if pauli_bases is not None:
+        _check_ptm_basis_consistency(ptm, pauli_bases)
+        vectors = [basis.vectors for basis in pauli_bases]
     else:
         ptm_dim_hilbert = int(np.sqrt(dim))
-        vectors = bases.general(ptm_dim_hilbert).vectors
+        vectors = [bases.general(ptm_dim_hilbert).vectors]
 
-    tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
+    tensor = reduce(np.kron, vectors)
+
+    pauli_tensor = np.kron(tensor.transpose((0, 2, 1)), tensor).reshape(
         (dim, dim, dim, dim), order='F')
-    choi = np.einsum('ij, ijkl -> kl', ptm, tensor, optimize=True).real
+
+    choi = np.einsum('ij, ijkl -> kl', ptm, pauli_tensor, optimize=True).real
     return choi
 
 
-def choi_to_ptm(choi, pauli_basis=None):
+def choi_to_ptm(choi, pauli_bases=None):
     """Converts a choi matrix representation (Choi) of a process to the corresponding Pauli transfer matrix representation (PTM).
 
     Parameters
@@ -120,21 +126,21 @@ def choi_to_ptm(choi, pauli_basis=None):
         The PTM of the process
     """
 
-    _check_ptm_or_choi_dims(choi)
+    _check_ptm_dims(choi)
     dim = choi.shape[0]
 
-    if pauli_basis is not None:
-        _check_ptm_or_choi_basis_consistency(choi, pauli_basis)
-        vectors = pauli_basis.vectors
+    if pauli_bases is not None:
+        _check_ptm_basis_consistency(choi, pauli_bases)
+        vectors = [basis.vectors for basis in pauli_bases]
     else:
         choi_dim_hilbert = int(np.sqrt(dim))
-        assert dim == choi_dim_hilbert*choi_dim_hilbert
-        vectors = bases.general(choi_dim_hilbert).vectors
+        vectors = [bases.general(choi_dim_hilbert).vectors]
 
-    tensor = np.kron(vectors.transpose((0, 2, 1)), vectors).reshape(
+    tensor = reduce(np.kron, vectors)
+    pauli_tensor = np.kron(tensor.transpose((0, 2, 1)), tensor).reshape(
         (dim, dim, dim, dim), order='F')
 
-    product = np.einsum('ij, lmjk -> lmik', choi, tensor, optimize=True)
+    product = np.einsum('ij, lmjk -> lmik', choi, pauli_tensor, optimize=True)
     ptm = np.einsum('lmii-> lm', product, optimize=True).real
     return ptm
 
@@ -157,14 +163,13 @@ def choi_to_kraus(choi):
     ndarray
         The array containing the decomposed Kraus matrices.
     """
-    _check_ptm_or_choi_dims(choi)
-    dim = choi.shape[0]
-
-    dim_hilbert = int(np.sqrt(dim))
+    _check_ptm_dims(choi)
+    dim_pauli = choi.shape[0]
+    dim_hilbert = int(np.sqrt(dim_pauli))
 
     einvals, einvecs = np.linalg.eig(choi)
     kraus = np.einsum("i, ijk -> ikj", np.sqrt(einvals.astype(complex)),
-                      einvecs.T.reshape(dim, dim_hilbert, dim_hilbert))
+                      einvecs.T.reshape(dim_pauli, dim_hilbert, dim_hilbert))
     return kraus
 
 
@@ -209,15 +214,13 @@ def kraus_to_choi(kraus):
     """
 
     kraus = _check_kraus_dims(kraus)
-    dim = kraus.shape[1]
-
-    dim_pauli = dim * dim
+    kraus_dim_pauli = kraus.shape[1] * kraus.shape[1]
     choi = np.einsum("ijk, ilm -> kjml", kraus, kraus.conj()
-                     ).reshape(dim_pauli, dim_pauli)
+                     ).reshape(kraus_dim_pauli, kraus_dim_pauli)
     return choi
 
 
-def convert_ptm_basis(ptm, cur_basis, new_basis):
+def convert_ptm_basis(ptm, cur_bases, new_bases):
     """Function to change the pauli basis of a Pauli transfer matrix (PTM) from the current one to a new basis
 
     Parameters
@@ -244,17 +247,18 @@ def convert_ptm_basis(ptm, cur_basis, new_basis):
         The PTM expressed in the new basis
     """
 
-    _check_ptm_or_choi_dims(ptm)
-    dim = ptm.shape[0]
+    _check_ptm_dims(ptm)
 
-    _check_ptm_or_choi_basis_consistency(ptm, cur_basis)
-    cur_vectors = cur_basis.vectors
+    _check_ptm_basis_consistency(ptm, cur_bases)
+    cur_vectors = [basis.vectors for basis in cur_bases]
+    cur_tensor = reduce(np.kron, cur_vectors)
 
-    _check_ptm_or_choi_basis_consistency(ptm, new_basis)
-    new_vectors = new_basis.vectors
+    _check_ptm_basis_consistency(ptm, new_bases)
+    new_vectors = [basis.vectors for basis in new_bases]
+    new_tensor = reduce(np.kron, new_vectors)
 
-    converted_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", new_vectors,
-                              cur_vectors, ptm, cur_vectors, new_vectors, optimize=True).real
+    converted_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", new_tensor,
+                              cur_tensor, ptm, cur_tensor, new_tensor, optimize=True).real
 
     return converted_ptm
 
@@ -275,31 +279,31 @@ def _check_kraus_dims(kraus):
     return kraus
 
 
-def _check_ptm_or_choi_dims(matrix):
-    assert isinstance(matrix, np.ndarray)
-    dim_pauli = matrix.shape[0]
+def _check_ptm_dims(ptm):
+    assert isinstance(ptm, np.ndarray)
+    dim_pauli = ptm.shape[0]
     if dim_pauli == 1:
-        raise ValueError(ERR_MSGS['wrong_dim'].format(matrix.shape))
+        raise ValueError(ERR_MSGS['wrong_dim'].format(ptm.shape))
 
-    if matrix.shape != (dim_pauli, dim_pauli):
-        raise ValueError(ERR_MSGS['not_sqr'].format(matrix.shape))
+    if ptm.shape != (dim_pauli, dim_pauli):
+        raise ValueError(ERR_MSGS['not_sqr'].format(ptm.shape))
 
     dim_hilbert = int(np.sqrt(dim_pauli))
     if dim_pauli != dim_hilbert*dim_hilbert:
         raise ValueError(ERR_MSGS['pauli_not_sqr'].format(dim_pauli))
 
 
-def _check_ptm_or_choi_basis_consistency(mat, basis):
-    mat_dim_pauli = mat.shape[0]
-    basis_dim_pauli = basis.dim_pauli
-    if mat_dim_pauli != basis_dim_pauli:
+def _check_ptm_basis_consistency(ptm, pauli_bases):
+    ptm_dim_pauli = ptm.shape[0]
+    basis_dim_pauli = np.prod([basis.dim_pauli for basis in pauli_bases])
+    if ptm_dim_pauli != basis_dim_pauli:
         raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
-            mat_dim_pauli, basis_dim_pauli))
+            ptm_dim_pauli, basis_dim_pauli))
 
 
-def _check_kraus_basis_consistency(kraus, basis):
+def _check_kraus_basis_consistency(kraus, pauli_bases):
     kraus_dim_hilbert = kraus.shape[1]
-    basis_dim_hilbert = basis.dim_hilbert
+    basis_dim_hilbert = np.prod([basis.dim_hilbert for basis in pauli_bases])
     if kraus_dim_hilbert != basis_dim_hilbert:
         raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
             kraus_dim_hilbert, basis_dim_hilbert))

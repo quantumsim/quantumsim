@@ -1,7 +1,7 @@
 import abc
 from ..state import State
 from .common import kraus_to_ptm
-from .common import _check_ptm_or_choi_dims, _check_kraus_dims, _check_ptm_or_choi_basis_consistency
+from .common import _check_ptm_dims, _check_kraus_dims, _check_ptm_basis_consistency
 from ..bases import general
 
 
@@ -100,40 +100,38 @@ class TracePreservingOperation(Operation):
         TODO: expand.
     """
 
-    def __init__(self, *, ptm=None, kraus=None, basis=None):
+    def __init__(self, *, ptm=None, kraus=None, bases=None):
         if ptm is not None and kraus is not None:
             raise ValueError(
                 '`ptm` and `kraus` are exclusive parameters, '
                 'specify only one of them.')
         if ptm is not None:
-            _check_ptm_or_choi_dims(ptm)
-            ptm_dim_hilbert = ptm.shape[0]
-            self._basis = basis or general(ptm_dim_hilbert)
-            _check_ptm_or_choi_basis_consistency(ptm, self._basis)
+            _check_ptm_dims(ptm)
+            self._bases = bases or [general(ptm.shape[0])]
+            _check_ptm_basis_consistency(ptm, self._bases)
             self._ptm = ptm
         elif kraus is not None:
             kraus = _check_kraus_dims(kraus)
-            kraus_dim_hilbert = kraus.shape[-1]
-            self._basis = basis or general(kraus_dim_hilbert)
+            self._bases = bases or [general(kraus.shape[-1])]
             # basis check already done in the conversion
-            self._ptm = kraus_to_ptm(kraus, self._basis)
+            self._ptm = kraus_to_ptm(kraus, self._bases)
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
 
-        if self._basis.num_subsystems not in [1, 2]:
+        if self.n_qubits not in [1, 2]:
             raise NotImplementedError
 
     @property
     def n_qubits(self):
-        return self._basis.num_subsystems
+        return len(self._bases)
 
     @property
     def ptm(self):
         return self._ptm
 
     @property
-    def basis(self):
-        return self._basis
+    def bases(self):
+        return self._bases
 
     def __call__(self, state, *qubit_indices):
         self._check_indices(qubit_indices)

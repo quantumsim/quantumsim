@@ -19,7 +19,7 @@ class PauliBasis:
     "must satisfy Tr(B[i] @ B[j]) = delta(i, j)"
     """
 
-    def __init__(self, vectors, labels, superbasis=None, subsys_dims=None):
+    def __init__(self, vectors, labels, superbasis=None):
         if vectors.shape[1] != vectors.shape[2]:
             raise ValueError(
                 "Pauli basis vectors must be square matrices, got shape {}x{}"
@@ -28,10 +28,6 @@ class PauliBasis:
         self.vectors = vectors
         self.labels = labels
         self._superbasis = superbasis
-        if subsys_dims is not None:
-            self._subsys_dims = subsys_dims
-        else:
-            self._subsys_dims = np.array([self.vectors.shape])
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
@@ -49,20 +45,6 @@ class PauliBasis:
 
         self.trace_index = self._to_unit_vector(traces)
 
-    def __mul__(self, pauli_basis):
-        expanded_vectors = np.kron(self.vectors, pauli_basis.vectors)
-        # NOTE: superbasis still not handled, thinking about it.
-
-        expanded_labels = np.array(
-            [label_1 + label_2 for label_1 in self.labels for label_2 in
-             pauli_basis.labels], dtype=object)
-
-        expanded_subsys_dims = np.concatenate(
-            (self.subsys_dims, pauli_basis.subsys_dims))
-
-        return PauliBasis(expanded_vectors, expanded_labels, None,
-                          expanded_subsys_dims)
-
     @property
     def dim_hilbert(self):
         return self.vectors.shape[1]
@@ -70,22 +52,6 @@ class PauliBasis:
     @property
     def dim_pauli(self):
         return self.vectors.shape[0]
-
-    @property
-    def sub_dim_pauli(self):
-        return self._subsys_dims[:, 0]
-
-    @property
-    def sub_dim_hilbert(self):
-        return self._subsys_dims[:, 1]
-
-    @property
-    def subsys_dims(self):
-        return self._subsys_dims
-
-    @property
-    def num_subsystems(self):
-        return len(self._subsys_dims)
 
     @property
     def superbasis(self):
