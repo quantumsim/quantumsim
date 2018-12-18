@@ -127,19 +127,27 @@ class TracePreservingOperation(Operation):
     def n_qubits(self):
         return self._basis.num_subsystems
 
+    @property
+    def ptm(self):
+        return self._ptm
+
+    @property
+    def basis(self):
+        return self._basis
+
     def __call__(self, state, *qubit_indices):
+        self._check_indices(qubit_indices)
         if self.n_qubits == 1:
-            if len(qubit_indices) != 1:
-                raise ValueError(
-                    'Incorrect number of indicies for a single qubit PTM')
             state.apply_single_qubit_ptm(*qubit_indices, self._ptm)
         elif self.n_qubits == 2:
-            if len(qubit_indices) != 2:
-                raise ValueError(
-                    'Incorrect number of indicies for a single qubit PTM')
             state.apply_two_qubit_ptm(*qubit_indices, self._ptm)
         else:
             raise NotImplementedError
+
+    def _check_indices(self, qubit_indices):
+        if len(qubit_indices) != self.n_qubits:
+            raise ValueError(
+                'Incorrect number of indicies for a single qubit PTM')
 
 
 class Initialization(Operation):
@@ -204,15 +212,15 @@ def join(*operations):
             raise ValueError(
                 'Specify indices for all operations involved with '
                 '`Operation.at()` method.')
-    if isinstance(op0, Operation):
+    if isinstance(op_0, Operation):
         for i, op in enumerate(operations[1:], start=1):
-            if op0.n_qubits != op.n_qubits:
+            if op_0.n_qubits != op.n_qubits:
                 raise ValueError(
                     'Numbers of qubits in operations 0 and {i} do not match:\n'
                     ' - operation 0 involves {n0} qubits\n'
                     ' - operation {i} involves {ni} qubits\n'
                     'Specify qubits to act on with `Operation.at()` method.'
-                    .format(i=i, n0=op0.n_qubits, ni=op.n_qubits))
+                    .format(i=i, n0=op_0.n_qubits, ni=op.n_qubits))
 
     # actual joining
     raise NotImplementedError()
