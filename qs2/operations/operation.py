@@ -1,7 +1,10 @@
 import abc
+import numpy as np
+from functools import reduce
 from ..state import State
 from .common import kraus_to_ptm
 from .common import _check_ptm_dims, _check_kraus_dims, _check_ptm_basis_consistency
+from .common import convert_ptm_basis
 from ..bases import general
 
 
@@ -143,6 +146,12 @@ class TracePreservingOperation(Operation):
         else:
             raise NotImplementedError
 
+    def to_bases(self, new_bases):
+        if self._bases == new_bases:
+            return self
+        conv_ptm = convert_ptm_basis(self._ptm, self._bases, new_bases)
+        return TracePreservingOperation(ptm=conv_ptm, bases=new_bases)
+
     def _check_indices(self, qubit_indices):
         if len(qubit_indices) != self.num_qubits:
             raise ValueError(
@@ -169,19 +178,19 @@ class Measurement(Operation):
 
 
 class CombinedOperation(Operation):
-    def __init__(self, operations, joint_bases):
-        self._operations = operations
-        self._join_bases = joint_bases
+    def __init__(self, ptms, joint_bases):
+        self._ptms = ptms
+        self._bases = joint_bases
 
     def __call__(self, state, *qubit_indices):
         pass
 
     @property
     def n_qubits(self):
-        raise NotImplementedError()
+        return len(self._bases)
 
 
-def join(*operations):
+def join(*operations, out_bases=None):
     """Combines a list of operations into one operation.
 
     Parameters
@@ -210,6 +219,7 @@ def join(*operations):
         raise ValueError(
             'Expected an operation, got {}'.format(type(init_op)))
     req_num_qubits = init_op.num_qubits
+    req_bases = out_bases or init_op.bases
 
     if not all(isinstance(op_inst, cls) for op_inst in operations[1:]):
         raise ValueError(
@@ -218,7 +228,7 @@ def join(*operations):
 
     if cls is Operation:
         for i, op_inst in enumerate(operations[1:], start=1):
-            if req_num_qubits != op_inst.num_qubits:
+            if op_inst.num_qubits != req_num_qubits:
                 raise ValueError(
                     'Numbers of qubits operation {i} acts on does not match the specified required number by the first operation:\n'
                     ' - Initial operation involves {n0} qubits\n'
@@ -226,6 +236,13 @@ def join(*operations):
                     'Specify the indices of the qubits that the operation acts on with the `Operation.at()` method.'
                     .format(i=i, n0=req_num_qubits, ni=op_inst.num_qubits))
 
-    # actual joining
-    raise NotImplementedError()
+        op_ptms = [op_inst.ptm if op_inst.bases == req_bases
+                   else op_inst.to_bases(req_bases).ptm
+                   for op_inst in operations]
+        joint_ptm = reduce(np.dot, op_ptms)
+        return TracePreservingOperation(ptm=joint_ptm, bases=req_bases)
+
+    else:
+        print()
+        raise NotImplementedError()
     # for each operation: get basis, check that the basis match and if not convert them to the same base (specified by the basis of the first operation).
