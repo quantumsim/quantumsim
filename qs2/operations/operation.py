@@ -72,7 +72,7 @@ class Operation(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def n_qubits(self):
+    def num_qubits(self):
         pass
 
 
@@ -118,11 +118,12 @@ class TracePreservingOperation(Operation):
         else:
             raise ValueError('Specify either `transfer_matrix` or `kraus`.')
 
-        if self.n_qubits not in [1, 2]:
+        # To be removed in the future
+        if self.num_qubits not in [1, 2]:
             raise NotImplementedError
 
     @property
-    def n_qubits(self):
+    def num_qubits(self):
         return len(self._bases)
 
     @property
@@ -135,15 +136,15 @@ class TracePreservingOperation(Operation):
 
     def __call__(self, state, *qubit_indices):
         self._check_indices(qubit_indices)
-        if self.n_qubits == 1:
+        if self.num_qubits == 1:
             state.apply_single_qubit_ptm(*qubit_indices, self._ptm)
-        elif self.n_qubits == 2:
+        elif self.num_qubits == 2:
             state.apply_two_qubit_ptm(*qubit_indices, self._ptm)
         else:
             raise NotImplementedError
 
     def _check_indices(self, qubit_indices):
-        if len(qubit_indices) != self.n_qubits:
+        if len(qubit_indices) != self.num_qubits:
             raise ValueError(
                 'Incorrect number of indicies for a single qubit PTM')
 
@@ -153,7 +154,7 @@ class Initialization(Operation):
         pass
 
     @property
-    def n_qubits(self):
+    def num_qubits(self):
         raise NotImplementedError()
 
 
@@ -163,11 +164,15 @@ class Measurement(Operation):
         pass
 
     @property
-    def n_qubits(self):
+    def num_qubits(self):
         raise NotImplementedError()
 
 
 class CombinedOperation(Operation):
+    def __init__(self, operations, joint_bases):
+        self._operations = operations
+        self._join_bases = joint_bases
+
     def __call__(self, state, *qubit_indices):
         pass
 
@@ -193,32 +198,34 @@ def join(*operations):
         input.
     """
     # input validation
-    if len(operations) <= 1:
+    if len(operations) < 2:
         raise ValueError('Specify at least two operations to join.')
 
-    op_0 = operations[0]
-    if isinstance(op_0, Operation):
+    init_op = operations[0]
+    if isinstance(init_op, Operation):
         cls = Operation
-    elif isinstance(op_0, _DumbIndexedOperation):
+    elif isinstance(init_op, _DumbIndexedOperation):
         cls = _DumbIndexedOperation
     else:
         raise ValueError(
-            'Expected an operation, got {}'.format(type(op_0)))
+            'Expected an operation, got {}'.format(type(init_op)))
+    req_num_qubits = init_op.num_qubits
 
-    for op in operations[1:]:
-        if not isinstance(op, cls):
-            raise ValueError(
-                'Specify indices for all operations involved with '
-                '`Operation.at()` method.')
-    if isinstance(op_0, Operation):
-        for i, op in enumerate(operations[1:], start=1):
-            if op_0.n_qubits != op.n_qubits:
+    if not all(isinstance(op_inst, cls) for op_inst in operations[1:]):
+        raise ValueError(
+            'Specify indices for all operations involved with '
+            '`Operation.at()` method.')
+
+    if cls is Operation:
+        for i, op_inst in enumerate(operations[1:], start=1):
+            if req_num_qubits != op_inst.num_qubits:
                 raise ValueError(
-                    'Numbers of qubits in operations 0 and {i} do not match:\n'
-                    ' - operation 0 involves {n0} qubits\n'
-                    ' - operation {i} involves {ni} qubits\n'
-                    'Specify qubits to act on with `Operation.at()` method.'
-                    .format(i=i, n0=op_0.n_qubits, ni=op.n_qubits))
+                    'Numbers of qubits operation {i} acts on does not match the specified required number by the first operation:\n'
+                    ' - Initial operation involves {n0} qubits\n'
+                    ' - Operation {i} involves {ni} qubits\n'
+                    'Specify the indices of the qubits that the operation acts on with the `Operation.at()` method.'
+                    .format(i=i, n0=req_num_qubits, ni=op_inst.num_qubits))
 
     # actual joining
     raise NotImplementedError()
+    # for each operation: get basis, check that the basis match and if not convert them to the same base (specified by the basis of the first operation).
