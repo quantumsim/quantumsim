@@ -1,5 +1,5 @@
 from numpy import pi
-from .operation import TracePreservingOperation
+from .operation import TracePreservingProcess
 
 
 def rotate_euler(phi, theta, lamda):
