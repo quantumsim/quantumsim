@@ -12,9 +12,9 @@ ERR_MSGS = dict(
 
 
 class Operator(metaclass=abc.ABCMeta):
-    def __init__(self, matrix, bases=None):
+    def __init__(self, matrix, num_subspaces):
         self._matrix = matrix
-        self._bases = bases
+        self._num_subspaces = num_subspaces
 
     @property
     def matrix(self):
@@ -22,9 +22,7 @@ class Operator(metaclass=abc.ABCMeta):
 
     @property
     def num_subspaces(self):
-        if self._bases is not None:
-            return len(self._bases)
-        return None
+        return self._num_subspaces
 
     @property
     @abc.abstractmethod
@@ -45,7 +43,7 @@ class Operator(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def to_ptm(self, bases=None):
+    def to_ptm(self, bases_in, bases_out=None):
         pass
 
 
@@ -54,7 +52,8 @@ class PTMOperator(Operator):
         assert isinstance(matrix, np.ndarray)
         self._check_matrix(matrix)
         self._check_consistent_basis(matrix, bases)
-        super().__init__(matrix, bases)
+        super().__init__(matrix, len(bases))
+        self._bases = bases
 
     def _check_matrix(self, matrix):
         if matrix.ndim != 2:
@@ -77,44 +76,51 @@ class PTMOperator(Operator):
             raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                 mat_dim_pauli, basis_dim_pauli))
 
+    @property
     def dim_hilbert(self):
         return np.sqrt(self._matrix.shape[0])
 
+    @property
     def dim_pauli(self):
         return self._matrix.shape[0]
 
-    def to_ptm(self, bases=None):
-        if bases is None and self._bases is None:
-            raise ValueError(
-                "A basis must be provided for the PTM to be expanded in")
+    def to_ptm(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
 
-        if bases is None or bases == self._bases:
+        if bases_in == self._bases and bases_out == self._bases:
             return self
 
-        self._check_consistent_basis(self._matrix, bases)
+        self._check_consistent_basis(self._matrix, bases_in)
+        self._check_consistent_basis(self._matrix, bases_out)
+
         cur_vectors = [basis.vectors for basis in self._bases]
         cur_tensor = reduce(np.kron, cur_vectors)
 
-        new_vectors = [basis.vectors for basis in bases]
-        new_tensor = reduce(np.kron, new_vectors)
+        in_vectors = [basis.vectors for basis in bases_in]
+        in_tensor = reduce(np.kron, in_vectors)
 
-        ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", new_tensor,
-                        cur_tensor, self._matrix, cur_tensor, new_tensor, optimize=True).real
+        if bases_out == bases_in:
+            out_tensor = in_tensor
+        else:
+            out_vectors = [basis.vectors for basis in bases_out]
+            out_tensor = reduce(np.kron, out_vectors)
 
-        return PTMOperator(ptm, bases)
+        ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", out_tensor,
+                        cur_tensor, self._matrix, cur_tensor, in_tensor, optimize=True).real
+
+        return PTMOperator(ptm, bases_out)
 
 
 class KrausOperator(Operator):
-    def __init__(self, matrix, bases=None):
+    def __init__(self, matrix, num_subspaces):
         assert isinstance(matrix, np.ndarray)
 
         if matrix.ndim == 2:
             matrix = np.array([matrix])
 
         self._check_matrix(matrix)
-        if bases is not None:
-            self._check_consistent_basis(matrix, bases)
-        super().__init__(matrix, bases)
+        super().__init__(matrix, num_subspaces)
 
     def _check_matrix(self, matrix):
         if matrix.ndim < 3:
@@ -133,26 +139,29 @@ class KrausOperator(Operator):
             raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                 mat_dim_hilbert, basis_dim_hilbert))
 
+    @property
     def dim_hilbert(self):
         return self._matrix.shape[1]
 
+    @property
     def dim_pauli(self):
         dim_hilbert = self._matrix.shape[1]
-        return dim_hilbert*dim_hilbert
+        return dim_hilbert * dim_hilbert
 
-    def to_ptm(self, bases=None):
-        if bases is None and self._bases is None:
-            raise ValueError(
-                "A basis must be provided for the PTM to be expanded in")
+    def to_ptm(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
 
-        if bases is not None:
-            self._check_consistent_basis(self._matrix, bases)
-            self._bases = bases
+        in_vectors = [basis.vectors for basis in bases_in]
+        in_tensor = reduce(np.kron, in_vectors)
 
-        vectors = [basis.vectors for basis in self._bases]
-        tensor = reduce(np.kron, vectors)
+        if bases_out == bases_in:
+            out_tensor = in_tensor
+        else:
+            out_vectors = [basis.vectors for basis in bases_out]
+            out_tensor = reduce(np.kron, out_vectors)
 
-        ptm = np.einsum("xab, zbc, ycd, zad -> xy", tensor, self._matrix,
-                        tensor, self._matrix.conj(), optimize=True).real
+        ptm = np.einsum("xab, zbc, ycd, zad -> xy", out_tensor, self._matrix,
+                        in_tensor, self._matrix.conj(), optimize=True).real
 
-        return PTMOperator(ptm, self._bases)
+        return PTMOperator(ptm, bases_out)

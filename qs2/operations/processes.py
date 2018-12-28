@@ -1,5 +1,8 @@
 import abc
+from functools import reduce
+import numpy as np
 from .operators import Operator, PTMOperator
+from ..bases import general
 
 
 class Process(metaclass=abc.ABCMeta):
@@ -43,13 +46,6 @@ class Process(metaclass=abc.ABCMeta):
         for tracking the multiplication of several processes.
     """
     @abc.abstractmethod
-    def prepare(self, bases=None):
-        """Prepares a proccess so that it the operater implemented the specific process can be applied to a state.
-        """
-
-        pass
-
-    @abc.abstractmethod
     def __call__(self, state, *qubit_indices):
         """Applies the operation inline (modifying the state) to the state
         to certain qubits. Number of qubit indices should be aligned with a
@@ -69,58 +65,45 @@ class Process(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        _DumbIndexedProcess
+        _IndexedProcess
             Intermediate representation of an operation.
         """
-        return _DumbIndexedProcess(self, indices)
+        return _IndexedProcess(self, indices)
 
 
-class _DumbIndexedProcess:
+class _IndexedProcess:
     """Internal representation of an processes during their multiplications.
     Contains an operation itself and dumb indices of qubits it acts on.
     """
 
-    def __init__(self, operation, indices):
-        self._operation = operation
-        self._indices = indices
+    def __init__(self, process, indices):
+        self.op = process.operator
+        self.inds = indices
 
 
 class TracePreservingProcess(Process):
-    """A general trace preserving operation.
-
-    Parameters
-    ----------
-    transfer_matrix: array_like, optional
-        Pauli transfer matrix of the operation.
-    kraus: list of array_like, optional
-        Kraus representation of the operation.
-    basis: qs2.basis.PauliBasis
-        Basis, in which the operation is provided.
-        TODO: expand.
-    """
-
     def __init__(self, operator):
         if not isinstance(operator, Operator):
             raise ValueError(
                 "Please provide a valid operator to define the process")
         self.operator = operator
 
-    def prepare(self, bases=None):
-        self.operator = self.operator.to_ptm(bases)
+    def prepare(self, bases_in, bases_out=None):
+        self.operator = self.operator.to_ptm(bases_in, bases_out)
 
     def __call__(self, state, *qubit_indices):
         if not isinstance(self.operator, PTMOperator):
             raise ValueError("Cannot apply a non-PTM operator to the state")
 
-        op_subspaces = self.operator.num_subspaces
+        proc_subspaces = self.operator.num_subspaces
 
-        if len(qubit_indices) != op_subspaces:
+        if len(qubit_indices) != proc_subspaces:
             raise ValueError(
                 'Incorrect number of indicies for a single qubit PTM')
 
-        if op_subspaces == 1:
+        if proc_subspaces == 1:
             state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
-        elif op_subspaces == 2:
+        elif proc_subspaces == 2:
             state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
         else:
             raise NotImplementedError
@@ -130,33 +113,146 @@ class Initialization(Process):
     def __call__(self, state, *qubit_indices):
         pass
 
-    @property
-    def num_qubits(self):
-        raise NotImplementedError()
-
 
 class Measurement(Process):
     def __call__(self, state, *qubit_indices):
         """Returns the result of the measurement"""
         pass
 
-    @property
-    def num_qubits(self):
-        raise NotImplementedError()
+
+class ExpandedProcess(Process):
+    def __init__(self, indexed_processes):
+        """A process which represents the product of other simple or combined processes.
+        """
+        self._indexed_processes = indexed_processes
+        self.operator = None
+
+    def __call__(self, state, *qubit_indices):
+        if self.operator is None:
+            raise ValueError(
+                "Cannot apply a non-compiled list of process to the state")
+
+        if not isinstance(self.operator, PTMOperator):
+            raise ValueError("Cannot apply a non-PTM operator to the state")
+
+        proc_subspaces = self.operator.num_subspaces
+
+        if len(qubit_indices) != proc_subspaces:
+            raise ValueError(
+                'Incorrect number of indicies for a single qubit PTM')
+
+        if proc_subspaces == 1:
+            state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
+        elif proc_subspaces == 2:
+            state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
+        else:
+            raise NotImplementedError
+
+    def prepare(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+
+        if len(bases_in) != len(bases_out):
+            raise ValueError(
+                "The bases in and bases out are of different subspace dimensionality")
+
+        unique_inds = set()
+        for indexed_process in self._indexed_processes:
+            unique_inds.update(indexed_process.inds)
+
+        _num_subspaces = len(unique_inds)
+        if _num_subspaces != len(bases_in):
+            raise ValueError(
+                "Provided bases do not match the number of subspaces of the joint operator")
+
+        _result_ndims = 2 * _num_subspaces
+        _result_inds = [i for i in range(_result_ndims)]
+
+        full_bases = [general(basis.dim_hilbert) for basis in bases_in]
+        pauli_dims = [basis.dim_pauli for basis in full_bases]
+        op_dim_pauli = np.prod(pauli_dims)
+        combined_ptm = np.eye(op_dim_pauli).reshape(pauli_dims + pauli_dims)
+
+        for indexed_process in self._indexed_processes:
+            proc_inds = indexed_process.inds
+            num_inds = len(proc_inds)
+            if num_inds == 1:
+                index = proc_inds[0]
+                conv_op = indexed_process.op.to_ptm([full_bases[index]])
+                _op_inds = [index, _result_ndims]
+                _ptm_inds = _result_inds.copy()
+                _ptm_inds[index] = _result_ndims
+                combined_ptm = np.einsum(
+                    conv_op.matrix, _op_inds, combined_ptm, _ptm_inds, _result_inds, optimize=True)
+
+            elif num_inds == 2:
+                end_inds = [ind + _result_ndims for ind in proc_inds]
+                conv_basis = [full_bases[ind] for ind in proc_inds]
+                conv_op = indexed_process.op.to_ptm(conv_basis)
+                _dim_paulis = [basis.dim_pauli for basis in conv_basis]
+                conv_ptm = conv_op.matrix.reshape(_dim_paulis + _dim_paulis)
+                _op_inds = list(proc_inds) + end_inds
+                _ptm_inds = end_inds + _result_inds[_num_subspaces:]
+                combined_ptm = np.einsum(
+                    conv_ptm, _op_inds, combined_ptm, _ptm_inds, optimize=True)
+            else:
+                raise NotImplementedError
+
+        # Works for now, but holy molly
+        combined_ptm = np.einsum(
+            bases_out[0].vectors, [0, 21, 22],
+            full_bases[0].vectors, [11, 22, 21],
+            bases_out[1].vectors, [1, 23, 24],
+            full_bases[1].vectors, [12, 24, 23],
+            combined_ptm, [11, 12, 13, 14],
+            full_bases[0].vectors, [13, 25, 26],
+            bases_in[0].vectors, [2, 26, 25],
+            full_bases[1].vectors, [14, 27, 28],
+            bases_in[1].vectors, [3, 28, 27], optimize=True).real
+
+        combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
+        self.operator = PTMOperator(combined_ptm, bases_out)
 
 
 class CombinedProcess(Process):
-    def __init__(self, operators, joint_bases):
-        pass
+    def __init__(self, processes):
+        """A process which represents the product of other simple or combined processes.
+        """
+        self._processes = processes
+        self.operator = None
 
     def __call__(self, state, *qubit_indices):
-        pass
+        if self.operator is None:
+            raise ValueError(
+                "Cannot apply a non-compiled list of process to the state")
 
-    def prepare(self, bases=None):
-        pass
+        if not isinstance(self.operator, PTMOperator):
+            raise ValueError("Cannot apply a non-PTM operator to the state")
+
+        num_subspaces = self.operator.num_subspaces
+
+        if len(qubit_indices) != num_subspaces:
+            raise ValueError(
+                'Incorrect number of indicies for a single qubit PTM')
+
+        if num_subspaces == 1:
+            state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
+        elif num_subspaces == 2:
+            state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
+        else:
+            raise NotImplementedError
+
+    def prepare(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+
+        conv_operators = [process.operator.to_ptm(
+            bases_in, bases_out).matrix for process in self._processes]
+        combined_ptm = reduce(np.dot, conv_operators)
+        self.operator = PTMOperator(combined_ptm, bases_out)
 
 
-def join(*processes, out_bases=None):
+def join(*processes):
     """Combines a list of processes into one operation.
 
     Parameters
@@ -179,8 +275,8 @@ def join(*processes, out_bases=None):
     init_proc = processes[0]
     if isinstance(init_proc, Process):
         cls = Process
-    elif isinstance(init_proc, _DumbIndexedProcess):
-        cls = _DumbIndexedProcess
+    elif isinstance(init_proc, _IndexedProcess):
+        cls = _IndexedProcess
     else:
         raise ValueError(
             'Expected an operation, got {}'.format(type(init_proc)))
@@ -190,5 +286,12 @@ def join(*processes, out_bases=None):
             'Specify indices for all processes involved with '
             '`Process.at()` method.')
 
-    raise NotImplementedError()
-    # for each operation: get basis, check that the basis match and if not convert them to the same base (specified by the basis of the first operation).
+    if cls is Process:
+        req_num_subspaces = init_proc.operator.num_subspaces
+        if not all(proc.operator.num_subspaces == req_num_subspaces
+                   for proc in processes[1:]):
+            raise ValueError(
+                'If joining processes the number of subspaces of each process must be the same.')
+        return CombinedProcess(processes)
+
+    return ExpandedProcess(processes)
