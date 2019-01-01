@@ -8,7 +8,7 @@ import numpy as np
 from numpy import pi
 
 import qs2.operations as op
-from qs2.operations import common
+from qs2.operations import operators
 from qs2 import bases
 from qs2.state import State
 
@@ -78,164 +78,86 @@ class TestOperations:
     def test_rotate_y(self):
         raise NotImplementedError()
 
+
+class TestOperators:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
-        damp_kraus = np.array(
-            [[[1, 0], [0, np.sqrt(1-p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]])
-        qubit_basis = [bases.gell_mann(2)]
-        ptm_damp = common.kraus_to_ptm(damp_kraus, qubit_basis)
+        damp_kraus_mat = np.array(
+            [[[1, 0], [0, np.sqrt(1 - p_damp)]],
+             [[0, np.sqrt(p_damp)], [0, 0]]])
 
-        assert ptm_damp.shape == (4, 4)
-        assert np.all(ptm_damp <= 1) and np.all(ptm_damp >= -1)
+        gm_qubit_basis = [bases.gell_mann(2)]
+        gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
 
-        expected_ptm = np.array([[1, 0, 0, 0],
+        damp_kraus = operators.KrausOperator(damp_kraus_mat, [2])
+
+        damp_ptm = damp_kraus.to_ptm(gm_qubit_basis)
+
+        assert damp_ptm.matrix.shape == (4, 4)
+        assert np.all(damp_ptm.matrix <= 1) and np.all(damp_ptm.matrix >= -1)
+
+        expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
                                  [0, 0, np.sqrt(1-p_damp), 0],
                                  [p_damp, 0, 0, 1-p_damp]])
 
-        assert np.allclose(ptm_damp, expected_ptm)
+        assert np.allclose(damp_ptm.matrix, expected_mat)
 
-        cz_kraus = np.diag([1, 1, 1, -1])
-        system_basis = qubit_basis + qubit_basis
-        cz_ptm = common.kraus_to_ptm(cz_kraus, system_basis)
+        cz_kraus_mat = np.diag([1, 1, 1, -1])
 
-        assert cz_ptm.shape == (16, 16)
-        assert np.all(cz_ptm.round(3) <= 1) and np.all(cz_ptm.round(3) >= -1)
-        assert np.isclose(np.sum(cz_ptm[0, :]), 1)
-        assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
+        cz_kraus = operators.KrausOperator(cz_kraus_mat, [2, 2])
+        cz_ptm = cz_kraus.to_ptm(gm_two_qubit_basis)
+
+        assert cz_ptm.matrix.shape == (16, 16)
+        assert np.all(cz_ptm.matrix.round(3) <= 1) and np.all(
+            cz_ptm.matrix.round(3) >= -1)
+        assert np.isclose(np.sum(cz_ptm.matrix[0, :]), 1)
+        assert np.isclose(np.sum(cz_ptm.matrix[:, 0]), 1)
 
     def test_kraus_to_ptm_qutrits(self):
-        cz_kraus = np.diag([1, 1, 1, 1, -1, 1, -1, 1, 1])
+        cz_kraus_mat = np.diag([1, 1, 1, 1, -1, 1, -1, 1, 1])
         qutrit_basis = [bases.gell_mann(3)]
-        system_basis = qutrit_basis + qutrit_basis
-        cz_ptm = common.kraus_to_ptm(cz_kraus, system_basis)
+        system_bases = qutrit_basis + qutrit_basis
 
-        assert cz_ptm.shape == (81, 81)
-        assert np.all(cz_ptm.round(3) <= 1) and np.all(cz_ptm.round(3) >= -1)
-        assert np.isclose(np.sum(cz_ptm[0, :]), 1)
-        assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
+        cz_kraus = operators.KrausOperator(cz_kraus_mat, [3, 3])
+        cz_ptm = cz_kraus.to_ptm(system_bases)
+
+        assert cz_ptm.matrix.shape == (81, 81)
+        assert np.all(cz_ptm.matrix.round(3) <= 1) and np.all(
+            cz_ptm.matrix.round(3) >= -1)
+        assert np.isclose(np.sum(cz_ptm.matrix[0, :]), 1)
+        assert np.isclose(np.sum(cz_ptm.matrix[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
-        qubit_basis = [bases.gell_mann(2)]
-        cz_kraus = np.diag([1, 1, 1, -1])
+        qubit_basis = [bases.general(2)]
+        qutrit_basis = [bases.general(3)]
+        cz_kraus_mat = np.diag([1, 1, 1, -1])
+        kraus_op = operators.KrausOperator(cz_kraus_mat, [2, 2])
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = common.kraus_to_ptm(wrong_dim_kraus)
+            _ = operators.KrausOperator(wrong_dim_kraus, [2, 2])
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = common.kraus_to_ptm(not_sqr_kraus)
-        basis_mismatch_kraus = np.random.random((9, 3, 3))
+            _ = operators.KrausOperator(not_sqr_kraus, [2, 2])
         with pytest.raises(ValueError):
-            _ = common.kraus_to_ptm(
-                basis_mismatch_kraus, qubit_basis)
-        wrong_basis = [bases.gell_mann(3)]
+            _ = operators.KrausOperator(cz_kraus_mat, [3, 3])
         with pytest.raises(ValueError):
-            _ = common.kraus_to_ptm(cz_kraus, wrong_basis)
-
-    def test_ptm_to_choi(self):
-        p_damp = 0.5
-        qubit_basis = [bases.gell_mann(2)]
-        ptm_damp = np.array([[1, 0, 0, 0],
-                             [0, np.sqrt(1-p_damp), 0, 0],
-                             [0, 0, np.sqrt(1-p_damp), 0],
-                             [p_damp, 0, 0, 1-p_damp]])
-
-        choi_damp = common.ptm_to_choi(ptm_damp, qubit_basis)
-
-        assert choi_damp.shape == (4, 4)
-
-        expected_choi = np.diag((1, 0, p_damp, p_damp))
-        expected_choi[0, 3] = expected_choi[3, 0] = np.sqrt(p_damp)
-
-        assert np.allclose(choi_damp, expected_choi)
-
-    def test_ptm_to_choi_errors(self):
-        not_sqr_ptm = np.random.random((4, 9))
-        with pytest.raises(ValueError):
-            _ = common.ptm_to_choi(not_sqr_ptm)
-        wrong_dim_ptm = np.random.random((2, 4, 4))
-        with pytest.raises(ValueError):
-            _ = common.ptm_to_choi(wrong_dim_ptm)
-        wrong_basis = [bases.gell_mann(3)]
-        test_ptm = np.diag((1, 1, 1, 1))
-        with pytest.raises(ValueError):
-            _ = common.ptm_to_choi(test_ptm, wrong_basis)
-
-    def test_choi_to_kraus_qubits(self):
-        p_damp = 0.5
-        choi_damp = np.diag((1, 0, p_damp, p_damp))
-        choi_damp[0, 3] = choi_damp[3, 0] = np.sqrt(p_damp)
-
-        kraus_damp = common.choi_to_kraus(choi_damp)
-
-        assert kraus_damp.shape == (4, 2, 2)
-
-        expected_kraus = np.array(
-            [[[1, 0], [0, np.sqrt(1-p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]])
-
-        for expected_op in expected_kraus:
-            assert expected_op.round(3) in kraus_damp.round(3)
-
-    def test_choi_to_kraus_errors(self):
-        not_sqr_choi = np.random.random((4, 9))
-        with pytest.raises(ValueError):
-            _ = common.choi_to_kraus(not_sqr_choi)
-        wrong_dim_choi = np.random.random((2, 4, 4))
-        with pytest.raises(ValueError):
-            _ = common.choi_to_kraus(wrong_dim_choi)
-
-    def test_ptm_to_kraus_qubits(self):
-        p_damp = 0.5
-        ptm_damp = np.array([[1, 0, 0, 0],
-                             [0, np.sqrt(1-p_damp), 0, 0],
-                             [0, 0, np.sqrt(1-p_damp), 0],
-                             [p_damp, 0, 0, 1-p_damp]])
-
-        kraus_damp = common.ptm_to_kraus(ptm_damp)
-
-        assert kraus_damp.shape == (4, 2, 2)
-
-        expected_kraus = np.array(
-            [[[1, 0], [0, np.sqrt(1-p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]])
-
-        for expected_op in expected_kraus:
-            assert expected_op.round(3) in kraus_damp.round(3)
-
-    def test_kraus_to_choi_qubits(self):
-        p_damp = 0.5
-        damp_kraus = np.array(
-            [[[1, 0], [0, np.sqrt(1-p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]])
-
-        choi_damp = common.kraus_to_choi(damp_kraus)
-
-        assert choi_damp.shape == (4, 4)
-
-        expected_choi = np.diag((1, 0, p_damp, p_damp))
-        expected_choi[0, 3] = expected_choi[3, 0] = np.sqrt(p_damp)
-
-        assert np.allclose(choi_damp, expected_choi)
-
-    def test_kraus_to_choi_errors(self):
-        wrong_dim_kraus = np.random.random((4, 4, 2, 2))
-        with pytest.raises(ValueError):
-            _ = common.kraus_to_choi(wrong_dim_kraus)
-        not_sqr_kraus = np.random.random((4, 2, 3))
-        with pytest.raises(ValueError):
-            _ = common.kraus_to_choi(not_sqr_kraus)
+            _ = kraus_op.to_ptm(qutrit_basis+qutrit_basis)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
-        damp_kraus = np.array(
+        damp_kraus_mat = np.array(
             [[[1, 0], [0, np.sqrt(1-p_damp)]],
              [[0, np.sqrt(p_damp)], [0, 0]]])
         gell_man_basis = [bases.gell_mann(2)]
         general_basis = [bases.general(2)]
 
-        ptm_gell_man = common.kraus_to_ptm(damp_kraus, gell_man_basis)
-        ptm_general = common.kraus_to_ptm(damp_kraus, general_basis)
+        damp_kraus = operators.KrausOperator(damp_kraus_mat, [2])
 
-        converted_ptm = common.convert_ptm_basis(
-            ptm_gell_man, gell_man_basis, general_basis)
+        ptm_gell_man = damp_kraus.to_ptm(gell_man_basis)
+        ptm_general = damp_kraus.to_ptm(general_basis)
 
-        assert np.allclose(ptm_general, converted_ptm)
+        converted_ptm = ptm_gell_man.to_ptm(general_basis)
+
+        assert np.allclose(ptm_general.matrix, converted_ptm.matrix)

@@ -234,6 +234,7 @@ def join(*processes):
                 conv_ptm, _op_inds, combined_ptm, _ptm_inds, optimize=True)
         else:
             raise NotImplementedError
+
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
     combined_oper = PTMOperator(combined_ptm, full_bases)
     return TracePreservingProcess(combined_oper)
