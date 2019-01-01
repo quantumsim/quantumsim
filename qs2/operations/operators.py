@@ -1,5 +1,6 @@
 import abc
 from functools import reduce
+from functools import lru_cache
 import numpy as np
 
 
@@ -104,23 +105,8 @@ class PTMOperator(Operator):
         self._check_consistent_basis(self.matrix, bases_in)
         self._check_consistent_basis(self.matrix, bases_out)
 
-        cur_vectors = [basis.vectors for basis in self.bases]
-        cur_tensor = reduce(np.kron, cur_vectors)
-
-        in_vectors = [basis.vectors for basis in bases_in]
-        in_tensor = reduce(np.kron, in_vectors)
-
-        if bases_out == bases_in:
-            out_tensor = in_tensor
-        else:
-            out_vectors = [basis.vectors for basis in bases_out]
-            out_tensor = reduce(np.kron, out_vectors)
-
-        ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw",
-                        out_tensor, cur_tensor,
-                        self.matrix,
-                        cur_tensor, in_tensor,
-                        optimize=True).real
+        ptm = change_ptm_basis(self.matrix, self.bases,
+                               bases_in, bases_out)
 
         return PTMOperator(ptm, bases_out)
 
@@ -149,9 +135,9 @@ class KrausOperator(Operator):
         if matrix.shape[1:] != (dim_hilbert, dim_hilbert):
             raise ValueError(ERR_MSGS['not_sqr'].format(matrix.shape))
 
-    def _check_consistent_basis(self, matrix, bases):
-        mat_dim_hilbert = matrix.shape[1]
-        basis_dim_hilbert = np.prod([basis.dim_hilbert for basis in bases])
+    def _check_consistent_basis(self, bases):
+        mat_dim_hilbert = self.dim_hilbert
+        basis_dim_hilbert = [basis.dim_hilbert for basis in bases]
 
         if mat_dim_hilbert != basis_dim_hilbert:
             raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
@@ -182,18 +168,51 @@ class KrausOperator(Operator):
         if bases_out is None:
             bases_out = bases_in
 
-        in_vectors = [basis.vectors for basis in bases_in]
-        in_tensor = reduce(np.kron, in_vectors)
+        self._check_consistent_basis(bases_in)
+        self._check_consistent_basis(bases_out)
 
-        if bases_out == bases_in:
-            out_tensor = in_tensor
-        else:
-            out_vectors = [basis.vectors for basis in bases_out]
-            out_tensor = reduce(np.kron, out_vectors)
-
-        ptm = np.einsum("xab, zbc, ycd, zad -> xy",
-                        out_tensor, self.matrix,
-                        in_tensor, self.matrix.conj(),
-                        optimize=True).real
+        ptm = kraus_to_ptm(self.matrix, bases_in, bases_out)
 
         return PTMOperator(ptm, bases_out)
+
+
+@lru_cache(maxsize=64)
+def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
+    cur_vectors = [basis.vectors for basis in cur_bases]
+    cur_tensor = reduce(np.kron, cur_vectors)
+
+    in_vectors = [basis.vectors for basis in bases_in]
+    in_tensor = reduce(np.kron, in_vectors)
+
+    if bases_out == bases_in:
+        out_tensor = in_tensor
+    else:
+        out_vectors = [basis.vectors for basis in bases_out]
+        out_tensor = reduce(np.kron, out_vectors)
+
+    ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw",
+                    out_tensor, cur_tensor,
+                    cur_ptm,
+                    cur_tensor, in_tensor,
+                    optimize=True).real
+
+    return ptm
+
+
+@lru_cache(maxsize=64)
+def kraus_to_ptm(kraus, bases_in, bases_out):
+    in_vectors = [basis.vectors for basis in bases_in]
+    in_tensor = reduce(np.kron, in_vectors)
+
+    if bases_out == bases_in:
+        out_tensor = in_tensor
+    else:
+        out_vectors = [basis.vectors for basis in bases_out]
+        out_tensor = reduce(np.kron, out_vectors)
+
+    ptm = np.einsum("xab, zbc, ycd, zad -> xy",
+                    out_tensor, kraus,
+                    in_tensor, kraus.conj(),
+                    optimize=True).real
+
+    return ptm
