@@ -12,17 +12,18 @@ ERR_MSGS = dict(
 
 
 class Operator(metaclass=abc.ABCMeta):
-    def __init__(self, matrix, num_subspaces):
-        self._matrix = matrix
-        self._num_subspaces = num_subspaces
+    def __init__(self, matrix):
+        self.matrix = matrix
 
     @property
-    def matrix(self):
-        return self._matrix
-
-    @property
+    @abc.abstractmethod
     def num_subspaces(self):
-        return self._num_subspaces
+        pass
+
+    @property
+    @abc.abstractmethod
+    def size(self):
+        pass
 
     @property
     @abc.abstractmethod
@@ -52,8 +53,9 @@ class PTMOperator(Operator):
         assert isinstance(matrix, np.ndarray)
         self._check_matrix(matrix)
         self._check_consistent_basis(matrix, bases)
-        super().__init__(matrix, len(bases))
-        self._bases = bases
+
+        super().__init__(matrix)
+        self.bases = bases
 
     def _check_matrix(self, matrix):
         if matrix.ndim != 2:
@@ -77,24 +79,32 @@ class PTMOperator(Operator):
                 mat_dim_pauli, basis_dim_pauli))
 
     @property
+    def num_subspaces(self):
+        return len(self.bases)
+
+    @property
     def dim_hilbert(self):
-        return np.sqrt(self._matrix.shape[0])
+        return tuple([basis.dim_hilbert for basis in self.bases])
+
+    @property
+    def size(self):
+        return np.product(self.dim_hilbert) ** 2
 
     @property
     def dim_pauli(self):
-        return self._matrix.shape[0]
+        return tuple([basis.dim_pauli for basis in self.bases])
 
     def to_ptm(self, bases_in, bases_out=None):
         if bases_out is None:
             bases_out = bases_in
 
-        if bases_in == self._bases and bases_out == self._bases:
+        if bases_in == self.bases and bases_out == self.bases:
             return self
 
-        self._check_consistent_basis(self._matrix, bases_in)
-        self._check_consistent_basis(self._matrix, bases_out)
+        self._check_consistent_basis(self.matrix, bases_in)
+        self._check_consistent_basis(self.matrix, bases_out)
 
-        cur_vectors = [basis.vectors for basis in self._bases]
+        cur_vectors = [basis.vectors for basis in self.bases]
         cur_tensor = reduce(np.kron, cur_vectors)
 
         in_vectors = [basis.vectors for basis in bases_in]
@@ -106,21 +116,29 @@ class PTMOperator(Operator):
             out_vectors = [basis.vectors for basis in bases_out]
             out_tensor = reduce(np.kron, out_vectors)
 
-        ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw", out_tensor,
-                        cur_tensor, self._matrix, cur_tensor, in_tensor, optimize=True).real
+        ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw",
+                        out_tensor, cur_tensor,
+                        self.matrix,
+                        cur_tensor, in_tensor,
+                        optimize=True).real
 
         return PTMOperator(ptm, bases_out)
 
 
 class KrausOperator(Operator):
-    def __init__(self, matrix, num_subspaces):
+    def __init__(self, matrix, subspace_dim_hilbert):
         assert isinstance(matrix, np.ndarray)
 
         if matrix.ndim == 2:
             matrix = np.array([matrix])
 
         self._check_matrix(matrix)
-        super().__init__(matrix, num_subspaces)
+        self._check_subspace_dims(matrix, subspace_dim_hilbert)
+
+        super().__init__(matrix)
+        self._dim_hilbert = subspace_dim_hilbert
+        self._dim_pauli = [sub_dim_hilbert * sub_dim_hilbert
+                           for sub_dim_hilbert in self.dim_hilbert]
 
     def _check_matrix(self, matrix):
         if matrix.ndim < 3:
@@ -139,14 +157,26 @@ class KrausOperator(Operator):
             raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
                 mat_dim_hilbert, basis_dim_hilbert))
 
+    def _check_subspace_dims(self, matrix, subspace_dim_hilbert):
+        dim_hilbert = matrix.shape[1]
+        if np.prod(subspace_dim_hilbert) != dim_hilbert:
+            raise ValueError('Incorrect hilbert dimensions of the subspaces')
+
+    @property
+    def num_subspaces(self):
+        return len(self.dim_hilbert)
+
     @property
     def dim_hilbert(self):
-        return self._matrix.shape[1]
+        return self._dim_hilbert
 
     @property
     def dim_pauli(self):
-        dim_hilbert = self._matrix.shape[1]
-        return dim_hilbert * dim_hilbert
+        return self._dim_pauli
+
+    @property
+    def size(self):
+        return np.product(self.dim_pauli)
 
     def to_ptm(self, bases_in, bases_out=None):
         if bases_out is None:
@@ -161,7 +191,9 @@ class KrausOperator(Operator):
             out_vectors = [basis.vectors for basis in bases_out]
             out_tensor = reduce(np.kron, out_vectors)
 
-        ptm = np.einsum("xab, zbc, ycd, zad -> xy", out_tensor, self._matrix,
-                        in_tensor, self._matrix.conj(), optimize=True).real
+        ptm = np.einsum("xab, zbc, ycd, zad -> xy",
+                        out_tensor, self.matrix,
+                        in_tensor, self.matrix.conj(),
+                        optimize=True).real
 
         return PTMOperator(ptm, bases_out)

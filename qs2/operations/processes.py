@@ -3,6 +3,7 @@ from functools import reduce
 import numpy as np
 from .operators import Operator, PTMOperator
 from ..bases import general
+from .samplers import BiasedSampler
 
 
 class Process(metaclass=abc.ABCMeta):
@@ -115,141 +116,23 @@ class Initialization(Process):
 
 
 class Measurement(Process):
+    def __init__(self, sampler):
+        if not isinstance(sampler, BiasedSampler):
+            raise ValueError(
+                "Incorrect sampler provided, got {}".format(sampler))
+        self._sampler = sampler
+
     def __call__(self, state, *qubit_indices):
         """Returns the result of the measurement"""
-        pass
+        results = []
+        for ind in qubit_indices:
+            probs = state.partial_trace(ind)
+            declared_state, proj_state, cond_prob = \
+                self._sampler.send(probs)
 
-
-class ExpandedProcess(Process):
-    def __init__(self, indexed_processes):
-        """A process which represents the product of other simple or combined processes.
-        """
-        self._indexed_processes = indexed_processes
-        self.operator = None
-
-    def __call__(self, state, *qubit_indices):
-        if self.operator is None:
-            raise ValueError(
-                "Cannot apply a non-compiled list of process to the state")
-
-        if not isinstance(self.operator, PTMOperator):
-            raise ValueError("Cannot apply a non-PTM operator to the state")
-
-        proc_subspaces = self.operator.num_subspaces
-
-        if len(qubit_indices) != proc_subspaces:
-            raise ValueError(
-                'Incorrect number of indicies for a single qubit PTM')
-
-        if proc_subspaces == 1:
-            state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
-        elif proc_subspaces == 2:
-            state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
-        else:
-            raise NotImplementedError
-
-    def prepare(self, bases_in, bases_out=None):
-        if bases_out is None:
-            bases_out = bases_in
-
-        if len(bases_in) != len(bases_out):
-            raise ValueError(
-                "The bases in and bases out are of different subspace dimensionality")
-
-        unique_inds = set()
-        for indexed_process in self._indexed_processes:
-            unique_inds.update(indexed_process.inds)
-
-        _num_subspaces = len(unique_inds)
-        if _num_subspaces != len(bases_in):
-            raise ValueError(
-                "Provided bases do not match the number of subspaces of the joint operator")
-
-        _result_ndims = 2 * _num_subspaces
-        _result_inds = [i for i in range(_result_ndims)]
-
-        full_bases = [general(basis.dim_hilbert) for basis in bases_in]
-        pauli_dims = [basis.dim_pauli for basis in full_bases]
-        op_dim_pauli = np.prod(pauli_dims)
-        combined_ptm = np.eye(op_dim_pauli).reshape(pauli_dims + pauli_dims)
-
-        for indexed_process in self._indexed_processes:
-            proc_inds = indexed_process.inds
-            num_inds = len(proc_inds)
-            if num_inds == 1:
-                index = proc_inds[0]
-                conv_op = indexed_process.op.to_ptm([full_bases[index]])
-                _op_inds = [index, _result_ndims]
-                _ptm_inds = _result_inds.copy()
-                _ptm_inds[index] = _result_ndims
-                combined_ptm = np.einsum(
-                    conv_op.matrix, _op_inds, combined_ptm, _ptm_inds, _result_inds, optimize=True)
-
-            elif num_inds == 2:
-                end_inds = [ind + _result_ndims for ind in proc_inds]
-                conv_basis = [full_bases[ind] for ind in proc_inds]
-                conv_op = indexed_process.op.to_ptm(conv_basis)
-                _dim_paulis = [basis.dim_pauli for basis in conv_basis]
-                conv_ptm = conv_op.matrix.reshape(_dim_paulis + _dim_paulis)
-                _op_inds = list(proc_inds) + end_inds
-                _ptm_inds = end_inds + _result_inds[_num_subspaces:]
-                combined_ptm = np.einsum(
-                    conv_ptm, _op_inds, combined_ptm, _ptm_inds, optimize=True)
-            else:
-                raise NotImplementedError
-
-        # Works for now, but holy molly
-        combined_ptm = np.einsum(
-            bases_out[0].vectors, [0, 21, 22],
-            full_bases[0].vectors, [11, 22, 21],
-            bases_out[1].vectors, [1, 23, 24],
-            full_bases[1].vectors, [12, 24, 23],
-            combined_ptm, [11, 12, 13, 14],
-            full_bases[0].vectors, [13, 25, 26],
-            bases_in[0].vectors, [2, 26, 25],
-            full_bases[1].vectors, [14, 27, 28],
-            bases_in[1].vectors, [3, 28, 27], optimize=True).real
-
-        combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
-        self.operator = PTMOperator(combined_ptm, bases_out)
-
-
-class CombinedProcess(Process):
-    def __init__(self, processes):
-        """A process which represents the product of other simple or combined processes.
-        """
-        self._processes = processes
-        self.operator = None
-
-    def __call__(self, state, *qubit_indices):
-        if self.operator is None:
-            raise ValueError(
-                "Cannot apply a non-compiled list of process to the state")
-
-        if not isinstance(self.operator, PTMOperator):
-            raise ValueError("Cannot apply a non-PTM operator to the state")
-
-        num_subspaces = self.operator.num_subspaces
-
-        if len(qubit_indices) != num_subspaces:
-            raise ValueError(
-                'Incorrect number of indicies for a single qubit PTM')
-
-        if num_subspaces == 1:
-            state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
-        elif num_subspaces == 2:
-            state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
-        else:
-            raise NotImplementedError
-
-    def prepare(self, bases_in, bases_out=None):
-        if bases_out is None:
-            bases_out = bases_in
-
-        conv_operators = [process.operator.to_ptm(
-            bases_in, bases_out).matrix for process in self._processes]
-        combined_ptm = reduce(np.dot, conv_operators)
-        self.operator = PTMOperator(combined_ptm, bases_out)
+            state.project(ind, proj_state)
+            results.append(tuple(declared_state, proj_state, cond_prob))
+        return results
 
 
 def join(*processes):
@@ -273,25 +156,84 @@ def join(*processes):
         raise ValueError('Specify at least two processes to join.')
 
     init_proc = processes[0]
-    if isinstance(init_proc, Process):
-        cls = Process
+    if isinstance(init_proc, TracePreservingProcess):
+        cls = TracePreservingProcess
     elif isinstance(init_proc, _IndexedProcess):
         cls = _IndexedProcess
     else:
         raise ValueError(
-            'Expected an operation, got {}'.format(type(init_proc)))
+            'Expected a process, got {}'.format(type(init_proc)))
 
     if not all(isinstance(proc_inst, cls) for proc_inst in processes[1:]):
         raise ValueError(
             'Specify indices for all processes involved with '
             '`Process.at()` method.')
 
-    if cls is Process:
+    if cls is TracePreservingProcess:
         req_num_subspaces = init_proc.operator.num_subspaces
+
         if not all(proc.operator.num_subspaces == req_num_subspaces
                    for proc in processes[1:]):
             raise ValueError(
                 'If joining processes the number of subspaces of each process must be the same.')
-        return CombinedProcess(processes)
 
-    return ExpandedProcess(processes)
+        # Currently joining the processes right away by doing the product internally in the full basis. Perhaps should return a class with list of operators that compiles them along the prepare function?
+
+        req_dim_hilbert = init_proc.operator.dim_hilbert
+        full_bases = [general(dim_hilbert)
+                      for dim_hilbert in req_dim_hilbert]
+
+        conv_operators = [process.operator.to_ptm(
+            full_bases).matrix for process in processes]
+        combined_ptm = reduce(np.dot, conv_operators)
+        combined_oper = PTMOperator(combined_ptm, full_bases)
+        return TracePreservingProcess(combined_oper)
+
+    temp_dims = {}
+    for process in processes:
+        for ind, dim in zip(process.inds, process.op.dim_hilbert):
+            if ind not in temp_dims:
+                temp_dims[ind] = dim
+            else:
+                if temp_dims[ind] != dim:
+                    raise ValueError('Hilbert dim mismatch')
+
+    subspaces_dim_hilbert = dict(sorted(temp_dims.items()))
+
+    num_subspaces = len(subspaces_dim_hilbert)
+    result_ndims = 2 * num_subspaces
+    result_inds = [i for i in range(result_ndims)]
+
+    full_bases = [general(dim_hilbert)
+                  for dim_hilbert in subspaces_dim_hilbert.values()]
+    pauli_dims = [basis.dim_pauli for basis in full_bases]
+    op_dim_pauli = np.prod(pauli_dims)
+    combined_ptm = np.eye(op_dim_pauli).reshape(pauli_dims + pauli_dims)
+
+    for indexed_process in processes:
+        proc_inds = indexed_process.inds
+        num_inds = len(proc_inds)
+        if num_inds == 1:
+            index = proc_inds[0]
+            conv_op = indexed_process.op.to_ptm([full_bases[index]])
+            _op_inds = [index, result_ndims]
+            _ptm_inds = result_inds.copy()
+            _ptm_inds[index] = result_ndims
+            combined_ptm = np.einsum(
+                conv_op.matrix, _op_inds, combined_ptm, _ptm_inds, result_inds, optimize=True)
+
+        elif num_inds == 2:
+            end_inds = [ind + result_ndims for ind in proc_inds]
+            conv_basis = [full_bases[ind] for ind in proc_inds]
+            conv_op = indexed_process.op.to_ptm(conv_basis)
+            _dim_paulis = [basis.dim_pauli for basis in conv_basis]
+            conv_ptm = conv_op.matrix.reshape(_dim_paulis + _dim_paulis)
+            _op_inds = list(proc_inds) + end_inds
+            _ptm_inds = end_inds + result_inds[num_subspaces:]
+            combined_ptm = np.einsum(
+                conv_ptm, _op_inds, combined_ptm, _ptm_inds, optimize=True)
+        else:
+            raise NotImplementedError
+    combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
+    combined_oper = PTMOperator(combined_ptm, full_bases)
+    return TracePreservingProcess(combined_oper)
