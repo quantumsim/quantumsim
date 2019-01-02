@@ -135,9 +135,9 @@ class KrausOperator(Operator):
         if matrix.shape[1:] != (dim_hilbert, dim_hilbert):
             raise ValueError(ERR_MSGS['not_sqr'].format(matrix.shape))
 
-    def _check_consistent_basis(self, bases):
-        mat_dim_hilbert = self.dim_hilbert
-        basis_dim_hilbert = [basis.dim_hilbert for basis in bases]
+    def _check_consistent_basis(self, matrix, bases):
+        mat_dim_hilbert = matrix.shape[1]
+        basis_dim_hilbert = np.prod([basis.dim_hilbert for basis in bases])
 
         if mat_dim_hilbert != basis_dim_hilbert:
             raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
@@ -168,15 +168,89 @@ class KrausOperator(Operator):
         if bases_out is None:
             bases_out = bases_in
 
-        self._check_consistent_basis(bases_in)
-        self._check_consistent_basis(bases_out)
+        self._check_consistent_basis(self.matrix, bases_in)
+        self._check_consistent_basis(self.matrix, bases_out)
 
-        ptm = kraus_to_ptm(self.matrix, bases_in, bases_out)
+        mat = self.matrix
+        print(mat)
+        ptm = kraus_to_ptm(mat, bases_in, bases_out)
 
         return PTMOperator(ptm, bases_out)
 
 
-@lru_cache(maxsize=64)
+class UnitaryOperator(Operator):
+    def __init__(self, matrix, subspace_dim_hilbert):
+        assert isinstance(matrix, np.ndarray)
+
+        self._check_matrix(matrix)
+        self._check_subspace_dims(matrix, subspace_dim_hilbert)
+
+        super().__init__(matrix)
+        self._dim_hilbert = subspace_dim_hilbert
+        self._dim_pauli = [sub_dim_hilbert * sub_dim_hilbert
+                           for sub_dim_hilbert in self.dim_hilbert]
+
+    def _check_matrix(self, matrix):
+
+        dim_hilbert = matrix.shape[0]
+
+        if matrix.shape != (dim_hilbert, dim_hilbert):
+            raise ValueError(ERR_MSGS['not_sqr'].format(matrix.shape))
+
+    def _check_consistent_basis(self, matrix, bases):
+        mat_dim_hilbert = matrix.shape[0]
+        basis_dim_hilbert = np.prod([basis.dim_hilbert for basis in bases])
+
+        if mat_dim_hilbert != basis_dim_hilbert:
+            raise ValueError(ERR_MSGS['basis_dim_mismatch'].format(
+                mat_dim_hilbert, basis_dim_hilbert))
+
+    def _check_subspace_dims(self, matrix, subspace_dim_hilbert):
+        dim_hilbert = matrix.shape[0]
+        if np.prod(subspace_dim_hilbert) != dim_hilbert:
+            raise ValueError('Incorrect hilbert dimensions of the subspaces')
+
+    @property
+    def num_subspaces(self):
+        return len(self.dim_hilbert)
+
+    @property
+    def dim_hilbert(self):
+        return self._dim_hilbert
+
+    @property
+    def dim_pauli(self):
+        return self._dim_pauli
+
+    @property
+    def size(self):
+        return np.product(self.dim_hilbert)
+
+    def to_ptm(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+
+        self._check_consistent_basis(self.matrix, bases_in)
+        self._check_consistent_basis(self.matrix, bases_out)
+
+        ptm = unitary_to_ptm(self.matrix, bases_in, bases_out)
+
+        return PTMOperator(ptm, bases_out)
+
+    def embed_dim_hilbert(self, new_dim_hilbert, inds=None):
+        if inds is None:
+            ind_range = range(min(self.dim_hilbert, new_dim_hilbert))
+            inds = np.array([(i, j) for i, j in enumerate(ind_range)])
+
+        proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
+        proj[tuple(inds.T)] = 1
+
+        new_unitary = np.eye(new_dim_hilbert) - \
+            proj.T @ proj + proj.T @ self.matrix @ proj
+
+        return UnitaryOperator(new_unitary, new_dim_hilbert)
+
+
 def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
     cur_vectors = [basis.vectors for basis in cur_bases]
     cur_tensor = reduce(np.kron, cur_vectors)
@@ -199,8 +273,7 @@ def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
     return ptm
 
 
-@lru_cache(maxsize=64)
-def kraus_to_ptm(kraus, bases_in, bases_out):
+def kraus_to_ptm(kraus: np.ndarray, bases_in, bases_out):
     in_vectors = [basis.vectors for basis in bases_in]
     in_tensor = reduce(np.kron, in_vectors)
 
@@ -213,6 +286,24 @@ def kraus_to_ptm(kraus, bases_in, bases_out):
     ptm = np.einsum("xab, zbc, ycd, zad -> xy",
                     out_tensor, kraus,
                     in_tensor, kraus.conj(),
+                    optimize=True).real
+
+    return ptm
+
+
+def unitary_to_ptm(unitary, bases_in, bases_out):
+    in_vectors = [basis.vectors for basis in bases_in]
+    in_tensor = reduce(np.kron, in_vectors)
+
+    if bases_out == bases_in:
+        out_tensor = in_tensor
+    else:
+        out_vectors = [basis.vectors for basis in bases_out]
+        out_tensor = reduce(np.kron, out_vectors)
+
+    ptm = np.einsum("xab, bc, ycd, ad -> xy",
+                    out_tensor, unitary,
+                    in_tensor, unitary.conj(),
                     optimize=True).real
 
     return ptm
