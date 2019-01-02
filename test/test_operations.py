@@ -86,7 +86,7 @@ class TestOperators:
             [[[1, 0], [0, np.sqrt(1 - p_damp)]],
              [[0, np.sqrt(p_damp)], [0, 0]]])
 
-        gm_qubit_basis = [bases.gell_mann(2)]
+        gm_qubit_basis = (bases.gell_mann(2),)
         gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
 
         damp_kraus = operators.KrausOperator(damp_kraus_mat, [2])
@@ -105,7 +105,7 @@ class TestOperators:
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
 
-        cz_kraus = operators.KrausOperator(cz_kraus_mat, [2, 2])
+        cz_kraus = operators.KrausOperator(cz_kraus_mat, (2, 2))
         cz_ptm = cz_kraus.to_ptm(gm_two_qubit_basis)
 
         assert cz_ptm.matrix.shape == (16, 16)
@@ -116,10 +116,10 @@ class TestOperators:
 
     def test_kraus_to_ptm_qutrits(self):
         cz_kraus_mat = np.diag([1, 1, 1, 1, -1, 1, -1, 1, 1])
-        qutrit_basis = [bases.gell_mann(3)]
+        qutrit_basis = (bases.gell_mann(3),)
         system_bases = qutrit_basis + qutrit_basis
 
-        cz_kraus = operators.KrausOperator(cz_kraus_mat, [3, 3])
+        cz_kraus = operators.KrausOperator(cz_kraus_mat, (3, 3))
         cz_ptm = cz_kraus.to_ptm(system_bases)
 
         assert cz_ptm.matrix.shape == (81, 81)
@@ -129,19 +129,18 @@ class TestOperators:
         assert np.isclose(np.sum(cz_ptm.matrix[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
-        qubit_basis = [bases.general(2)]
-        qutrit_basis = [bases.general(3)]
+        qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = operators.KrausOperator(cz_kraus_mat, [2, 2])
+        kraus_op = operators.KrausOperator(cz_kraus_mat, (2, 2))
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(wrong_dim_kraus, [2, 2])
+            _ = operators.KrausOperator(wrong_dim_kraus, (2, 2))
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(not_sqr_kraus, [2, 2])
+            _ = operators.KrausOperator(not_sqr_kraus, (2, 2))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(cz_kraus_mat, [3, 3])
+            _ = operators.KrausOperator(cz_kraus_mat, (3, 3))
         with pytest.raises(ValueError):
             _ = kraus_op.to_ptm(qutrit_basis+qutrit_basis)
 
@@ -150,10 +149,10 @@ class TestOperators:
         damp_kraus_mat = np.array(
             [[[1, 0], [0, np.sqrt(1-p_damp)]],
              [[0, np.sqrt(p_damp)], [0, 0]]])
-        gell_man_basis = [bases.gell_mann(2)]
-        general_basis = [bases.general(2)]
+        gell_man_basis = (bases.gell_mann(2),)
+        general_basis = (bases.general(2),)
 
-        damp_kraus = operators.KrausOperator(damp_kraus_mat, [2])
+        damp_kraus = operators.KrausOperator(damp_kraus_mat, (2,))
 
         ptm_gell_man = damp_kraus.to_ptm(gell_man_basis)
         ptm_general = damp_kraus.to_ptm(general_basis)

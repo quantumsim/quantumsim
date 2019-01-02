@@ -180,12 +180,12 @@ def join(*processes):
         # Currently joining the processes right away by doing the product internally in the full basis. Perhaps should return a class with list of operators that compiles them along the prepare function?
 
         req_dim_hilbert = init_proc.operator.dim_hilbert
-        full_bases = [general(dim_hilbert)
-                      for dim_hilbert in req_dim_hilbert]
+        full_bases = tuple(general(dim_hilbert)
+                           for dim_hilbert in req_dim_hilbert)
 
-        conv_operators = [process.operator.to_ptm(
+        conv_ptms = [process.operator.to_ptm(
             full_bases).matrix for process in processes]
-        combined_ptm = reduce(np.dot, conv_operators)
+        combined_ptm = reduce(np.dot, conv_ptms)
         combined_oper = PTMOperator(combined_ptm, full_bases)
         return TracePreservingProcess(combined_oper)
 
@@ -215,7 +215,7 @@ def join(*processes):
         num_inds = len(proc_inds)
         if num_inds == 1:
             index = proc_inds[0]
-            conv_op = indexed_process.op.to_ptm([full_bases[index]])
+            conv_op = indexed_process.op.to_ptm((full_bases[index],))
             _op_inds = [index, result_ndims]
             _ptm_inds = result_inds.copy()
             _ptm_inds[index] = result_ndims
@@ -224,7 +224,7 @@ def join(*processes):
 
         elif num_inds == 2:
             end_inds = [ind + result_ndims for ind in proc_inds]
-            conv_basis = [full_bases[ind] for ind in proc_inds]
+            conv_basis = tuple(full_bases[ind] for ind in proc_inds)
             conv_op = indexed_process.op.to_ptm(conv_basis)
             _dim_paulis = [basis.dim_pauli for basis in conv_basis]
             conv_ptm = conv_op.matrix.reshape(_dim_paulis + _dim_paulis)
@@ -236,5 +236,5 @@ def join(*processes):
             raise NotImplementedError
 
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
-    combined_oper = PTMOperator(combined_ptm, full_bases)
+    combined_oper = PTMOperator(combined_ptm, tuple(full_bases))
     return TracePreservingProcess(combined_oper)

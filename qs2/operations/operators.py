@@ -1,6 +1,7 @@
 import abc
 from functools import reduce
-from functools import lru_cache
+from functools import lru_cache, wraps
+from hashlib import sha1
 import numpy as np
 
 
@@ -171,9 +172,7 @@ class KrausOperator(Operator):
         self._check_consistent_basis(self.matrix, bases_in)
         self._check_consistent_basis(self.matrix, bases_out)
 
-        mat = self.matrix
-        print(mat)
-        ptm = kraus_to_ptm(mat, bases_in, bases_out)
+        ptm = kraus_to_ptm(self.matrix, bases_in, bases_out)
 
         return PTMOperator(ptm, bases_out)
 
@@ -251,6 +250,32 @@ class UnitaryOperator(Operator):
         return UnitaryOperator(new_unitary, new_dim_hilbert)
 
 
+def hashed_lru_cache(function):
+    """Function wrapper that converts a single nd.array arguementr at position 0 to a hash for the cache to store
+    """
+
+    cur_arr = None
+
+    @lru_cache(maxsize=64)
+    def cached_wrapper(arr_hash,  *args, **kwargs):
+        nonlocal cur_arr
+        return function(cur_arr, *args, **kwargs)
+
+    @wraps(function)
+    def wrapper(array, *args, **kwargs):
+        nonlocal cur_arr
+        # sha1 is faster than converting array to tuple or hashing a string
+        arr_hash = sha1(array.copy(order='C')).hexdigest()
+        cur_arr = array
+        return cached_wrapper(arr_hash, *args, **kwargs)
+
+    wrapper.cache_info = cached_wrapper.cache_info
+    wrapper.cache_clear = cached_wrapper.cache_clear
+
+    return wrapper
+
+
+@hashed_lru_cache
 def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
     cur_vectors = [basis.vectors for basis in cur_bases]
     cur_tensor = reduce(np.kron, cur_vectors)
@@ -273,7 +298,8 @@ def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
     return ptm
 
 
-def kraus_to_ptm(kraus: np.ndarray, bases_in, bases_out):
+@hashed_lru_cache
+def kraus_to_ptm(kraus, bases_in, bases_out):
     in_vectors = [basis.vectors for basis in bases_in]
     in_tensor = reduce(np.kron, in_vectors)
 
@@ -291,6 +317,7 @@ def kraus_to_ptm(kraus: np.ndarray, bases_in, bases_out):
     return ptm
 
 
+@hashed_lru_cache
 def unitary_to_ptm(unitary, bases_in, bases_out):
     in_vectors = [basis.vectors for basis in bases_in]
     in_tensor = reduce(np.kron, in_vectors)
