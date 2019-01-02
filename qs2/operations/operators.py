@@ -14,6 +14,13 @@ ERR_MSGS = dict(
 
 
 class Operator(metaclass=abc.ABCMeta):
+    '''A general operator which effectively implements a quantum process. In general an operator is only identified by it's matrix. However the Operator class contains additionaly information about the type of operator and additional data that goes along with it. For example for the case of a Pauli Transfer Matrix (PTM) operator in addition to the array representing the PTM itself the bases in which the PTM has been expanded in are also bundeled. These bases are then used for operator transformation and operator properties.
+
+    Additionally each operator is associated with methods, which check the correctness of the input parameters (with respect to the specific operator type). Finally as operations in quantumsim are ultimately performed with the PTM repesentation, each operator has a method which compiles the equivalent PTM repesentation in a specified basis.
+
+    Currently the supported types of operators include: Kraus, Pauli Transfer Matrix and Unitary operators.
+    '''
+
     def __init__(self, matrix):
         self.matrix = matrix
 
@@ -39,6 +46,15 @@ class Operator(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _check_matrix(self, matrix):
+        """Checks that the dimesnions of the matrix and the shape are as expected
+
+        Parameters
+        ----------
+        matrix : np.ndarray
+            The matrix that is the mathematical description of the operator
+
+        """
+
         pass
 
     @abc.abstractmethod
@@ -47,6 +63,17 @@ class Operator(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def to_ptm(self, bases_in, bases_out=None):
+        """Transforms the current type of Operator to a PTM operator expanded in explicit bases.
+
+        Parameters
+        ----------
+        bases_in : tuple
+            The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+        bases_out : tuple, optional
+            The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator (the default is None, which means that bases_out are the same as bases_in)
+
+        """
+
         pass
 
 
@@ -114,6 +141,17 @@ class PTMOperator(Operator):
 
 class KrausOperator(Operator):
     def __init__(self, matrix, subspace_dim_hilbert):
+        """A Krause operator, which is mathematically expressed as a set of kraus matrices, representing the decomposition of the unitary operator (or other operator types such as choi, ptm etc). Additionally the hilbert dimensions of the individual operator subspaces need to be provided as a tuple, for the purpose of consistency and analysis (of basis, operator compatibility when joining, etc...)
+
+        Parameters
+        ----------
+        matrix : np.ndarray
+            The set of kraus matrices repesenting the process
+        subspace_dim_hilbert : tuple
+            The tuple of the individual hilbert dimensions of each subspace
+
+        """
+
         assert isinstance(matrix, np.ndarray)
 
         if matrix.ndim == 2:
@@ -179,6 +217,9 @@ class KrausOperator(Operator):
 
 class UnitaryOperator(Operator):
     def __init__(self, matrix, subspace_dim_hilbert):
+        """A bit of a misleading name, but it is a general unitary operator (most likely in the pauli (gell_mann) basis). This should actually be a subtype of the Kraus operator, but I am not sure.
+        """
+
         assert isinstance(matrix, np.ndarray)
 
         self._check_matrix(matrix)
@@ -251,7 +292,9 @@ class UnitaryOperator(Operator):
 
 
 def hashed_lru_cache(function):
-    """Function wrapper that converts a single nd.array arguementr at position 0 to a hash for the cache to store
+    """Wrapper function that is used to cache operator conversions data. Since lists and arrays are not by default cached by lru_cache and can in general be somewhat large, the arrays are instead hashed using the sha1 protocol. This choice is motivated by the speed of execution of the sha1 hashing and the correct handling of the data types of the arrays.
+
+    Once the hash is obtained, the lru_cache wrapped function is called with the hashed repesentation of the array. If that repsentation is in the cache, the corresponding result is returned. If not, then the array from which the hash was obtained is used to calculate the transformation.
     """
 
     cur_arr = None
@@ -264,7 +307,8 @@ def hashed_lru_cache(function):
     @wraps(function)
     def wrapper(array, *args, **kwargs):
         nonlocal cur_arr
-        # sha1 is faster than converting array to tuple or hashing a string
+        # sha1 is faster than converting array to tuple or hashing a string. Alternatively one could do:
+        #arr_hash = hash(np.array_str(jokl))
         arr_hash = sha1(array.copy(order='C')).hexdigest()
         cur_arr = array
         return cached_wrapper(arr_hash, *args, **kwargs)
@@ -277,6 +321,24 @@ def hashed_lru_cache(function):
 
 @hashed_lru_cache
 def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
+    """Function to convert a PTM matrix expanded in a certain basis, to an equivalent PTM expanded in a different basis, specified by bases_in, bases_out
+
+    Parameters
+    ----------
+    cur_ptm : np.ndarray
+        The PTM matrix expanded in the current basis
+    cur_bases : tuple
+        The tuple of the qs2.Pauli_Basis objects corresponding the current basis of each subspace of the operator that the PTM was expanded in
+    bases_in : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+    bases_out : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+
+    Returns
+    -------
+    np.ndarray
+        The PTM matrix expanded in the provided basis
+    """
     cur_vectors = [basis.vectors for basis in cur_bases]
     cur_tensor = reduce(np.kron, cur_vectors)
 
@@ -300,6 +362,23 @@ def change_ptm_basis(cur_ptm, cur_bases, bases_in, bases_out):
 
 @hashed_lru_cache
 def kraus_to_ptm(kraus, bases_in, bases_out):
+    """Function to convert a set of kraus matrices to a PTM matrix expanded in a basis, specified by bases_in, bases_out
+
+    Parameters
+    ----------
+    kraus : np.ndarray
+        The set of kraus matrices
+    bases_in : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+    bases_out : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+
+    Returns
+    -------
+    np.ndarray
+        The PTM matrix expanded in the provided basis
+    """
+
     in_vectors = [basis.vectors for basis in bases_in]
     in_tensor = reduce(np.kron, in_vectors)
 
@@ -319,6 +398,22 @@ def kraus_to_ptm(kraus, bases_in, bases_out):
 
 @hashed_lru_cache
 def unitary_to_ptm(unitary, bases_in, bases_out):
+    """Function to convert a unitary matrix to a PTM matrix expanded in a basis, specified by bases_in, bases_out
+
+    Parameters
+    ----------
+    unitary : np.ndarray
+        The unitary matrix
+    bases_in : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+    bases_out : tuple
+        The tuple of the qs2.Pauli_Basis object corresponding to each subspace of the operator
+
+    Returns
+    -------
+    np.ndarray
+        The PTM matrix expanded in the provided basis
+    """
     in_vectors = [basis.vectors for basis in bases_in]
     in_tensor = reduce(np.kron, in_vectors)
 
