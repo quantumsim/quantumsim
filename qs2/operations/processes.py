@@ -54,6 +54,24 @@ class Process(metaclass=abc.ABCMeta):
         """
         pass
 
+
+class _IndexedProcess:
+    """Internal representation of an processes during their multiplications.
+    Contains an operation itself and dumb indices of qubits it acts on.
+    """
+
+    def __init__(self, operator, indices):
+        self.op = operator
+        self.inds = indices
+
+
+class TracePreservingProcess(Process):
+    def __init__(self, operator):
+        if not isinstance(operator, Operator):
+            raise ValueError(
+                "Please provide a valid operator to define the process")
+        self.operator = operator
+
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
         indices of qubits it acts on. Used during processes' concatenation
@@ -69,25 +87,7 @@ class Process(metaclass=abc.ABCMeta):
         _IndexedProcess
             Intermediate representation of an operation.
         """
-        return _IndexedProcess(self, indices)
-
-
-class _IndexedProcess:
-    """Internal representation of an processes during their multiplications.
-    Contains an operation itself and dumb indices of qubits it acts on.
-    """
-
-    def __init__(self, process, indices):
-        self.op = process.operator
-        self.inds = indices
-
-
-class TracePreservingProcess(Process):
-    def __init__(self, operator):
-        if not isinstance(operator, Operator):
-            raise ValueError(
-                "Please provide a valid operator to define the process")
-        self.operator = operator
+        return _IndexedProcess(self.operator, indices)
 
     def prepare(self, bases_in, bases_out=None):
         self.operator = self.operator.to_ptm(bases_in, bases_out)
@@ -121,19 +121,13 @@ class Reset(Process):
 
 
 class Measurement(Process):
-    def __init__(self, sampler):
-        if not isinstance(sampler, BiasedSampler):
-            raise ValueError(
-                "Incorrect sampler provided, got {}".format(sampler))
-        self._sampler = sampler
-
-    def __call__(self, state, *qubit_indices):
+    def __call__(self, state, sampler, *qubit_indices):
         """Returns the result of the measurement"""
         results = []
         for ind in qubit_indices:
             probs = state.partial_trace(ind)
             declared_state, proj_state, cond_prob = \
-                self._sampler.send(probs)
+                sampler.send(probs)
 
             state.project(ind, proj_state)
             results.append(tuple(declared_state, proj_state, cond_prob))

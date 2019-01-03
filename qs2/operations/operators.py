@@ -300,15 +300,17 @@ def hashed_lru_cache(function):
     cur_arr = None
 
     @lru_cache(maxsize=64)
-    def cached_wrapper(arr_hash,  *args, **kwargs):
+    def cached_wrapper(_, *args, **kwargs):
         nonlocal cur_arr
         return function(cur_arr, *args, **kwargs)
 
     @wraps(function)
     def wrapper(array, *args, **kwargs):
         nonlocal cur_arr
-        # sha1 is faster than converting array to tuple or hashing a string. Alternatively one could do:
-        #arr_hash = hash(np.array_str(jokl))
+        # sha1 is faster than converting array to tuple or
+        # hashing a string. Alternatively one could do:
+        #arr_hash = hash(np.array_str(array.copy(order='C')))
+        # this requieres arrays to be C-contigious.
         arr_hash = sha1(array.copy(order='C')).hexdigest()
         cur_arr = array
         return cached_wrapper(arr_hash, *args, **kwargs)
