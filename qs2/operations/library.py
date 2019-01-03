@@ -50,8 +50,7 @@ def rotate_x(angle=np.pi):
     TracePreservingOperation
         An operation, that corresponds to the rotation.
     """
-    sin = np.sin(angle / 2)
-    cos = np.cos(angle / 2)
+    sin, cos = np.sin(angle / 2), np.cos(angle / 2)
     matrix = np.array([[cos, -1j*sin], [-1j*sin, cos]])
     operator = UnitaryOperator(matrix, (2,))
 
@@ -94,7 +93,14 @@ def rotate_z(angle=np.pi):
         An operation, that corresponds to the rotation.
     """
     exp = np.exp(-1j * angle / 2)
-    matrix = np.array([[exp, 0], [0, exp.conj()]])
+    matrix = np.diag([exp, exp.conj()])
+    operator = UnitaryOperator(matrix, (2,))
+
+    return TracePreservingProcess(operator)
+
+
+def phase_shift(angle=np.pi):
+    matrix = np.diag([1, np.exp(1j * angle)])
     operator = UnitaryOperator(matrix, (2,))
 
     return TracePreservingProcess(operator)
@@ -166,6 +172,40 @@ def cnot():
     operator = UnitaryOperator(matrix, (2, 2))
 
     return TracePreservingProcess(operator)
+
+
+@lru_cache(maxsize=32)
+def controlled_unitary(unitary):
+    dim_hilbert = unitary.shape[0]
+    if unitary.shape != (dim_hilbert, dim_hilbert):
+        raise ValueError("Unitary matrix must be square")
+
+    control_block = np.eye(2)
+    off_diag_block_0 = np.zeros((2, dim_hilbert))
+    off_diag_block_1 = np.zeros((dim_hilbert, 2))
+
+    matrix = np.array([[control_block, off_diag_block_0],
+                       [off_diag_block_1, unitary]])
+
+    operator = UnitaryOperator(matrix, (2, dim_hilbert))
+
+    return TracePreservingProcess(operator)
+
+
+def controled_rotation(angle=np.pi, axis='z'):
+    if axis == 'x':
+        sin, cos = np.sin(angle / 2), np.cos(angle / 2)
+        matrix = np.array([[cos, -1j*sin], [-1j*sin, cos]])
+    if axis == 'y':
+        sin, cos = np.sin(angle / 2), np.cos(angle / 2)
+        matrix = np.array([[cos, -sin], [sin, cos]])
+    if axis == 'z':
+        exp = np.exp(-1j * angle / 2)
+        matrix = np.array([[exp, 0], [0, exp.conj()]])
+    else:
+        raise ValueError("Please provide a valid axis, got {}".format(axis))
+
+    return controlled_unitary(matrix)
 
 
 @lru_cache(maxsize=32)
