@@ -115,6 +115,11 @@ class Initialization(Process):
         pass
 
 
+class Reset(Process):
+    def __call__(self, state, *qubit_indices):
+        pass
+
+
 class Measurement(Process):
     def __init__(self, sampler):
         if not isinstance(sampler, BiasedSampler):

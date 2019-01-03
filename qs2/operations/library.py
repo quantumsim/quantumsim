@@ -1,6 +1,6 @@
 import numpy as np
 from functools import lru_cache
-from .operators import UnitaryOperator, KrausOperator
+from .operators import UnitaryOperator, KrausOperator, PTMOperator
 from .processes import TracePreservingProcess, join
 from ..bases import gell_mann
 
@@ -32,8 +32,8 @@ def rotate_euler(phi, theta, lamda):
     matrix = np.array([
         [cos_theta, -1j * exp_lambda * sin_theta],
         [-1j * exp_phi * sin_theta, exp_phi * exp_lambda * cos_theta]])
-    unitary = UnitaryOperator(matrix, (2,))
-    return TracePreservingProcess(unitary)
+    operator = UnitaryOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
@@ -109,8 +109,8 @@ def hadamard():
         An operation, that corresponds to the rotation.
     """
     matrix = np.sqrt(0.5)*np.array([[1, 1], [1, -1]])
-    unitary = UnitaryOperator(matrix, (2,))
-    return TracePreservingProcess(unitary)
+    operator = UnitaryOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
@@ -128,9 +128,9 @@ def cphase(angle=np.pi):
         An operation, that corresponds to the rotation.
     """
     matrix = np.diag([1, 1, 1, np.exp(1j * angle)])
-    unitary = UnitaryOperator(matrix, (2, 2))
+    operator = UnitaryOperator(matrix, (2, 2))
 
-    return TracePreservingProcess(unitary)
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
@@ -152,9 +152,9 @@ def iswap(angle=np.pi/2):
                        [0, cos, 1j*sin, 0],
                        [0, 1j*sin, cos, 0],
                        [0, 0, 0, 1]])
-    unitary = UnitaryOperator(matrix, (2, 2))
+    operator = UnitaryOperator(matrix, (2, 2))
 
-    return TracePreservingProcess(unitary)
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
@@ -163,9 +163,9 @@ def cnot():
                        [0, 1, 0, 0],
                        [0, 0, 0, 1],
                        [0, 0, 1, 0]])
-    unitary = UnitaryOperator(matrix, (2, 2))
+    operator = UnitaryOperator(matrix, (2, 2))
 
-    return TracePreservingProcess(unitary)
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
@@ -178,12 +178,19 @@ def amp_damping(damp_rate):
 
 
 @lru_cache(maxsize=32)
-def phase_damping(dephase_rate):
-    matrices = np.array([[[1, 0], [0, np.sqrt(1 - dephase_rate)]],
-                         [[0, 0], [0, np.sqrt(dephase_rate)]]])
-    kraus = KrausOperator(matrices, (2,))
+def phase_damping(dephase_rate=None, *, x_deph_rate=None,
+                  y_deph_rate=None, z_deph_rate=None):
+    if dephase_rate is not None:
+        matrices = np.array([[[1, 0], [0, np.sqrt(1 - dephase_rate)]],
+                             [[0, 0], [0, np.sqrt(dephase_rate)]]])
+        operator = KrausOperator(matrices, (2,))
+    else:
+        matrix = np.diag(
+            [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
+        bases = (gell_mann(2),)
+        operator = PTMOperator(matrix, bases)
 
-    return TracePreservingProcess(kraus)
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=64)
@@ -198,32 +205,35 @@ def amp_phase_damping(damp_rate, dephase_rate):
 def bit_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["X"]])
-    kraus = KrausOperator(matrix, (2,))
-    return TracePreservingProcess(kraus)
+    operator = KrausOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=16)
 def phase_flipping(flip_rate):
+    # This is actually equivalent to the phase damping
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["Z"]])
-    kraus = KrausOperator(matrix, (2,))
-    return TracePreservingProcess(kraus)@lru_cache(maxsize=16)
+    operator = KrausOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=16)
 def bit_phase_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["Y"]])
-    kraus = KrausOperator(matrix, (2,))
-    return TracePreservingProcess(kraus)
+    operator = KrausOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=16)
-def depolarizing(depolar_rate):
-    matrix = np.array([np.sqrt(1-(3*depolar_rate/2)) * _PAULI["I"],
-                       np.sqrt(depolar_rate / 2)*_PAULI["X"],
-                       np.sqrt(depolar_rate / 2)*_PAULI["Y"],
-                       np.sqrt(depolar_rate / 2)*_PAULI["Z"]])
+def depolarization(depolar_rate):
+    rate = depolar_rate / 2
+    sqrt = np.sqrt(rate)
+    matrix = np.array([np.sqrt(2 - (3 * rate)) * _PAULI["I"],
+                       sqrt * _PAULI["X"],
+                       sqrt * _PAULI["Y"],
+                       sqrt * _PAULI["Z"]])
 
-    kraus = KrausOperator(matrix, (2,))
-    return TracePreservingProcess(kraus)
+    operator = KrausOperator(matrix, (2,))
+    return TracePreservingProcess(operator)
