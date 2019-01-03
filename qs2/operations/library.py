@@ -169,22 +169,38 @@ def cnot():
 
 
 @lru_cache(maxsize=32)
-def amp_damping(damp_rate):
-    matrices = np.array([[[1, 0], [0, np.sqrt(1 - damp_rate)]],
-                         [[0, np.sqrt(damp_rate)], [0, 0]]])
-    kraus = KrausOperator(matrices, (2,))
+def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
+    if total_rate is not None:
+        matrices = np.array([[[1, 0], [0, np.sqrt(1 - damp_rate)]],
+                             [[0, np.sqrt(damp_rate)], [0, 0]]])
+        operator = KrausOperator(matrices, (2,))
+    else:
+        if None is in (exc_rate, damp_rate):
+            raise ValueError(
+                "either the total rate or both the exc_rate and damp_rate must be provided")
+        comb_rate = exc_rate + damp_rate
+        matrix = np.array([
+            [1, 0, 0, 0],
+            [0, np.sqrt((1 - comb_rate)), 0, 0],
+            [0, 0, np.sqrt((1 - comb_rate)), 0],
+            [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
+        bases = (gell_mann(2),)
+        operator = PTMOperator(matrix, bases)
 
-    return TracePreservingProcess(kraus)
+    return TracePreservingProcess(operator)
 
 
 @lru_cache(maxsize=32)
-def phase_damping(dephase_rate=None, *, x_deph_rate=None,
+def phase_damping(total_rate=None, *, x_deph_rate=None,
                   y_deph_rate=None, z_deph_rate=None):
-    if dephase_rate is not None:
-        matrices = np.array([[[1, 0], [0, np.sqrt(1 - dephase_rate)]],
-                             [[0, 0], [0, np.sqrt(dephase_rate)]]])
+    if total_rate is not None:
+        matrices = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
+                             [[0, 0], [0, np.sqrt(total_rate)]]])
         operator = KrausOperator(matrices, (2,))
     else:
+        if None is in (x_deph_rate, y_deph_rate, z_deph_rate):
+            raise ValueError(
+                "either the total rate or the dephasing rating along each of the three axis must be provided")
         matrix = np.diag(
             [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
         bases = (gell_mann(2),)
