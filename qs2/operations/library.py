@@ -175,7 +175,7 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
                              [[0, np.sqrt(damp_rate)], [0, 0]]])
         operator = KrausOperator(matrices, (2,))
     else:
-        if None is in (exc_rate, damp_rate):
+        if None in (exc_rate, damp_rate):
             raise ValueError(
                 "either the total rate or both the exc_rate and damp_rate must be provided")
         comb_rate = exc_rate + damp_rate
@@ -198,7 +198,7 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
                              [[0, 0], [0, np.sqrt(total_rate)]]])
         operator = KrausOperator(matrices, (2,))
     else:
-        if None is in (x_deph_rate, y_deph_rate, z_deph_rate):
+        if None in (x_deph_rate, y_deph_rate, z_deph_rate):
             raise ValueError(
                 "either the total rate or the dephasing rating along each of the three axis must be provided")
         matrix = np.diag(
