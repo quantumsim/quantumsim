@@ -3,7 +3,6 @@ from functools import reduce
 import numpy as np
 from .operators import Operator, PTMOperator
 from ..bases import general
-from .samplers import BiasedSampler
 
 
 class Process(metaclass=abc.ABCMeta):
@@ -237,3 +236,46 @@ def join(*processes):
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
     combined_oper = PTMOperator(combined_ptm, tuple(full_bases))
     return TracePreservingProcess(combined_oper)
+
+
+def _linear_addition(*weighted_processes):
+    """An internal function which returns a linear combination of two processes (after converting them to ptms in the general basis as an intermediate step towards finds the product). This function can be useful when two different process happen with probabilities.
+
+    Parameters
+    ----------
+    (w1, op0), ..., (wN, opN): tuples of weight coefficient and  qs2.TracePersrvingProcess
+        Processs involved, in chronological order. The number of subspaces involved in each process mst be the same. 
+
+    Returns
+    -------
+    TracePersrvingProcess
+        The resulting process obtained from combined 
+    """
+
+    if len(weighted_processes) < 2:
+        raise ValueError('Specify at least two processes to join.')
+
+    weights, processes = zip(*weighted_processes)
+
+    if np.sum(weights) != 1:
+        raise ValueError('The sum of the coefficients must add up to 1')
+
+    if not all(isinstance(proc_inst, TracePreservingProcess)
+               for proc_inst in processes):
+        raise ValueError('All processes need to be Trace Perserving')
+
+    req_num_subspaces = processes[0].operator.num_subspaces
+
+    if not all(proc.operator.num_subspaces == req_num_subspaces
+               for proc in processes):
+        raise ValueError(
+            'If joining processes the number of subspaces of each process must be the same.')
+    req_dim_hilbert = processes[0].operator.dim_hilbert
+    full_bases = tuple(general(dim_hilbert)
+                       for dim_hilbert in req_dim_hilbert)
+
+    conv_ptms = [process.operator.to_ptm(
+        full_bases).matrix for process in processes]
+    linear_ptm = [weight * ptm for weight, ptm in zip(weights, conv_ptms)]
+    linear_oper = PTMOperator(linear_ptm, full_bases)
+    return TracePreservingProcess(linear_oper)

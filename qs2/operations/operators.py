@@ -431,3 +431,50 @@ def unitary_to_ptm(unitary, bases_in, bases_out):
                     optimize=True).real
 
     return ptm
+
+
+@hashed_lru_cache
+def lindblad_to_ptm(lindbladian, bases_in, bases_out):
+
+    in_vectors = [basis.vectors for basis in bases_in]
+    in_tensor = reduce(np.kron, in_vectors)
+
+    if bases_out == bases_in:
+        out_tensor = in_tensor
+    else:
+        out_vectors = [basis.vectors for basis in bases_out]
+        out_tensor = reduce(np.kron, out_vectors)
+
+    ptm = np.einsum("xab, bc, ycd, ad -> xy",
+                    out_tensor, lindbladian,
+                    in_tensor, lindbladian.conj(),
+                    optimize=True)
+
+    ptm -= 0.5 * np.einsum("xab, cd, yda, cb  -> xy",
+                           out_tensor, lindbladian, in_tensor, lindbladian.conj(),
+                           optimize=True)
+
+    ptm -= 0.5 * np.einsum("xab, da, ybc, dc  -> xy",
+                           out_tensor, lindbladian,
+                           in_tensor, lindbladian.conj(),
+                           optimize=True)
+
+    return ptm.real
+
+
+@hashed_lru_cache
+def adjunction_to_ptm(lindbladian, bases_in, bases_out):
+    in_vectors = [basis.vectors for basis in bases_in]
+    in_tensor = reduce(np.kron, in_vectors)
+
+    if bases_out == bases_in:
+        out_tensor = in_tensor
+    else:
+        out_vectors = [basis.vectors for basis in bases_out]
+        out_tensor = reduce(np.kron, out_vectors)
+
+    ptm = np.einsum("xab, bc, yca -> xy",
+                    out_tensor, lindbladian,
+                    in_tensor, optimize=True)
+
+    return ptm.imag

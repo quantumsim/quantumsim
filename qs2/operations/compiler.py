@@ -1,5 +1,3 @@
-import numpy as np
-from collections import deque
 from ..bases import general
 from .processes import TracePreservingProcess
 
@@ -50,7 +48,7 @@ class Compiler:
     def create_blocks(self):
         raise NotImplementedError
 
-    def get_optimal_bases(self, initial_bases=None, *, tol=1e-16):
+    def get_optimal_bases(self, initial_bases=None):
         if initial_bases is not None:
             if len(initial_bases) != len(self.unique_inds_dims):
                 raise ValueError("Provide a basis for all")
