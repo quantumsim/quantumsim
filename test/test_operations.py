@@ -7,76 +7,147 @@ import pytest
 import numpy as np
 from numpy import pi
 
-import qs2.operations as op
 from qs2.operations import operators
 from qs2 import bases
-from qs2.state import State
+from qs2.operations import library as lib
+from qs2.backends import DensityMatrix
 
 
-class TestOperations:
-    @pytest.mark.skip(reason='Not implemented yet')
-    def test_algebra(self):
-        s = State(3)
-        rot_pi2 = op.rotate_y(0.5*pi)
-        assert rot_pi2.n_qubits == 1
-
-        rot_pi = rot_pi2 @ rot_pi2
-        assert rot_pi.n_qubits == 1
-        assert rot_pi == op.rotate_y(pi)
-
-        rot_pi_alias = rot_pi.at(0) @ rot_pi.at(0)
-        assert rot_pi == rot_pi_alias
-
-        combined_rotation_2q = rot_pi2.at(0) @ rot_pi2.at(1)
-        assert combined_rotation_2q.n_qubits == 2
-
-        combined_rotation_3q = rot_pi2[0] @ rot_pi2[1] @ rot_pi2[2]
-        the_same_rotation = combined_rotation_2q.at(0, 2) @ rot_pi2.at(1)
-        assert combined_rotation_3q == the_same_rotation
-
-        combined_rotation_3q(s)
-        assert rot_pi2.n_qubits == 3
-        assert np.allclose(s.probability(axis='x'), [(1, 0), (1, 0), (1, 0)])
-
-    @pytest.mark.skip(reason='Not implemented yet')
-    def test_rotate_z(self):
-        s = State(3)
-
-        rotate90 = op.rotate_z(0.5*np.pi)
-        rotate90(s, 1)
-
-        rotate180 = op.rotate_z(np.pi)
-        rotate180(s, 2)
-
-        assert np.allclose(s.probability(), [(1., 0.), (0.5, 0.5), (0., 1.)])
-        assert np.allclose(s.probability(0, 1), [(1., 0.), (0.5, 0.5)])
-        assert np.allclose(s.probability(2), [(0., 1.)])
-
-        rotate90(s, 0)
-        assert np.allclose(s.probability(0, axis='z'), [(0.5, 0.5)])
-
-    @pytest.mark.skip(reason='Not implemented yet')
+class TestLibrary:
     def test_rotate_x(self):
-        s = State(3)
+        qubit_basis = (bases.general(2),)
+        sys_bases = qubit_basis+qubit_basis+qubit_basis
+        dm = DensityMatrix(sys_bases)
 
-        rotate90 = op.rotate_x(0.5*np.pi)
-        rotate90(s, 1)
+        rotate90 = lib.rotate_x(0.5*np.pi)
+        rotate90.prepare(qubit_basis)
 
-        rotate180 = op.rotate_x(np.pi)
-        rotate180(s, 2)
+        rotate180 = lib.rotate_x(np.pi)
+        rotate180.prepare(qubit_basis)
 
-        assert np.allclose(s.probability(axis='x'),
-                           [(1., 0.), (0.5, 0.5), (0., 1.)])
-        assert np.allclose(s.probability(0, 1, axis='x'),
-                           [(1., 0.), (0.5, 0.5)])
-        assert np.allclose(s.probability(2, axis='x'), [(0., 1.)])
+        rotate360 = lib.rotate_x(2*np.pi)
+        rotate360.prepare(qubit_basis)
 
-        rotate90(s, 0)
-        assert np.allclose(s.probability(0, axis='x'), [(0.5, 0.5)])
+        rotate90(dm, 1)
+        rotate180(dm, 2)
+        assert np.allclose(dm.partial_trace(0), (1, 0))
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+        assert np.allclose(dm.partial_trace(2), (0, 1))
 
-    @pytest.mark.skip(reason='Not implemented yet')
+        rotate180(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+
+        rotate90(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (1, 0))
+
+        rotate360(dm, 0)
+        assert np.allclose(dm.partial_trace(0), (1, 0))
+
     def test_rotate_y(self):
-        raise NotImplementedError()
+        qubit_basis = (bases.general(2),)
+        sys_bases = qubit_basis+qubit_basis+qubit_basis
+        dm = DensityMatrix(sys_bases)
+
+        rotate90 = lib.rotate_y(0.5*np.pi)
+        rotate90.prepare(qubit_basis)
+
+        rotate180 = lib.rotate_y(np.pi)
+        rotate180.prepare(qubit_basis)
+
+        rotate360 = lib.rotate_y(2*np.pi)
+        rotate360.prepare(qubit_basis)
+
+        rotate90(dm, 1)
+        rotate180(dm, 2)
+        assert np.allclose(dm.partial_trace(0), (1, 0))
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+        assert np.allclose(dm.partial_trace(2), (0, 1))
+
+        rotate180(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+
+        rotate90(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (1, 0))
+
+        rotate360(dm, 0)
+        assert np.allclose(dm.partial_trace(0), (1, 0))
+
+    def test_rotate_z(self):
+        sqrt2 = np.sqrt(2)
+        qubit_basis = (bases.general(2),)
+        dm = DensityMatrix(qubit_basis)
+
+        rotate90 = lib.rotate_z(0.5*np.pi)
+        rotate90.prepare(qubit_basis)
+
+        rotate180 = lib.rotate_z(np.pi)
+        rotate180.prepare(qubit_basis)
+
+        rotate360 = lib.rotate_z(2*np.pi)
+        rotate360.prepare(qubit_basis)
+
+        rotate90(dm, 0)
+        assert np.allclose(dm.expansion(), [1, 0, 0, 0])
+        rotate180(dm, 0)
+        assert np.allclose(dm.expansion(), [1, 0, 0, 0])
+
+        # manually apply a hadamard gate
+        had_expansion = np.array([0.5, 0.5, sqrt2, 0])
+        superpos_dm = DensityMatrix(qubit_basis,
+                                    had_expansion)
+
+        rotate180(superpos_dm, 0)
+        assert np.allclose(superpos_dm.expansion(),
+                           [0.5, 0.5, -sqrt2, 0])
+
+        rotate90(superpos_dm, 0)
+        assert np.allclose(superpos_dm.expansion(),
+                           [0.5, 0.5, 0, -sqrt2])
+
+        rotate180(superpos_dm, 0)
+        assert np.allclose(superpos_dm.expansion(),
+                           [0.5, 0.5, 0, sqrt2])
+
+        rotate360(superpos_dm, 0)
+        assert np.allclose(superpos_dm.expansion(),
+                           [0.5, 0.5, 0, sqrt2])
+
+    def test_rotate_euler(self):
+        qubit_basis = (bases.general(2),)
+        dm = DensityMatrix(qubit_basis+qubit_basis)
+
+        rotate90x = lib.rotate_euler(0, 0.5*np.pi, 0)
+        rotate90x.prepare(qubit_basis)
+
+        rotate180x = lib.rotate_euler(0, np.pi, 0)
+        rotate180x.prepare(qubit_basis)
+
+        rotate90y = lib.rotate_euler(0, 0.5*np.pi, 0)
+        rotate90y.prepare(qubit_basis)
+
+        rotate180y = lib.rotate_euler(0, np.pi, 0)
+        rotate180y.prepare(qubit_basis)
+
+        rotate90x(dm, 0)
+        assert np.allclose(dm.partial_trace(0), (0.5, 0.5))
+
+        rotate90y(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+
+    def test_hadamard(self):
+        qubit_basis = (bases.general(2),)
+        sys_bases = qubit_basis+qubit_basis
+        dm = DensityMatrix(sys_bases)
+
+        hadamard = lib.hadamard()
+        hadamard.prepare(qubit_basis)
+
+        hadamard(dm, 1)
+        assert np.allclose(dm.partial_trace(0), (1, 0))
+        assert np.allclose(dm.partial_trace(1), (0.5, 0.5))
+
+        hadamard(dm, 1)
+        assert np.allclose(dm.partial_trace(1), (1, 0))
 
 
 class TestOperators:
