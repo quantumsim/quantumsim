@@ -66,6 +66,10 @@ class _IndexedProcess:
 
 class TracePreservingProcess(Process):
     def __init__(self, operator):
+        """
+        NOTE: I changed the process class to represent both qubit operators and less conventional processes (measurement, initialization aka processes which are not represented by an operator). The operator based processes are now this.
+        """
+
         if not isinstance(operator, Operator):
             raise ValueError(
                 "Please provide a valid operator to define the process")
@@ -111,17 +115,25 @@ class TracePreservingProcess(Process):
 
 class Initialization(Process):
     def __call__(self, state, *qubit_indices):
+        """Not implemented yet as I am unsure how the state will look. Should be fairly straightforward to do so (state projection)
+        """
         pass
 
 
 class Reset(Process):
     def __call__(self, state, *qubit_indices):
+        """Not implemented yet as I am unsure how the state will look. Should be fairly straightforward to do so (state projection)
+        """
+
         pass
 
 
 class Measurement(Process):
     def __call__(self, state, sampler, *qubit_indices):
-        """Returns the result of the measurement"""
+        """Returns the result of the measurement
+
+        #NOTE: I don't think sampler should be part of the process. However the measurement process needs information of the probability tree and which state to project. I think the bast thing is to pass tuples of (index, proj_state) and let the declared state be handled by the Gate class.
+        """
         results = []
         for ind in qubit_indices:
             probs = state.partial_trace(ind)
@@ -142,6 +154,10 @@ def join(*processes):
         Processs involved, in chronological order. If number of qubits in
         them is not the same everywhere, all of them must specify dumb
         indices of qubits they act onto with `Process.at()` method.
+
+    #TODO: Products formed in the general basis by first converting operators to ptm. This might be not efficient, but makes the function easier and more general. We might want to optionally extend this to be specifiable by the use (or something smarter). This might not be too bad as this allows some sparsity analysis to be performed and for basis optimization.
+
+    #TODO: Currently only joins up to two-subspace operators. This is ok for now as we still can't apply three or more subspace operators to the state. However it'd be good to generalize and make this as agnostic of dimensions/subspaces as possible for the futre.
 
     Returns
     -------
@@ -240,6 +256,10 @@ def join(*processes):
 
 def _linear_addition(*weighted_processes):
     """An internal function which returns a linear combination of two processes (after converting them to ptms in the general basis as an intermediate step towards finds the product). This function can be useful when two different process happen with probabilities.
+
+    NOTE: This operation might be useful in the future (For instance if one wants to apply two difference processes each happened with a probability p_i). For now I am not using it and it seemed a bit out of place, so I have left it as an internal method.
+
+    TODO: Current addition performed in intermediate basis. This can be changed (same as join())
 
     Parameters
     ----------

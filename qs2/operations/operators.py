@@ -295,6 +295,8 @@ def hashed_lru_cache(function):
     """Wrapper function that is used to cache operator conversions data. Since lists and arrays are not by default cached by lru_cache and can in general be somewhat large, the arrays are instead hashed using the sha1 protocol. This choice is motivated by the speed of execution of the sha1 hashing and the correct handling of the data types of the arrays.
 
     Once the hash is obtained, the lru_cache wrapped function is called with the hashed repesentation of the array. If that repsentation is in the cache, the corresponding result is returned. If not, then the array from which the hash was obtained is used to calculate the transformation.
+
+    #NOTE: This is a bit hacky, but I didn't know how to pass the array by register it in the cache only with it's hash (since the lru_cache is a wrapper). Also I think it should work quite well with the possibly data types being passed, but I haven't fully tested this yet. 
     """
 
     cur_arr = None
