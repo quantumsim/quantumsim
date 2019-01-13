@@ -1,9 +1,10 @@
 from ..bases import general
-from .processes import TracePreservingProcess
+from .processes import TracePreservingProcess, Measurement
+from .processes import join
 
 
 class _ProcessBlock:
-    def __init__(self, process, *, in_bases=None, out_bases=None):
+    def __init__(self, process, inds, in_bases=None, out_bases=None):
         """A process block is an internal structure used by the compiler. Each block ultimately implements a process. However in addition a block is aware of it's own bases and indicies, which are then used for the truncation of the processes by the compiler, sparsity analysis and optimization.
         Parameters
         ----------
@@ -14,11 +15,39 @@ class _ProcessBlock:
 
         """
         self.process = process
-        self._in_bases = in_bases
-        self._out_bases = out_bases
+        self.inds = inds
+        self.in_bases = in_bases
+        self.out_bases = out_bases
 
-    def __repr__(self):
-        raise NotImplementedError
+    def prepare(self):
+        if self.in_bases is None:
+            raise ValueError('In bases must be specified')
+        if self.out_bases is None:
+            raise ValueError('In bases must be specified')
+
+        self.process.prepare(self.in_bases, self.out_bases)
+
+
+class _ExplandableBlock:
+    def __init__(self, inds):
+        self.processes = []
+        self.inds = set(inds)
+
+    @property
+    def num_bits(self):
+        return len(self.inds)
+
+    def merge(self, expandable_block):
+        self.processes += expandable_block.processes
+        self.inds = self.inds.union(expandable_block.inds)
+
+    def add(self, process, inds):
+        self.processes.append(process.at(inds))
+        self.inds.update(inds)
+
+    def finalize(self):
+        joined_process = join(*self.processes)
+        return _ProcessBlock(joined_process, self.inds)
 
 
 class Compiler:
@@ -28,34 +57,89 @@ class Compiler:
     """
 
     def __init__(self, *operations):
-        self.process_inds = [operation[0] for operation in operations]
-        self.processes = [operation[1] for operation in operations]
+        self.proc_blocks = None
+        self._blocks = {}
 
-        temp_dims = {}
-        for process, inds in zip(self.processes, self.process_inds):
-            if isinstance(process, TracePreservingProcess):
-                for ind, dim in zip(inds, process.operator.dim_hilbert):
-                    if ind not in temp_dims:
-                        temp_dims[ind] = dim
-                    else:
-                        if temp_dims[ind] != dim:
-                            raise ValueError('Hilbert dim mismatch')
+    def create_blocks(self, *operations):
+        self.proc_blocks = []
+        for process, proc_inds in zip(operations):
+            if not isinstance(process, TracePreservingProcess):
+                # Meaning it's either a measurement, initialization or reset. These go in their own blocks
+                for proc_ind in proc_inds:
+                    if proc_ind in self._blocks:
+                        cur_block = self._blocks[proc_ind]
+                        self.proc_blocks.append(cur_block.finalize())
+                        self._delete_block(proc_ind)
+                proc_block = _ProcessBlock(process, proc_inds)
+                self.proc_blocks.append(proc_block)
+            else:
+                self._add_to_blocks(process, proc_inds)
 
-        self.unique_inds_dims = dict(sorted(temp_dims.items()))
+        for block in self._blocks:
+            self.proc_blocks.append(block.finalize())
 
-        self.blocks = None
+    def get_optimal_bases(self, initial_bases=None, *, tol=1e-16):
+        if self.proc_blocks is None:
+            raise ValueError('Compile operations first')
 
-    def create_blocks(self):
-        raise NotImplementedError
+        last_out_bases = {}
 
-    def get_optimal_bases(self, initial_bases=None):
-        if initial_bases is not None:
-            if len(initial_bases) != len(self.unique_inds_dims):
-                raise ValueError("Provide a basis for all")
+        def get_in_bases(ind, dim):
+            if ind in last_out_bases:
+                return last_out_bases[ind]
+            elif initial_bases is not None:
+                return initial_bases[ind]
+            return general(dim)
+
+        for block in self.proc_blocks:
+            process = block.process
+            operator = process.operator
+            dims = operator.dim_hilbert
+
+            in_bases = (get_in_bases(ind, dim)
+                        for ind, dim in zip(block.inds, dims))
+            block.in_bases = in_bases
+
+            if isinstance(process, Measurement):
+                for ind, basis in zip(block.inds, in_bases):
+                    last_out_bases[ind] = basis.computational_subbasis()
+            elif isinstance(process, TracePreservingProcess):
+                full_bases = (basis.superbasis() for basis in in_bases)
+
+                # TODO: Add sparsity analysis here to get the real out_basis
+                block.out_bases = full_bases
+                block.prepare()
+                for ind, basis in zip(block.inds, full_bases):
+                    last_out_bases[ind] = basis
+
+    def _add_to_blocks(self, process, proc_inds):
+        for ind in proc_inds:
+            self._register(ind)
+
+        first_block = self._blocks[proc_inds[0]]
+
+        if all(self._blocks[ind] == first_block for ind in proc_inds):
+            first_block.add(process, proc_inds)
         else:
-            initial_bases = tuple(general(dim)
-                                  for dim in self.unique_inds_dims.values())
-        raise NotImplementedError
+            expanded_block = _ExplandableBlock(proc_inds)
+            for proc_ind in proc_inds:
+                if proc_ind in self._blocks:
+                    cur_block = self._blocks[proc_ind]
+                    if all(ind in proc_inds for ind in cur_block.inds):
+                        expanded_block.merge(cur_block)
+                    else:
+                        self.proc_blocks.append(cur_block.finalize())
 
-    def prepare_blocks(self):
-        raise NotImplementedError
+                    self._delete_block(proc_ind)
+                    self._blocks[proc_ind] = expanded_block
+
+            expanded_block.add(process, proc_inds)
+
+    def _delete_block(self, ind):
+        block_inds = self._blocks[ind].inds
+        for block_ind in block_inds:
+            del self._blocks[block_ind]
+
+    def _register(self, ind):
+        if ind not in self._blocks:
+            self._blocks[ind] = _ExplandableBlock(ind)
