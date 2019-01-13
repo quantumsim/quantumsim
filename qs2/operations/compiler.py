@@ -30,6 +30,10 @@ class _ProcessBlock:
 
 class _ExplandableBlock:
     def __init__(self, inds):
+        """The expandable block is a list of processes, which can be expanded or merged with other such blocks. This block is not ready for execution until converted to a process block by the compiler
+
+        """
+
         self.processes = []
         self.inds = set(inds)
 
@@ -56,7 +60,7 @@ class Compiler:
 
     """
 
-    def __init__(self, *operations):
+    def __init__(self):
         self.proc_blocks = None
         self._blocks = {}
 
