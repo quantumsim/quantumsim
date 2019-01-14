@@ -215,42 +215,39 @@ def join(*processes):
     subspaces_dim_hilbert = dict(sorted(temp_dims.items()))
 
     num_subspaces = len(subspaces_dim_hilbert)
-    result_ndims = 2 * num_subspaces
-    result_inds = [i for i in range(result_ndims)]
 
-    full_bases = [general(dim_hilbert)
-                  for dim_hilbert in subspaces_dim_hilbert.values()]
+    ptm_inds_1 = [n for n in range(0, num_subspaces)]
+    ptm_inds_2 = [n for n in range(num_subspaces, 2*num_subspaces)]
+    ptm_inds_3 = [n for n in range(2*num_subspaces, 3*num_subspaces)]
+
+    full_bases = tuple(general(dim_hilbert)
+                       for dim_hilbert in subspaces_dim_hilbert.values())
     pauli_dims = [basis.dim_pauli for basis in full_bases]
     op_dim_pauli = np.prod(pauli_dims)
     combined_ptm = np.eye(op_dim_pauli).reshape(pauli_dims + pauli_dims)
 
     for indexed_process in processes:
-        proc_inds = indexed_process.inds
-        num_inds = len(proc_inds)
-        if num_inds == 1:
-            index = proc_inds[0]
-            conv_op = indexed_process.op.to_ptm((full_bases[index],))
-            _op_inds = [index, result_ndims]
-            _ptm_inds = result_inds.copy()
-            _ptm_inds[index] = result_ndims
-            combined_ptm = np.einsum(
-                conv_op.matrix, _op_inds, combined_ptm, _ptm_inds, result_inds, optimize=True)
+        proc_inds = list(reversed(indexed_process.inds))
 
-        elif num_inds == 2:
-            end_inds = [ind + result_ndims for ind in proc_inds]
-            conv_basis = tuple(full_bases[ind] for ind in proc_inds)
-            conv_op = indexed_process.op.to_ptm(conv_basis)
-            _dim_paulis = [basis.dim_pauli for basis in conv_basis]
-            conv_ptm = conv_op.matrix.reshape(_dim_paulis + _dim_paulis)
-            _op_inds = list(proc_inds) + end_inds
-            _ptm_inds = end_inds + result_inds[num_subspaces:]
-            combined_ptm = np.einsum(
-                conv_ptm, _op_inds, combined_ptm, _ptm_inds, optimize=True)
-        else:
-            raise NotImplementedError
+        conv_basis = tuple(full_bases[ind] for ind in proc_inds)
+        conv_op = indexed_process.op.to_ptm(conv_basis)
+        op_pauli_dim = [pauli_dims[ind] for ind in proc_inds]
+        conv_ptm = conv_op.matrix.reshape(op_pauli_dim + op_pauli_dim)
+
+        conv_ptm_inds = [ptm_inds_1[ind] for ind in proc_inds] + \
+            [ptm_inds_3[ind] for ind in proc_inds]
+
+        reduced_prod_inds = [ptm_inds_3[i] if i in proc_inds else ptm_inds_1[i]
+                             for i in range(num_subspaces)]
+
+        combined_ptm_inds = reduced_prod_inds + ptm_inds_2
+        combined_ptm = np.einsum(
+            conv_ptm, conv_ptm_inds,
+            combined_ptm, combined_ptm_inds,
+            optimize=True)
 
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
-    combined_oper = PTMOperator(combined_ptm, tuple(full_bases))
+    combined_oper = PTMOperator(combined_ptm, full_bases)
     return TracePreservingProcess(combined_oper)
 
 
