@@ -4,16 +4,22 @@ from .processes import join
 
 
 class _ProcessBlock:
-    def __init__(self, process, inds, in_bases=None, out_bases=None):
-        """A process block is an internal structure used by the compiler. Each block ultimately implements a process. However in addition a block is aware of it's own bases and indicies, which are then used for the truncation of the processes by the compiler, sparsity analysis and optimization.
-        Parameters
-        ----------
-        in_bases : tuple, optional
-            The in bases for the operator (the default is None, which corresponds to unknown bases)
-        out_bases : tuple, optional
-            The out bases for the operator (the default is None, which corresponds to an unnown bases)
+    """A process block is an internal structure used by the compiler.
 
-        """
+    Each block ultimately implements a process. However in addition a block is
+    aware of it's own bases and indicies, which are then used for the truncation
+    of the processes by the compiler, sparsity analysis and optimization.
+
+    Parameters
+    ----------
+    in_bases : tuple, optional
+        The in bases for the operator (the default is None, which corresponds
+        to unknown bases)
+    out_bases : tuple, optional
+        The out bases for the operator (the default is None, which corresponds
+        to an unnown bases)
+    """
+    def __init__(self, process, inds, in_bases=None, out_bases=None):
         self.process = process
         self.inds = inds
         self.in_bases = in_bases
@@ -29,11 +35,11 @@ class _ProcessBlock:
 
 
 class _ExplandableBlock:
+    """The expandable block is a list of processes, which can be expanded or
+    merged with other such blocks. This block is not ready for execution until
+    converted to a process block by the compiler.
+    """
     def __init__(self, inds):
-        """The expandable block is a list of processes, which can be expanded or merged with other such blocks. This block is not ready for execution until converted to a process block by the compiler
-
-        """
-
         self.processes = []
         self.inds = set(inds)
 
@@ -55,11 +61,17 @@ class _ExplandableBlock:
 
 
 class Compiler:
-    """The compiler is a link between the circuit (gates) and the processes. The compiler serves to truncate the processes of the circuit to blocks, while correctly handling specific processes (measurements, resets, etc). The compiler blocks are a wrapper around a process and provide information about the indicies of the process and bases.
-    The compiler can then analyze the sparsity of the process operators in order to perform bases optimization for the calculation. These bases are then returned for the processes to be prepared and for the state to use.
+    """The compiler is a link between the circuit (gates) and the processes.
 
+    The compiler serves to truncate the processes of the circuit to blocks,
+    while correctly handling specific processes (measurements, resets, etc).
+    The compiler blocks are a wrapper around a process and provide information
+    about the indicies of the process and bases.
+
+    The compiler can then analyze the sparsity of the process operators in order
+    to perform bases optimization for the calculation. These bases are then
+    returned for the processes to be prepared and for the state to use.
     """
-
     def __init__(self):
         self.proc_blocks = None
         self._blocks = {}
@@ -68,7 +80,8 @@ class Compiler:
         self.proc_blocks = []
         for process, proc_inds in zip(operations):
             if not isinstance(process, TracePreservingProcess):
-                # Meaning it's either a measurement, initialization or reset. These go in their own blocks
+                # Meaning it's either a measurement, initialization or reset.
+                # These go in their own blocks
                 for proc_ind in proc_inds:
                     if proc_ind in self._blocks:
                         cur_block = self._blocks[proc_ind]
@@ -82,7 +95,7 @@ class Compiler:
         for block in self._blocks:
             self.proc_blocks.append(block.finalize())
 
-    def get_optimal_bases(self, initial_bases=None, *, tol=1e-16):
+    def get_optimal_bases(self, initial_bases=None):
         if self.proc_blocks is None:
             raise ValueError('Compile operations first')
 

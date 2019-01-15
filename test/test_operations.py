@@ -5,9 +5,9 @@
 
 import pytest
 import numpy as np
-from numpy import pi
 
-from qs2.operations import operators
+# from qs2.operations import operators
+from qs2.operations.processes import TracePreservingProcess
 from qs2 import bases
 from qs2.operations import library as lib
 from qs2.backends import DensityMatrix
@@ -16,17 +16,12 @@ from qs2.backends import DensityMatrix
 class TestLibrary:
     def test_rotate_x(self):
         qubit_basis = (bases.general(2),)
-        sys_bases = qubit_basis+qubit_basis+qubit_basis
+        sys_bases = qubit_basis * 3
         dm = DensityMatrix(sys_bases)
 
         rotate90 = lib.rotate_x(0.5*np.pi)
-        rotate90.prepare(qubit_basis)
-
         rotate180 = lib.rotate_x(np.pi)
-        rotate180.prepare(qubit_basis)
-
         rotate360 = lib.rotate_x(2*np.pi)
-        rotate360.prepare(qubit_basis)
 
         rotate90(dm, 1)
         rotate180(dm, 2)
@@ -49,13 +44,8 @@ class TestLibrary:
         dm = DensityMatrix(sys_bases)
 
         rotate90 = lib.rotate_y(0.5*np.pi)
-        rotate90.prepare(qubit_basis)
-
         rotate180 = lib.rotate_y(np.pi)
-        rotate180.prepare(qubit_basis)
-
         rotate360 = lib.rotate_y(2*np.pi)
-        rotate360.prepare(qubit_basis)
 
         rotate90(dm, 1)
         rotate180(dm, 2)
@@ -78,13 +68,8 @@ class TestLibrary:
         dm = DensityMatrix(qubit_basis)
 
         rotate90 = lib.rotate_z(0.5*np.pi)
-        rotate90.prepare(qubit_basis)
-
         rotate180 = lib.rotate_z(np.pi)
-        rotate180.prepare(qubit_basis)
-
         rotate360 = lib.rotate_z(2*np.pi)
-        rotate360.prepare(qubit_basis)
 
         rotate90(dm, 0)
         assert np.allclose(dm.expansion(), [1, 0, 0, 0])
@@ -117,16 +102,7 @@ class TestLibrary:
         dm = DensityMatrix(qubit_basis+qubit_basis)
 
         rotate90x = lib.rotate_euler(0, 0.5*np.pi, 0)
-        rotate90x.prepare(qubit_basis)
-
-        rotate180x = lib.rotate_euler(0, np.pi, 0)
-        rotate180x.prepare(qubit_basis)
-
         rotate90y = lib.rotate_euler(0, 0.5*np.pi, 0)
-        rotate90y.prepare(qubit_basis)
-
-        rotate180y = lib.rotate_euler(0, np.pi, 0)
-        rotate180y.prepare(qubit_basis)
 
         rotate90x(dm, 0)
         assert np.allclose(dm.partial_trace(0), (0.5, 0.5))
@@ -140,7 +116,6 @@ class TestLibrary:
         dm = DensityMatrix(sys_bases)
 
         hadamard = lib.hadamard()
-        hadamard.prepare(qubit_basis)
 
         hadamard(dm, 1)
         assert np.allclose(dm.partial_trace(0), (1, 0))
@@ -150,7 +125,7 @@ class TestLibrary:
         assert np.allclose(dm.partial_trace(1), (1, 0))
 
 
-class TestOperators:
+class TestProcesses:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
         damp_kraus_mat = np.array(
@@ -160,60 +135,58 @@ class TestOperators:
         gm_qubit_basis = (bases.gell_mann(2),)
         gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
 
-        damp_kraus = operators.KrausOperator(damp_kraus_mat, [2])
+        damp_op = TracePreservingProcess.from_kraus(damp_kraus_mat, [2])
+        damp_ptm = damp_op.ptm(gm_qubit_basis)
 
-        damp_ptm = damp_kraus.to_ptm(gm_qubit_basis)
-
-        assert damp_ptm.matrix.shape == (4, 4)
-        assert np.all(damp_ptm.matrix <= 1) and np.all(damp_ptm.matrix >= -1)
+        assert damp_ptm.shape == (4, 4)
+        assert np.all(damp_ptm <= 1) and np.all(damp_ptm >= -1)
 
         expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
                                  [0, 0, np.sqrt(1-p_damp), 0],
                                  [p_damp, 0, 0, 1-p_damp]])
 
-        assert np.allclose(damp_ptm.matrix, expected_mat)
+        assert np.allclose(damp_ptm, expected_mat)
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
+        cz_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (2, 2))
+        cz_ptm = cz_op.ptm(gm_two_qubit_basis)
 
-        cz_kraus = operators.KrausOperator(cz_kraus_mat, (2, 2))
-        cz_ptm = cz_kraus.to_ptm(gm_two_qubit_basis)
-
-        assert cz_ptm.matrix.shape == (16, 16)
-        assert np.all(cz_ptm.matrix.round(3) <= 1) and np.all(
-            cz_ptm.matrix.round(3) >= -1)
-        assert np.isclose(np.sum(cz_ptm.matrix[0, :]), 1)
-        assert np.isclose(np.sum(cz_ptm.matrix[:, 0]), 1)
+        assert cz_ptm.shape == (16, 16)
+        assert np.all(cz_ptm.round(3) <= 1)
+        assert np.all(cz_ptm.round(3) >= -1)
+        assert np.isclose(np.sum(cz_ptm[0, :]), 1)
+        assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
 
     def test_kraus_to_ptm_qutrits(self):
         cz_kraus_mat = np.diag([1, 1, 1, 1, -1, 1, -1, 1, 1])
         qutrit_basis = (bases.gell_mann(3),)
-        system_bases = qutrit_basis + qutrit_basis
+        system_bases = qutrit_basis * 2
 
-        cz_kraus = operators.KrausOperator(cz_kraus_mat, (3, 3))
-        cz_ptm = cz_kraus.to_ptm(system_bases)
+        cz_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (3, 3))
+        cz_ptm = cz_op.ptm(system_bases)
 
-        assert cz_ptm.matrix.shape == (81, 81)
-        assert np.all(cz_ptm.matrix.round(3) <= 1) and np.all(
-            cz_ptm.matrix.round(3) >= -1)
-        assert np.isclose(np.sum(cz_ptm.matrix[0, :]), 1)
-        assert np.isclose(np.sum(cz_ptm.matrix[:, 0]), 1)
+        assert cz_ptm.shape == (81, 81)
+        assert np.all(cz_ptm.round(3) <= 1) and np.all(
+            cz_ptm.round(3) >= -1)
+        assert np.isclose(np.sum(cz_ptm[0, :]), 1)
+        assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
         qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = operators.KrausOperator(cz_kraus_mat, (2, 2))
+        kraus_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (2, 2))
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(wrong_dim_kraus, (2, 2))
+            _ = TracePreservingProcess.from_kraus(wrong_dim_kraus, (2, 2))
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(not_sqr_kraus, (2, 2))
+            _ = TracePreservingProcess.from_kraus(not_sqr_kraus, (2, 2))
         with pytest.raises(ValueError):
-            _ = operators.KrausOperator(cz_kraus_mat, (3, 3))
+            _ = TracePreservingProcess.from_kraus(cz_kraus_mat, (3, 3))
         with pytest.raises(ValueError):
-            _ = kraus_op.to_ptm(qutrit_basis+qutrit_basis)
+            _ = kraus_op.ptm(qutrit_basis+qutrit_basis)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
@@ -223,11 +196,12 @@ class TestOperators:
         gell_man_basis = (bases.gell_mann(2),)
         general_basis = (bases.general(2),)
 
-        damp_kraus = operators.KrausOperator(damp_kraus_mat, (2,))
+        damp_op_kraus = TracePreservingProcess.from_kraus(damp_kraus_mat, (2,))
+        ptm_gell_man = damp_op_kraus.ptm(gell_man_basis)
+        damp_op_ptm = TracePreservingProcess.from_ptm(ptm_gell_man,
+                                                      gell_man_basis)
 
-        ptm_gell_man = damp_kraus.to_ptm(gell_man_basis)
-        ptm_general = damp_kraus.to_ptm(general_basis)
+        ptm_general_kraus = damp_op_kraus.ptm(general_basis)
+        ptm_general_converted = damp_op_ptm.ptm(general_basis)
 
-        converted_ptm = ptm_gell_man.to_ptm(general_basis)
-
-        assert np.allclose(ptm_general.matrix, converted_ptm.matrix)
+        assert np.allclose(ptm_general_kraus, ptm_general_converted)
