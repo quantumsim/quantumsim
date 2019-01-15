@@ -1,7 +1,7 @@
 import abc
-from functools import reduce
+from functools import reduce, lru_cache
 import numpy as np
-from .operators import Operator, PTMOperator
+# from .operators import Operator, PTMOperator
 from ..bases import general
 
 
@@ -45,6 +45,7 @@ class Process(metaclass=abc.ABCMeta):
         Indices of qubits it acts on. They are designed to be dumb and used
         for tracking the multiplication of several processes.
     """
+
     @abc.abstractmethod
     def __call__(self, state, *qubit_indices):
         """Applies the operation inline (modifying the state) to the state
@@ -65,15 +66,79 @@ class _IndexedProcess:
 
 
 class TracePreservingProcess(Process):
-    def __init__(self, operator):
+    def __init__(self, *, _i_know_what_i_do=False):
         """
         NOTE: I changed the process class to represent both qubit operators and less conventional processes (measurement, initialization aka processes which are not represented by an operator). The operator based processes are now this.
         """
+        if not _i_know_what_i_do:
+            raise RuntimeError(
+                'TracePreservingProcess\'s constructor is not supposed to be '
+                'used explicitly. Use TracePreservingProcess.from_ptm() or '
+                'TracePreservingProcess.from_kraus()')
+        self._ptm = None
+        self._kraus = None
+        self._bases_in = None
+        self._bases_out = None
+        self._dim_hilbert = None
 
-        if not isinstance(operator, Operator):
+    @classmethod
+    def from_ptm(cls, ptm, bases_in, bases_out=None):
+        out = cls(_i_know_what_i_do=True)
+        out._bases_in = bases_in
+        out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
+        if bases_out is not None:
+            out._validate_bases(bases_out=bases_out)
+            out._bases_out = bases_out
+        else:
+            out._bases_out = bases_in
+        expected_shape = (np.prod(out.dim_pauli),) * 2
+        if not ptm.shape == expected_shape:
             raise ValueError(
-                "Please provide a valid operator to define the process")
-        self.operator = operator
+                'Shape of `ptm` is not compatible with the `bases` '
+                'dimensionality: \n'
+                '- expected shape from provided `bases`: {}\n'
+                '- `ptm` shape: {}'.format(expected_shape, out._ptm.shape))
+        out._ptm = ptm
+        return out
+
+    @classmethod
+    def from_kraus(cls, kraus, dim_hilbert):
+        out = cls(_i_know_what_i_do=True)
+        if not isinstance(kraus, np.ndarray):
+            kraus = np.array(kraus)
+        if len(kraus.shape) == 2:
+            kraus = kraus.reshape((1, *kraus.shape))
+        elif len(kraus.shape) != 3:
+            raise ValueError(
+                '`kraus` should be a 2D or 3D array, got shape {}'
+                    .format(kraus.shape))
+        expected_size = np.prod(dim_hilbert)
+        expected_shape = (expected_size, expected_size)
+        if kraus.shape[1:] != expected_shape:
+            raise ValueError(
+                'Shape of `kraus` is not compatible with the `dim_hilbert`\n'
+                '- expected shape from provided `dim_hilbert`: (?, {m}, {m})\n'
+                '- `ptm` shape: {shape}'
+                    .format(m=expected_size, shape=kraus.shape))
+        out._kraus = kraus
+        out._dim_hilbert = dim_hilbert
+        return out
+
+    @property
+    def dim_hilbert(self):
+        return self._dim_hilbert
+
+    @property
+    def dim_pauli(self):
+        return tuple((d * d for d in self._dim_hilbert))
+
+    @property
+    def num_subspaces(self):
+        return len(self.dim_hilbert)
+
+    @property
+    def size(self):
+        return np.product(self.dim_pauli)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -92,13 +157,53 @@ class TracePreservingProcess(Process):
         """
         return _IndexedProcess(self.operator, indices)
 
-    def prepare(self, bases_in, bases_out=None):
-        self.operator = self.operator.to_ptm(bases_in, bases_out)
+    # def prepare(self, bases_in, bases_out=None):
+    #     self.operator = self.operator.to_ptm(bases_in, bases_out)
+
+    @lru_cache(maxsize=32)
+    def ptm(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+        if (self._ptm is not None and bases_in == self._bases_in and
+                bases_out == self._bases_out):
+            return self._ptm
+        self._validate_bases(bases_in=bases_in, bases_out=bases_out)
+        if self._kraus is not None:
+            return np.einsum("xab, zbc, ycd, zad -> xy",
+                             self._combine_bases_vectors(bases_out),
+                             self._kraus,
+                             self._combine_bases_vectors(bases_in),
+                             self._kraus.conj(),
+                             optimize=True).real
+        if self._ptm is not None:
+            return np.einsum("xij, yji, yz, zkl, wlk -> xw",
+                             self._combine_bases_vectors(bases_out),
+                             self._combine_bases_vectors(self._bases_out),
+                             self._ptm,
+                             self._combine_bases_vectors(self._bases_in),
+                             self._combine_bases_vectors(bases_in),
+                             optimize=True).real
+        raise RuntimeError("Neither `self._kraus`, nor `self._ptm` are set.")
+
+    @staticmethod
+    @lru_cache(maxsize=8)
+    def _combine_bases_vectors(bases):
+        return reduce(np.kron, [basis.vectors for basis in bases])
+
+    def _validate_bases(self, **kwargs):
+        for name, bases in kwargs.items():
+            dim_hilbert = tuple((b.dim_hilbert for b in bases))
+            if self.dim_hilbert != dim_hilbert:
+                raise ValueError(
+                    "The dimensions of `{n}` do not match the operation's "
+                    "Hilbert dimensionality:"
+                    "- expected Hilbert dimensionality: {d_exp}"
+                    "- `{n}`' Hilbert dimensionality: {d_basis}"
+                    .format(n=name, d_exp=self.dim_hilbert, d_basis=dim_hilbert)
+                )
 
     def __call__(self, state, *qubit_indices):
-        if not isinstance(self.operator, PTMOperator):
-            raise ValueError("Cannot apply a non-PTM operator to the state")
-
+        # FIXME state should know its basis
         proc_subspaces = self.operator.num_subspaces
 
         if len(qubit_indices) != proc_subspaces:
@@ -106,9 +211,14 @@ class TracePreservingProcess(Process):
                 'Incorrect number of indicies for a single qubit PTM')
 
         if proc_subspaces == 1:
-            state.apply_single_qubit_ptm(*qubit_indices, self.operator.matrix)
+            state.apply_single_qubit_ptm(
+                *qubit_indices,
+                self.ptm((state.bases[qubit_indices],)))
         elif proc_subspaces == 2:
-            state.apply_two_qubit_ptm(*qubit_indices, self.operator.matrix)
+            state.apply_two_qubit_ptm(
+                *qubit_indices,
+                self.ptm((state.bases[qubit_indices[0]],
+                          state.bases[qubit_indices[1]])))
         else:
             raise NotImplementedError
 
@@ -200,8 +310,7 @@ def join(*processes):
         conv_ptms = [process.operator.to_ptm(
             full_bases).matrix for process in processes]
         combined_ptm = reduce(np.dot, conv_ptms)
-        combined_oper = PTMOperator(combined_ptm, full_bases)
-        return TracePreservingProcess(combined_oper)
+        return TracePreservingProcess.from_ptm(combined_ptm, full_bases)
 
     temp_dims = {}
     for process in processes:
@@ -217,8 +326,8 @@ def join(*processes):
     num_subspaces = len(subspaces_dim_hilbert)
 
     ptm_inds_1 = [n for n in range(0, num_subspaces)]
-    ptm_inds_2 = [n for n in range(num_subspaces, 2*num_subspaces)]
-    ptm_inds_3 = [n for n in range(2*num_subspaces, 3*num_subspaces)]
+    ptm_inds_2 = [n for n in range(num_subspaces, 2 * num_subspaces)]
+    ptm_inds_3 = [n for n in range(2 * num_subspaces, 3 * num_subspaces)]
 
     full_bases = tuple(general(dim_hilbert)
                        for dim_hilbert in subspaces_dim_hilbert.values())
@@ -235,7 +344,7 @@ def join(*processes):
         conv_ptm = conv_op.matrix.reshape(op_pauli_dim + op_pauli_dim)
 
         conv_ptm_inds = [ptm_inds_1[ind] for ind in proc_inds] + \
-            [ptm_inds_3[ind] for ind in proc_inds]
+                        [ptm_inds_3[ind] for ind in proc_inds]
 
         reduced_prod_inds = [ptm_inds_3[i] if i in proc_inds else ptm_inds_1[i]
                              for i in range(num_subspaces)]
@@ -247,8 +356,7 @@ def join(*processes):
             optimize=True)
 
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
-    combined_oper = PTMOperator(combined_ptm, full_bases)
-    return TracePreservingProcess(combined_oper)
+    return TracePreservingProcess.from_ptm(combined_ptm, full_bases)
 
 
 def _linear_addition(*weighted_processes):
@@ -261,12 +369,12 @@ def _linear_addition(*weighted_processes):
     Parameters
     ----------
     (w1, op0), ..., (wN, opN): tuples of weight coefficient and  qs2.TracePersrvingProcess
-        Processs involved, in chronological order. The number of subspaces involved in each process mst be the same. 
+        Processs involved, in chronological order. The number of subspaces involved in each process mst be the same.
 
     Returns
     -------
     TracePersrvingProcess
-        The resulting process obtained from combined 
+        The resulting process obtained from combined
     """
 
     if len(weighted_processes) < 2:
@@ -294,5 +402,4 @@ def _linear_addition(*weighted_processes):
     conv_ptms = [process.operator.to_ptm(
         full_bases).matrix for process in processes]
     linear_ptm = [weight * ptm for weight, ptm in zip(weights, conv_ptms)]
-    linear_oper = PTMOperator(linear_ptm, full_bases)
-    return TracePreservingProcess(linear_oper)
+    return TracePreservingProcess.from_ptm(linear_ptm, full_bases)

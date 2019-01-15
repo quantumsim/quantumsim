@@ -5,7 +5,6 @@
 
 import pytest
 import numpy as np
-from numpy import pi
 
 from qs2.operations import operators
 from qs2 import bases

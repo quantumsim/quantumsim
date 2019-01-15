@@ -82,14 +82,10 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
-        # TODO Check exact signature of basis_out, I assume this does not
-        # make any impact on PTM application
         pass
 
     @abc.abstractmethod
     def apply_two_qubit_ptm(self, qubit0, qubit1, ptm, basis_out=None):
-        # TODO Check exact signature of basis_out, I assume this does not
-        # make any impact on PTM application
         pass
 
     @abc.abstractmethod
