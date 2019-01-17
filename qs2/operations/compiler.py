@@ -1,6 +1,6 @@
 from ..bases import general
-from .processes import TracePreservingProcess, Measurement
-from .processes import join
+from .operation import Transformation, Projection
+from .operation import join
 
 
 class _ProcessBlock:
@@ -79,7 +79,7 @@ class Compiler:
     def create_blocks(self, *operations):
         self.proc_blocks = []
         for process, proc_inds in zip(operations):
-            if not isinstance(process, TracePreservingProcess):
+            if not isinstance(process, Transformation):
                 # Meaning it's either a measurement, initialization or reset.
                 # These go in their own blocks
                 for proc_ind in proc_inds:
@@ -117,10 +117,10 @@ class Compiler:
                         for ind, dim in zip(block.inds, dims))
             block.in_bases = in_bases
 
-            if isinstance(process, Measurement):
+            if isinstance(process, Projection):
                 for ind, basis in zip(block.inds, in_bases):
                     last_out_bases[ind] = basis.computational_subbasis()
-            elif isinstance(process, TracePreservingProcess):
+            elif isinstance(process, Transformation):
                 full_bases = (basis.superbasis() for basis in in_bases)
 
                 # TODO: Add sparsity analysis here to get the real out_basis

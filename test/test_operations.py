@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 
 # from qs2.operations import operators
-from qs2.operations.processes import TracePreservingProcess
+from qs2.operations.operation import Transformation
 from qs2 import bases
 from qs2.operations import library as lib
 from qs2.backends import DensityMatrix
@@ -125,7 +125,7 @@ class TestLibrary:
         assert np.allclose(dm.partial_trace(1), (1, 0))
 
 
-class TestProcesses:
+class TestOperations:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
         damp_kraus_mat = np.array(
@@ -135,7 +135,7 @@ class TestProcesses:
         gm_qubit_basis = (bases.gell_mann(2),)
         gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
 
-        damp_op = TracePreservingProcess.from_kraus(damp_kraus_mat, [2])
+        damp_op = Transformation.from_kraus(damp_kraus_mat, [2])
         damp_ptm = damp_op.ptm(gm_qubit_basis)
 
         assert damp_ptm.shape == (4, 4)
@@ -149,7 +149,7 @@ class TestProcesses:
         assert np.allclose(damp_ptm, expected_mat)
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        cz_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (2, 2))
+        cz_op = Transformation.from_kraus(cz_kraus_mat, (2, 2))
         cz_ptm = cz_op.ptm(gm_two_qubit_basis)
 
         assert cz_ptm.shape == (16, 16)
@@ -163,7 +163,7 @@ class TestProcesses:
         qutrit_basis = (bases.gell_mann(3),)
         system_bases = qutrit_basis * 2
 
-        cz_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (3, 3))
+        cz_op = Transformation.from_kraus(cz_kraus_mat, (3, 3))
         cz_ptm = cz_op.ptm(system_bases)
 
         assert cz_ptm.shape == (81, 81)
@@ -175,16 +175,16 @@ class TestProcesses:
     def test_kraus_to_ptm_errors(self):
         qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = TracePreservingProcess.from_kraus(cz_kraus_mat, (2, 2))
+        kraus_op = Transformation.from_kraus(cz_kraus_mat, (2, 2))
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = TracePreservingProcess.from_kraus(wrong_dim_kraus, (2, 2))
+            _ = Transformation.from_kraus(wrong_dim_kraus, (2, 2))
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = TracePreservingProcess.from_kraus(not_sqr_kraus, (2, 2))
+            _ = Transformation.from_kraus(not_sqr_kraus, (2, 2))
         with pytest.raises(ValueError):
-            _ = TracePreservingProcess.from_kraus(cz_kraus_mat, (3, 3))
+            _ = Transformation.from_kraus(cz_kraus_mat, (3, 3))
         with pytest.raises(ValueError):
             _ = kraus_op.ptm(qutrit_basis+qutrit_basis)
 
@@ -196,10 +196,10 @@ class TestProcesses:
         gell_man_basis = (bases.gell_mann(2),)
         general_basis = (bases.general(2),)
 
-        damp_op_kraus = TracePreservingProcess.from_kraus(damp_kraus_mat, (2,))
+        damp_op_kraus = Transformation.from_kraus(damp_kraus_mat, (2,))
         ptm_gell_man = damp_op_kraus.ptm(gell_man_basis)
-        damp_op_ptm = TracePreservingProcess.from_ptm(ptm_gell_man,
-                                                      gell_man_basis)
+        damp_op_ptm = Transformation.from_ptm(ptm_gell_man,
+                                              gell_man_basis)
 
         ptm_general_kraus = damp_op_kraus.ptm(general_basis)
         ptm_general_converted = damp_op_ptm.ptm(general_basis)

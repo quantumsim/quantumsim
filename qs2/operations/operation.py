@@ -4,17 +4,17 @@ import numpy as np
 from ..bases import general
 
 
-class Process(metaclass=abc.ABCMeta):
-    """A metaclass for all processes.
+class Operation(metaclass=abc.ABCMeta):
+    """A metaclass for all quantum operations.
 
     Every operation has to implement call method, that takes a
     :class:`qs2.state.State` object and modifies it inline. This method may
     return nothing or a result of a measurement, if the operation is a
     measurement.
 
-    Processs are designed to form an algebra. For the sake of making
+    Operations are designed to form an algebra. For the sake of making
     interface sane, we do not provide explicit multiplication, instead we use
-    :func:`qs2.processes.join` function to concatenate a set of processes.
+    :func:`qs2.operations.join` function to concatenate a set of operations.
     I.e., if we have `rotate90` operation, we may construct `rotate180`
     operation as follows:
 
@@ -22,13 +22,13 @@ class Process(metaclass=abc.ABCMeta):
     ... rotY90 = qs2.operations.rotate_z(0.5*numpy.pi)
     ... rotY180 = qs2.operations.join(rotY90, rotY90)
 
-    If the dimensionality of processes does not match, we may specify qubits it
+    If the dimensionality of operations does not match, we may specify qubits it
     acts onto in a form of integer dumb indices:
 
     >>> cz = qs2.operations.cphase()
     ... cnot = qs2.operations.join(rotY90.at(0), cz.at(0, 1), rotY90.at(0))
 
-    This is also useful, if you want to combine processes on different
+    This is also useful, if you want to combine operations on different
     qubits into one:
 
     >>> hadamard = qs2.operations.hadamard()
@@ -39,6 +39,18 @@ class Process(metaclass=abc.ABCMeta):
     `0, 1, ..., N`.
     """
 
+    @property
+    @abc.abstractmethod
+    def dim_hilbert(self):
+        """Hilbert dimensionality of qubits the operation acts onto."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def dim_pauli(self):
+        """Pauli dimensionality of qubits the operation acts onto."""
+        pass
+
     @abc.abstractmethod
     def __call__(self, state, *qubit_indices):
         """Applies the operation inline (modifying the state) to the state
@@ -48,20 +60,33 @@ class Process(metaclass=abc.ABCMeta):
         pass
 
 
-class _IndexedProcess:
-    """Internal representation of an processes during their multiplications.
+class _IndexedOperation:
+    """Internal representation of an operations during their multiplications.
     Contains an operation itself and dumb indices of qubits it acts on.
     """
-    def __init__(self, operator, indices):
-        self.op = operator
+    def __init__(self, operation, indices):
+        self.op = operation
         self.indices = indices
 
 
-class TracePreservingProcess(Process):
+class Transformation(Operation):
+    """Generic transformation of a state.
+
+    Any transformation, that should be a completely positive map, can be
+    represented in a form of set of Kraus operators [1]_ or as a Pauli transfer
+    matrix [2]_. Dependent on your preferred representation, you may construct
+    the transformation with :func:`CompletelyPositiveMap.from_kraus` or
+    :func:`CompletelyPositiveMap.from_ptm`. Constructor of this class is not
+    supposed to be called in user code.
+
+    References
+    ----------
+    .. [1] M. A. Nielsen, I. L. Chuang, "Quantum Computation and Quantum
+       Information" (Cambridge University Press, 2000).
+    .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
+       arXiv:1509.02921 (2000).
+    """
     def __init__(self, *, _i_know_what_i_do=False):
-        """
-        NOTE: I changed the process class to represent both qubit operators and less conventional processes (measurement, initialization aka processes which are not represented by an operator). The operator based processes are now this.
-        """
         if not _i_know_what_i_do:
             raise RuntimeError(
                 'TracePreservingProcess\'s constructor is not supposed to be '
@@ -75,6 +100,25 @@ class TracePreservingProcess(Process):
 
     @classmethod
     def from_ptm(cls, ptm, bases_in, bases_out=None):
+        """Construct completely positive map, based on Pauli transfer matrix.
+
+        TODO: elaborate on PTM format.
+
+        Parameters
+        ----------
+        ptm: array_like
+            Pauli transfer matrix in a form of Numpy array
+        bases_in: tuple of qs2.bases.PauliBasis
+            Input bases of qubits.
+        bases_out: tuple of qs2.bases.PauliBasis or None
+            Output bases of qubits. If None, assumed to be the same as input
+            bases.
+
+        Returns
+        -------
+        Transformation
+            Resulting operation
+        """
         out = cls(_i_know_what_i_do=True)
         out._bases_in = bases_in
         out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
@@ -95,6 +139,22 @@ class TracePreservingProcess(Process):
 
     @classmethod
     def from_kraus(cls, kraus, dim_hilbert):
+        """Construct completely positive map, based on a set of Kraus matrices.
+
+        TODO: elaborate on Kraus matrices format.
+
+        Parameters
+        ----------
+        kraus: array_like
+            Pauli transfer matrix in a form of Numpy array
+        dim_hilbert: tuple of int
+            Dimensionalities of qubit subspaces.
+
+        Returns
+        -------
+        Transformation
+            Resulting operation
+        """
         out = cls(_i_know_what_i_do=True)
         if not isinstance(kraus, np.ndarray):
             kraus = np.array(kraus)
@@ -144,10 +204,10 @@ class TracePreservingProcess(Process):
 
         Returns
         -------
-        _IndexedProcess
+        _IndexedOperation
             Intermediate representation of an operation.
         """
-        return _IndexedProcess(self, indices)
+        return _IndexedOperation(self, indices)
 
     @lru_cache(maxsize=32)
     def ptm(self, bases_in, bases_out=None):
@@ -212,27 +272,39 @@ class TracePreservingProcess(Process):
             raise NotImplementedError
 
 
-class Initialization(Process):
+class Initialization(Operation):
+    @property
+    def dim_hilbert(self):
+        pass
+
+    @property
+    def dim_pauli(self):
+        pass
+
     def __call__(self, state, *qubit_indices):
-        """Not implemented yet as I am unsure how the state will look. Should be fairly straightforward to do so (state projection)
+        """Not implemented yet as I am unsure how the state will look.
+        Should be fairly straightforward to do so (state projection)
         """
         pass
 
 
-class Reset(Process):
-    def __call__(self, state, *qubit_indices):
-        """Not implemented yet as I am unsure how the state will look. Should be fairly straightforward to do so (state projection)
-        """
-
+class Projection(Operation):
+    @property
+    def dim_hilbert(self):
         pass
 
+    @property
+    def dim_pauli(self):
+        pass
 
-class Measurement(Process):
     def __call__(self, state, sampler, *qubit_indices):
         """Returns the result of the measurement
 
-        #NOTE: I don't think sampler should be part of the process.
-         However the measurement process needs information of the probability tree and which state to project. I think the bast thing is to pass tuples of (index, proj_state) and let the declared state be handled by the Gate class.
+        NOTE: I don't think sampler should be part of the process. However the
+        measurement process needs information of the probability tree and which
+        state to project. I think the bast thing is to pass tuples of
+        (index, proj_state) and let the declared state be handled by the Gate
+        class.
         """
         results = []
         for ind in qubit_indices:
@@ -255,9 +327,16 @@ def join(*processes):
         them is not the same everywhere, all of them must specify dumb
         indices of qubits they act onto with `Process.at()` method.
 
-    #TODO: Products formed in the general basis by first converting operators to ptm. This might be not efficient, but makes the function easier and more general. We might want to optionally extend this to be specifiable by the use (or something smarter). This might not be too bad as this allows some sparsity analysis to be performed and for basis optimization.
+    TODO: Products formed in the general basis by first converting operators to
+    ptm. This might be not efficient, but makes the function easier and more
+    general. We might want to optionally extend this to be specifiable by the
+    use (or something smarter). This might not be too bad as this allows some
+    sparsity analysis to be performed and for basis optimization.
 
-    #TODO: Currently only joins up to two-subspace operators. This is ok for now as we still can't apply three or more subspace operators to the state. However it'd be good to generalize and make this as agnostic of dimensions/subspaces as possible for the futre.
+    #TODO: Currently only joins up to two-subspace operators. This is ok for
+    now as we still can't apply three or more subspace operators to the state.
+    However it'd be good to generalize and make this as agnostic of
+    dimensions/subspaces as possible for the futre.
 
     Returns
     -------
@@ -270,10 +349,10 @@ def join(*processes):
         raise ValueError('Specify at least two processes to join.')
 
     init_proc = processes[0]
-    if isinstance(init_proc, TracePreservingProcess):
-        cls = TracePreservingProcess
-    elif isinstance(init_proc, _IndexedProcess):
-        cls = _IndexedProcess
+    if isinstance(init_proc, Transformation):
+        cls = Transformation
+    elif isinstance(init_proc, _IndexedOperation):
+        cls = _IndexedOperation
     else:
         raise ValueError(
             'Expected a process, got {}'.format(type(init_proc)))
@@ -283,7 +362,7 @@ def join(*processes):
             'Specify indices for all processes involved with '
             '`Process.at()` method.')
 
-    if cls is TracePreservingProcess:
+    if cls is Transformation:
         req_num_subspaces = init_proc.operator.num_subspaces
 
         if not all(proc.operator.num_subspaces == req_num_subspaces
@@ -300,7 +379,7 @@ def join(*processes):
         conv_ptms = [process.operator.to_ptm(
             full_bases).matrix for process in processes]
         combined_ptm = reduce(np.dot, conv_ptms)
-        return TracePreservingProcess.from_ptm(combined_ptm, full_bases)
+        return Transformation.from_ptm(combined_ptm, full_bases)
 
     temp_dims = {}
     for process in processes:
@@ -346,7 +425,7 @@ def join(*processes):
             optimize=True)
 
     combined_ptm = combined_ptm.reshape(op_dim_pauli, op_dim_pauli)
-    return TracePreservingProcess.from_ptm(combined_ptm, full_bases)
+    return Transformation.from_ptm(combined_ptm, full_bases)
 
 
 def _linear_addition(*weighted_processes):
@@ -375,7 +454,7 @@ def _linear_addition(*weighted_processes):
     if np.sum(weights) != 1:
         raise ValueError('The sum of the coefficients must add up to 1')
 
-    if not all(isinstance(proc_inst, TracePreservingProcess)
+    if not all(isinstance(proc_inst, Transformation)
                for proc_inst in processes):
         raise ValueError('All processes need to be Trace Perserving')
 
@@ -392,4 +471,4 @@ def _linear_addition(*weighted_processes):
     conv_ptms = [process.operator.to_ptm(
         full_bases).matrix for process in processes]
     linear_ptm = [weight * ptm for weight, ptm in zip(weights, conv_ptms)]
-    return TracePreservingProcess.from_ptm(linear_ptm, full_bases)
+    return Transformation.from_ptm(linear_ptm, full_bases)
