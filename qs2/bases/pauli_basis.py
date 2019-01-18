@@ -58,10 +58,18 @@ class PauliBasis:
         return self._superbasis or self
 
     def subbasis(self, indices):
+        """Return a subbasis of this basis.
+
+        Parameters
+        ----------
+        indices : list of int
+            Indices of basis vectors to include in subbasis
+
+        Returns
+        -------
+        PauliBasis
         """
-        return a subbasis of this basis
-        """
-        return PauliBasis(self.vectors[indices],
+        return PauliBasis(self.vectors[list(indices)],
                           [self.labels[i] for i in indices], self)
 
     def computational_subbasis(self):
