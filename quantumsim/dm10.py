@@ -122,22 +122,8 @@ class Density:
         self._gridsize = 2**max(0, 2 * no_qubits - 8)
 
     def trace(self):
-
-        if self.allocated_diag < self.no_qubits:
-            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
-            self.allocated_diag = self.no_qubits
-        block = (2**self.no_qubits, 1, 1)
-        grid = (1, 1, 1)
-
-        _get_diag.prepared_call(
-            grid,
-            block,
-            self.data.gpudata,
-            self.diag_work.gpudata,
-            np.uint32(self.no_qubits))
-
+        self.get_diag_work()
         trace = ga.sum(self.diag_work[:1 << self.no_qubits]).get()
-
         return trace
 
     def renormalize(self):
@@ -167,7 +153,7 @@ class Density:
 
         return complex_dm.get()
 
-    def get_diag(self):
+    def get_diag_work(self):
         if self.allocated_diag < self.no_qubits:
             self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
             self.allocated_diag = self.no_qubits
@@ -182,7 +168,9 @@ class Density:
             self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
-        return self.diag_work.get()
+    def get_diag(self):
+        self.get_diag_work()
+        return self.diag_work[:1 << self.no_qubits].get()
 
     def cphase(self, bit0, bit1):
         assert bit0 < self.no_qubits
