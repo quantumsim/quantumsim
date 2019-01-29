@@ -123,12 +123,9 @@ class Density:
 
     def trace(self):
 
-        if self.no_qubits > 10:
-            raise NotImplementedError(
-                "Trace not implemented for more than 10 qubits yet")
         if self.allocated_diag < self.no_qubits:
             self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
-            self.allocated_qubits = self.no_qubits
+            self.allocated_diag = self.no_qubits
         block = (2**self.no_qubits, 1, 1)
         grid = (1, 1, 1)
 
@@ -139,12 +136,9 @@ class Density:
             self.diag_work.gpudata,
             np.uint32(self.no_qubits))
 
-        _trace.prepared_call(grid, block,
-                             self.diag_work.gpudata, -1, shared_size=8 * block[0])
+        trace = ga.sum(self.diag_work[:1 << self.no_qubits]).get()
 
-        tr0 = self.diag_work[0].get()
-
-        return tr0
+        return trace
 
     def renormalize(self):
         """Renormalize to trace one."""
@@ -176,7 +170,7 @@ class Density:
     def get_diag(self):
         if self.allocated_diag < self.no_qubits:
             self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
-            self.allocated_qubits = self.no_qubits
+            self.allocated_diag = self.no_qubits
 
         block = (2**8, 1, 1)
         grid = (2**max(0, self.no_qubits - 8), 1, 1)
