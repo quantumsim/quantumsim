@@ -3,18 +3,18 @@ import numpy as np
 
 
 class BiasedSampler:
-    '''A sampler that returns a uniform choice but with probabilities weighted
+    """A sampler that returns a uniform choice but with probabilities weighted
     as p_twiddle=p^alpha/Z, with Z a normalisation constant. Also allows for
     readout error to be input when the sampling is called.
 
     All the class does is to store the product of all p_twiddles for
     renormalisation purposes
-    '''
+    """
 
     def __init__(self, readout_error, alpha, rng):
-        '''
+        """
         @alpha: number between 0 and 1 for renormalisation purposes.
-        '''
+        """
         self.readout_error = readout_error
         self.alpha = alpha
         self.rng = _ensure_rng(rng)
@@ -29,9 +29,9 @@ class BiasedSampler:
         pass
 
     def send(self, ps):
-        '''
+        """
         @readout_error: probability of the state update and classical output disagreeing
-        '''
+        """
 
         if ps is None:
             return None

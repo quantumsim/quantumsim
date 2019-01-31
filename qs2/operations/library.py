@@ -1,9 +1,9 @@
 import numpy as np
 from functools import lru_cache
 from .operation import Transformation, join
-from ..bases import gell_mann
+from .. import bases
 
-_PAULI = dict(zip(['I', 'X', 'Y', 'Z'], gell_mann(2).vectors))
+_PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
 
 @lru_cache(maxsize=64)
@@ -202,8 +202,8 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
             [0, np.sqrt((1 - comb_rate)), 0, 0],
             [0, 0, np.sqrt((1 - comb_rate)), 0],
             [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
-        bases = (gell_mann(2),)
-        return Transformation.from_ptm(ptm, bases)
+        bases_ = (bases.gell_mann(2),)
+        return Transformation.from_ptm(ptm, bases_)
 
 
 @lru_cache(maxsize=32)
@@ -220,8 +220,8 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
                 "the three axis must be provided")
         ptm = np.diag(
             [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
-        bases = (gell_mann(2),)
-        return Transformation.from_ptm(ptm, bases)
+        bases_ = (bases.gell_mann(2),)
+        return Transformation.from_ptm(ptm, bases_)
 
 
 @lru_cache(maxsize=64)
