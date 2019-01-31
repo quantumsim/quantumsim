@@ -59,6 +59,27 @@ class Operation(metaclass=abc.ABCMeta):
         """
         pass
 
+    @abc.abstractmethod
+    def compile(self, basis_in, basis_out):
+        """Return an optimized version of this circuit, based on the
+        restrictions on input and output bases, that may not be full.
+
+        Parameters
+        ----------
+        basis_in : list of qs2.bases.PauliBasis or None
+            Input bases of the qubits. If `None` provided, full :math:`01xy`
+            basis is assumed.
+        basis_out : list of qs2.bases.PauliBasis
+            Output bases of the qubits. If `None` provided, full :math:`01xy`
+            basis is assumed.
+
+        Returns
+        -------
+        qs2.operations.Operation
+            Optimized representation of self.
+        """
+        pass
+
 
 class _IndexedOperation:
     """Internal representation of an operations during their multiplications.
@@ -67,6 +88,13 @@ class _IndexedOperation:
     def __init__(self, operation, indices):
         self.op = operation
         self.indices = indices
+
+    def __matmul__(self, other):
+        """Combines an operation with another operation in a clever manner."""
+        if not isinstance(other, _IndexedOperation):
+            raise ValueError('RHS must be an operation')
+        involved_indices = set(sorted(self.indices + other.indices))
+        raise NotImplementedError
 
 
 class Transformation(Operation):
@@ -79,6 +107,16 @@ class Transformation(Operation):
     :func:`CompletelyPositiveMap.from_ptm`. Constructor of this class is not
     supposed to be called in user code.
 
+    Attributes
+    ----------
+    sv_cutoff : float
+        During the Pauli transfer matrix optimizations, singular value
+        decomposition of a transfer matrix is used to determine optimal
+        computational basis. All singular values less than `sv_cutoff`
+        are considered weakly contributed and neglected. This attribute
+        should be set before any compilation of a circuit, otherwise default
+        is used (1e-5).
+
     References
     ----------
     .. [1] M. A. Nielsen, I. L. Chuang, "Quantum Computation and Quantum
@@ -86,6 +124,9 @@ class Transformation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
+
+    sv_cutoff = 1e-5
+
     def __init__(self, *, _i_know_what_i_do=False):
         if not _i_know_what_i_do:
             raise RuntimeError(
@@ -94,8 +135,8 @@ class Transformation(Operation):
                 'TracePreservingProcess.from_kraus()')
         self._ptm = None
         self._kraus = None
-        self._bases_in = None
-        self._bases_out = None
+        self._basis_in = None
+        self._basis_out = None
         self._dim_hilbert = None
 
     @classmethod
@@ -120,13 +161,13 @@ class Transformation(Operation):
             Resulting operation
         """
         out = cls(_i_know_what_i_do=True)
-        out._bases_in = bases_in
+        out._basis_in = bases_in
         out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
         if bases_out is not None:
             out._validate_bases(bases_out=bases_out)
-            out._bases_out = bases_out
+            out._basis_out = bases_out
         else:
-            out._bases_out = bases_in
+            out._basis_out = bases_in
         expected_shape = (np.prod(out.dim_pauli),) * 2
         if not ptm.shape == expected_shape:
             raise ValueError(
@@ -213,8 +254,8 @@ class Transformation(Operation):
     def ptm(self, bases_in, bases_out=None):
         if bases_out is None:
             bases_out = bases_in
-        if (self._ptm is not None and bases_in == self._bases_in and
-                bases_out == self._bases_out):
+        if (self._ptm is not None and bases_in == self._basis_in and
+                bases_out == self._basis_out):
             return self._ptm
         self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         if self._kraus is not None:
@@ -227,12 +268,72 @@ class Transformation(Operation):
         if self._ptm is not None:
             return np.einsum("xij, yji, yz, zkl, wlk -> xw",
                              self._combine_bases_vectors(bases_out),
-                             self._combine_bases_vectors(self._bases_out),
+                             self._combine_bases_vectors(self._basis_out),
                              self._ptm,
-                             self._combine_bases_vectors(self._bases_in),
+                             self._combine_bases_vectors(self._basis_in),
                              self._combine_bases_vectors(bases_in),
                              optimize=True).real
         raise RuntimeError("Neither `self._kraus`, nor `self._ptm` are set.")
+
+    def compile(self, basis_in, basis_out):
+        raise NotImplementedError
+
+    def optimal_basis(self, basis_in, basis_out):
+        """Based on input or output bases provided, determine an optimal
+        basis, throwing away all basis elements, that are guaranteed not to
+        contribute to the result of PTM application.
+
+        Circuits provide some restrictions on input and output basis. For
+        example, after the ideal initialization gate system is guaranteed to
+        stay in :math:`|0\rangle` state, which means that input basis will
+        consist of a single element. Similarly, if after the gate application
+        qubit will be measured, only :math:`|0\rangle` and :math:`|1\rangle`
+        states need to be computed, therefore we may reduce output basis to
+        the classical subbasis. This method is used to perform such sort of
+        optimization: usage of subbasis instead of a full basis in a density
+        matrix will exponentially reduce memory consumption and computational
+        time.
+
+        Parameters
+        ----------
+        basis_in : list of qs2.bases.PauliBasis or None
+            Basis of input elements, that is involved in computation. If
+            None, either internal representation is taken (if available) or
+            full :func:`qs2.bases.general` basis is used.
+        basis_out : list of qs2.bases.PauliBasis or None
+            Basis of output elements, that is involved in computation. If
+            None, either internal representation is taken (if available) or
+            full :func:`qs2.bases.general` basis is used.
+
+        Returns
+        -------
+        opt_basis_in, opt_basis_out: list of qs2.bases.PauliBasis
+            Subbases of input bases, that will contribute to computation.
+        """
+        # FIXME Bases can be None separately
+        basis_in = (basis_in or
+                    self._basis_in or
+                    [bases.general(d) for d in self.dim_hilbert])
+        basis_out = (basis_out or
+                     self._basis_out or
+                     [bases.general(d) for d in self.dim_hilbert])
+        raise NotImplementedError
+
+    def _optimal_basis_out(self, basis_in, basis_out):
+        """Part of `optimal_basis` method, that throws unnecessary basis
+        vectors in `basis_out`, based on restrictions on `basis_in`."""
+        u, s, vh = np.linalg.svd(self.ptm(basis_in, basis_out))
+        truncate_index, = (s > self.sv_cutoff).shape
+        mask = np.count_nonzero(u[:, :truncate_index], axis=1)\
+                 .reshape(tuple(b.dim_pauli for b in bases_out))
+        opt_basis_out = []
+        for i, basis in enumerate(basis_out):
+            active_elements = np.unique(np.unique(np.nonzero(mask)[i]))
+            if len(active_elements) < basis.dim_pauli:
+                opt_basis_out.append(basis.subbasis(active_elements))
+            else:
+                optimized_basis.append(basis)
+        return basis_in, opt_basis_out
 
     @staticmethod
     @lru_cache(maxsize=8)
@@ -275,11 +376,11 @@ class Transformation(Operation):
 class Initialization(Operation):
     @property
     def dim_hilbert(self):
-        pass
+        raise NotImplementedError
 
     @property
     def dim_pauli(self):
-        pass
+        raise NotImplementedError
 
     def __call__(self, state, *qubit_indices):
         """Not implemented yet as I am unsure how the state will look.
@@ -287,16 +388,20 @@ class Initialization(Operation):
         """
         pass
 
+    def compile(self, basis_in, basis_out):
+        pass
+
 
 class Projection(Operation):
     @property
     def dim_hilbert(self):
-        pass
+        raise NotImplementedError
 
     @property
     def dim_pauli(self):
-        pass
+        raise NotImplementedError
 
+    # FIXME Sampler should not be there.
     def __call__(self, state, sampler, *qubit_indices):
         """Returns the result of the measurement
 
@@ -315,6 +420,9 @@ class Projection(Operation):
             state.project(ind, proj_state)
             results.append(tuple(declared_state, proj_state, cond_prob))
         return results
+
+    def compile(self, basis_in, basis_out):
+        pass
 
 
 def join(*processes):
