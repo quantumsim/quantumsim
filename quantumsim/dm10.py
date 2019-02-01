@@ -283,7 +283,7 @@ class Density:
 
         self.get_diag_work()
 
-        diag = self.diag_work.get()
+        diag = self.diag_work[:1 << self.no_qubits].get()
 
         diag = diag.reshape([2]*self.no_qubits)
 
