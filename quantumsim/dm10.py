@@ -280,26 +280,18 @@ class Density:
 
     def partial_trace(self, bit):
         assert bit < self.no_qubits
-        if self.no_qubits > 10:
-            raise NotImplementedError(
-                "Trace not implemented for more than 10 qubits yet")
-        if self.allocated_diag < self.no_qubits:
-            self.diag_work = ga.empty((1 << self.no_qubits), dtype=np.float64)
-            self.allocated_qubits = self.no_qubits
-        block = (2**self.no_qubits, 1, 1)
-        grid = (1, 1, 1)
 
-        _get_diag.prepared_call(
-            grid,
-            block,
-            self.data.gpudata,
-            self.diag_work.gpudata,
-            np.uint32(self.no_qubits))
+        self.get_diag_work()
 
-        _trace.prepared_call(grid, block,
-                             self.diag_work.gpudata, bit, shared_size=8 * block[0])
+        diag = self.diag_work.get()
 
-        tr1, tr0 = self.diag_work[:2].get()
+        diag = diag.reshape([2]*self.no_qubits)
+
+        idx_to_sum = [i 
+                for i in range(self.no_qubits) 
+                if i != self.no_qubits - bit - 1]
+
+        tr0, tr1 = np.sum(diag, axis=tuple(idx_to_sum))
         return tr0, tr1
 
     def project_measurement(self, bit, state):
