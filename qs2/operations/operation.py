@@ -54,10 +54,11 @@ class Operation(metaclass=abc.ABCMeta):
 
         For example, for a single-qubit gate, acting in a full basis,
         shape should be :math:`\\left(d^2, d^2\\right)`, where d is a Hilbert
-        dimensionality of a qubit subspace. For a two-qubit gate it will be
-        :math:`\\left(d^2, d^2, d^2, d^2\\right)`. If PTM acts on a reduced
-        basis or reduces a basis (for example, it is a projection), elements
-        can be less than :math:`d^2`.
+        dimensionality of a qubit subspace. First item corresponds to the
+        output dimensionality, second -- to the input one. For a two-qubit
+        gate it will be :math:`\\left(d^2, d^2, d^2, d^2\\right)`.
+        If PTM acts on a reduced basis or reduces a basis (for example,
+        it is a projection), elements can be less than :math:`d^2`.
         """
         pass
 
@@ -70,7 +71,7 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def compile(self, basis_in, basis_out):
+    def compile(self, basis_in=None, basis_out=None):
         """Return an optimized version of this circuit, based on the
         restrictions on input and output bases, that may not be full.
 
@@ -175,17 +176,13 @@ class Transformation(Operation):
         out._bases_out = bases_out
         out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
         out._validate_bases(bases_out=bases_out)
-        ptm_shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
-        try:
-            out._ptm = ptm.reshape(ptm_shape)
-        except ValueError:
-            d_in = np.prod((b.dim_pauli for b in bases_in))
-            d_out = np.prod((b.dim_pauli for b in bases_out))
+        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
                 'dimensionality: \n'
                 '- expected shape from provided `bases`: {}\n'
-                '- `ptm` shape: {}'.format((d_out, d_in), ptm.shape))
+                '- `ptm` shape: {}'.format(shape, ptm.shape))
         out._ptm = ptm
         return out
 
@@ -271,13 +268,14 @@ class Transformation(Operation):
                 bases_out == self._bases_out):
             return self._ptm
         self._validate_bases(bases_in=bases_in, bases_out=bases_out)
+        shape = tuple(b.dim_pauli for b in chain (bases_out, bases_in))
         if self._kraus is not None:
             return np.einsum("xab, zbc, ycd, zad -> xy",
                              self._combine_bases_vectors(bases_out),
                              self._kraus,
                              self._combine_bases_vectors(bases_in),
                              self._kraus.conj(),
-                             optimize=True).real
+                             optimize=True).real.reshape(shape)
         if self._ptm is not None:
             return np.einsum("xij, yji, yz, zkl, wlk -> xw",
                              self._combine_bases_vectors(bases_out),
@@ -285,7 +283,7 @@ class Transformation(Operation):
                              self._ptm,
                              self._combine_bases_vectors(self._bases_in),
                              self._combine_bases_vectors(bases_in),
-                             optimize=True).real
+                             optimize=True).real.reshape(shape)
         raise RuntimeError("Neither `self._kraus`, nor `self._ptm` are set.")
 
     def compile(self, bases_in=None, bases_out=None):
@@ -330,8 +328,10 @@ class Transformation(Operation):
         bases_out = (bases_out or
                      self._bases_out or
                      tuple(general(d) for d in self.dim_hilbert))
-
-        u, s, vh = np.linalg.svd(self.ptm(bases_in, bases_out),
+        d_in = np.prod([b.dim_pauli for b in bases_in])
+        d_out = np.prod([b.dim_pauli for b in bases_out])
+        u, s, vh = np.linalg.svd(self.ptm(bases_in, bases_out)
+                                     .reshape(d_out, d_in),
                                  full_matrices=False)
         (truncate_index,) = (s > self.sv_cutoff).shape
 

@@ -151,7 +151,8 @@ class TestOperations:
         cz_op = Transformation.from_kraus(cz_kraus_mat, (2, 2))
         cz_ptm = cz_op.ptm(gm_two_qubit_basis)
 
-        assert cz_ptm.shape == (16, 16)
+        assert cz_ptm.shape == (4, 4, 4, 4)
+        cz_ptm = cz_ptm.reshape((16, 16))
         assert np.all(cz_ptm.round(3) <= 1)
         assert np.all(cz_ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm[0, :]), 1)
@@ -165,11 +166,12 @@ class TestOperations:
         cz_op = Transformation.from_kraus(cz_kraus_mat, (3, 3))
         cz_ptm = cz_op.ptm(system_bases)
 
-        assert cz_ptm.shape == (81, 81)
-        assert np.all(cz_ptm.round(3) <= 1) and np.all(
+        assert cz_ptm.shape == (9, 9, 9, 9)
+        cz_ptm_flat = cz_ptm.reshape((81, 81))
+        assert np.all(cz_ptm_flat.round(3) <= 1) and np.all(
             cz_ptm.round(3) >= -1)
-        assert np.isclose(np.sum(cz_ptm[0, :]), 1)
-        assert np.isclose(np.sum(cz_ptm[:, 0]), 1)
+        assert np.isclose(np.sum(cz_ptm_flat[0, :]), 1)
+        assert np.isclose(np.sum(cz_ptm_flat[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
         qutrit_basis = (bases.general(3),)
@@ -274,3 +276,38 @@ class TestOperations:
         assert ob_in[1] == b0
         assert ob_out[0] == b
         assert ob_out[1] == b
+
+    def test_compile_singleqb_2d(self):
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b01 = b.computational_subbasis()
+
+        op = lib.rotate_y(np.pi)
+        assert op.shape == (4, 4)
+        op_full = op.compile(bases_in=(b,))
+        assert op_full.shape == (4, 4)
+        op_cl = op.compile(bases_in=(b01,))
+        assert op_cl.shape == (2, 2)
+
+        op = lib.rotate_x(np.pi/3)
+        assert op.shape == (4, 4)
+        op_full = op.compile(bases_in=(b,), bases_out=(b01,))
+        # X component of a state is irrelevant for the output.
+        assert op_full.shape == (2, 3)
+        op_cl = op.compile(bases_in=(b0,))
+        assert op_cl.shape == (3, 1)
+
+    def test_compile_twoqb_2d(self):
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b1 = b.subbasis([1])
+        b01 = b.computational_subbasis()
+
+        op = lib.cnot()
+        assert op.shape == (4, 4, 4, 4)
+        op_full = op.compile(bases_in=(b, b))
+        assert op_full.shape == (4, 4, 4, 4)
+        op_cl = op.compile(bases_in=(b01, b01))
+        assert op_cl.shape == (2, 2, 2, 2)
+        op_cl = op.compile(bases_in=(b0, b))
+        assert op_cl.shape == (1, 4, 1, 4)
