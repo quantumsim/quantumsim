@@ -1,5 +1,7 @@
 import abc
 from functools import reduce, lru_cache
+from itertools import chain
+
 import numpy as np
 from ..bases import general
 
@@ -135,12 +137,12 @@ class Transformation(Operation):
                 'TracePreservingProcess.from_kraus()')
         self._ptm = None
         self._kraus = None
-        self._basis_in = None
-        self._basis_out = None
+        self._bases_in = None
+        self._bases_out = None
         self._dim_hilbert = None
 
     @classmethod
-    def from_ptm(cls, ptm, bases_in, bases_out=None):
+    def from_ptm(cls, ptm, bases_in, bases_out):
         """Construct completely positive map, based on Pauli transfer matrix.
 
         TODO: elaborate on PTM format.
@@ -151,7 +153,7 @@ class Transformation(Operation):
             Pauli transfer matrix in a form of Numpy array
         bases_in: tuple of qs2.bases.PauliBasis
             Input bases of qubits.
-        bases_out: tuple of qs2.bases.PauliBasis or None
+        bases_out: tuple of qs2.bases.PauliBasis
             Output bases of qubits. If None, assumed to be the same as input
             bases.
 
@@ -161,20 +163,21 @@ class Transformation(Operation):
             Resulting operation
         """
         out = cls(_i_know_what_i_do=True)
-        out._basis_in = bases_in
+        out._bases_in = bases_in
+        out._bases_out = bases_out
         out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
-        if bases_out is not None:
-            out._validate_bases(bases_out=bases_out)
-            out._basis_out = bases_out
-        else:
-            out._basis_out = bases_in
-        expected_shape = (np.prod(out.dim_pauli),) * 2
-        if not ptm.shape == expected_shape:
+        out._validate_bases(bases_out=bases_out)
+        ptm_shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        try:
+            out._ptm = ptm.reshape(ptm_shape)
+        except ValueError:
+            d_in = np.prod((b.dim_pauli for b in bases_in))
+            d_out = np.prod((b.dim_pauli for b in bases_out))
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
                 'dimensionality: \n'
                 '- expected shape from provided `bases`: {}\n'
-                '- `ptm` shape: {}'.format(expected_shape, out._ptm.shape))
+                '- `ptm` shape: {}'.format((d_out, d_in), ptm.shape))
         out._ptm = ptm
         return out
 
@@ -250,12 +253,11 @@ class Transformation(Operation):
         """
         return _IndexedOperation(self, indices)
 
-    @lru_cache(maxsize=32)
     def ptm(self, bases_in, bases_out=None):
         if bases_out is None:
             bases_out = bases_in
-        if (self._ptm is not None and bases_in == self._basis_in and
-                bases_out == self._basis_out):
+        if (self._ptm is not None and bases_in == self._bases_in and
+                bases_out == self._bases_out):
             return self._ptm
         self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         if self._kraus is not None:
@@ -268,17 +270,18 @@ class Transformation(Operation):
         if self._ptm is not None:
             return np.einsum("xij, yji, yz, zkl, wlk -> xw",
                              self._combine_bases_vectors(bases_out),
-                             self._combine_bases_vectors(self._basis_out),
+                             self._combine_bases_vectors(self._bases_out),
                              self._ptm,
-                             self._combine_bases_vectors(self._basis_in),
+                             self._combine_bases_vectors(self._bases_in),
                              self._combine_bases_vectors(bases_in),
                              optimize=True).real
         raise RuntimeError("Neither `self._kraus`, nor `self._ptm` are set.")
 
-    def compile(self, basis_in, basis_out):
-        raise NotImplementedError
+    def compile(self, bases_in=None, bases_out=None):
+        opt_bases = self.optimal_bases(bases_in, bases_out)
+        return self.from_ptm(self.ptm(*opt_bases), *opt_bases)
 
-    def optimal_basis(self, basis_in, basis_out):
+    def optimal_bases(self, bases_in=None, bases_out=None):
         """Based on input or output bases provided, determine an optimal
         basis, throwing away all basis elements, that are guaranteed not to
         contribute to the result of PTM application.
@@ -296,49 +299,63 @@ class Transformation(Operation):
 
         Parameters
         ----------
-        basis_in : list of qs2.bases.PauliBasis or None
+        bases_in : tuple of qs2.bases.PauliBasis or None
             Basis of input elements, that is involved in computation. If
             None, either internal representation is taken (if available) or
             full :func:`qs2.bases.general` basis is used.
-        basis_out : list of qs2.bases.PauliBasis or None
+        bases_out : tuple of qs2.bases.PauliBasis or None
             Basis of output elements, that is involved in computation. If
             None, either internal representation is taken (if available) or
             full :func:`qs2.bases.general` basis is used.
 
         Returns
         -------
-        opt_basis_in, opt_basis_out: list of qs2.bases.PauliBasis
+        opt_basis_in, opt_basis_out: tuple of qs2.bases.PauliBasis
             Subbases of input bases, that will contribute to computation.
         """
-        # FIXME Bases can be None separately
-        basis_in = (basis_in or
-                    self._basis_in or
-                    [bases.general(d) for d in self.dim_hilbert])
-        basis_out = (basis_out or
-                     self._basis_out or
-                     [bases.general(d) for d in self.dim_hilbert])
-        raise NotImplementedError
+        bases_in = (bases_in or
+                    self._bases_in or
+                    tuple(general(d) for d in self.dim_hilbert))
+        bases_out = (bases_out or
+                     self._bases_out or
+                     tuple(general(d) for d in self.dim_hilbert))
 
-    def _optimal_basis_out(self, basis_in, basis_out):
-        """Part of `optimal_basis` method, that throws unnecessary basis
-        vectors in `basis_out`, based on restrictions on `basis_in`."""
-        u, s, vh = np.linalg.svd(self.ptm(basis_in, basis_out))
-        truncate_index, = (s > self.sv_cutoff).shape
-        mask = np.count_nonzero(u[:, :truncate_index], axis=1)\
-                 .reshape(tuple(b.dim_pauli for b in bases_out))
-        opt_basis_out = []
-        for i, basis in enumerate(basis_out):
-            active_elements = np.unique(np.unique(np.nonzero(mask)[i]))
-            if len(active_elements) < basis.dim_pauli:
-                opt_basis_out.append(basis.subbasis(active_elements))
-            else:
-                optimized_basis.append(basis)
-        return basis_in, opt_basis_out
+        u, s, vh = np.linalg.svd(self.ptm(bases_in, bases_out),
+                                 full_matrices=False)
+        (truncate_index,) = (s > self.sv_cutoff).shape
+
+        # mask_in = np.count_nonzero(vh[:truncate_index], axis=0) \
+        #             .reshape(tuple(b.dim_pauli for b in bases_in)) \
+        #             .nonzero()
+        mask_in = np.any(np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
+                    .reshape(tuple(b.dim_pauli for b in bases_in)) \
+                    .nonzero()
+        mask_out = np.any(np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
+                     .reshape(tuple(b.dim_pauli for b in bases_out)) \
+                     .nonzero()
+
+        opt_bases_in = []
+        opt_bases_out = []
+        for opt_bases, bases, mask in (
+                (opt_bases_in, bases_in, mask_in),
+                (opt_bases_out, bases_out, mask_out)):
+            for basis, involved_indices in zip(bases, mask):
+                # Figure out what single-qubit basis elements are not
+                # involved at all
+                unique_indices = np.unique(involved_indices)
+                if len(unique_indices) < basis.dim_pauli:
+                    # We can safely use a subbasis
+                    opt_bases.append(basis.subbasis(unique_indices))
+                else:
+                    # Nothing can be thrown out
+                    opt_bases.append(basis)
+
+        return tuple(opt_bases_in), tuple(opt_bases_out)
 
     @staticmethod
     @lru_cache(maxsize=8)
     def _combine_bases_vectors(bases):
-        return reduce(np.kron, [basis.vectors for basis in bases])
+        return reduce(np.kron, [b.vectors for b in bases])
 
     def _validate_bases(self, **kwargs):
         for name, bases in kwargs.items():

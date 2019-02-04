@@ -6,7 +6,6 @@
 import pytest
 import numpy as np
 
-# from qs2.operations import operators
 from qs2.operations.operation import Transformation
 from qs2 import bases
 from qs2.operations import library as lib
@@ -76,7 +75,7 @@ class TestLibrary:
         rotate180(dm, 0)
         assert np.allclose(dm.expansion(), [1, 0, 0, 0])
 
-        # manually apply a hadamard gate
+        # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, sqrt2, 0])
         superpos_dm = DensityMatrix(qubit_basis,
                                     had_expansion)
@@ -199,9 +198,79 @@ class TestOperations:
         damp_op_kraus = Transformation.from_kraus(damp_kraus_mat, (2,))
         ptm_gell_man = damp_op_kraus.ptm(gell_man_basis)
         damp_op_ptm = Transformation.from_ptm(ptm_gell_man,
+                                              gell_man_basis,
                                               gell_man_basis)
 
         ptm_general_kraus = damp_op_kraus.ptm(general_basis)
         ptm_general_converted = damp_op_ptm.ptm(general_basis)
 
         assert np.allclose(ptm_general_kraus, ptm_general_converted)
+
+    def test_opt_basis_singleqb_2d(self):
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b1 = b.subbasis([1])
+        b01 = b.computational_subbasis()
+
+        # Identity up to floating point error
+        rot = lib.rotate_x(2*np.pi)
+        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b0,))
+        assert ob_in == b0
+        assert ob_out == b0
+        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b1,))
+        assert ob_in == b1
+        assert ob_out == b1
+
+        # RX(pi)
+        rot = lib.rotate_x(np.pi)
+        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b0,))
+        assert ob_in == b0
+        assert ob_out == b1
+        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b1,))
+        assert ob_in == b1
+        assert ob_out == b0
+
+        # RY(pi/2)
+        rot = lib.rotate_y(np.pi/2)
+        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b01,))
+        assert ob_in == b01
+        assert ob_out.dim_pauli == 3
+        assert '0' in ob_out.labels
+        assert '1' in ob_out.labels
+        assert 'X10' in ob_out.labels
+
+    def test_opt_basis_twoqb_2d(self):
+        op = lib.cnot()
+
+        # Classical input basis -> classical output basis
+        # Possible flip in control bit
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b01 = b.subbasis([0, 1])
+        b_in = (b01, b0)
+        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
+        assert ob_in[0] == b01
+        assert ob_in[1] == b0
+        assert ob_out[0] == b01
+        assert ob_out[1] == b01
+
+        # Classical control bit is not violated
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b_in = (b0, b)
+        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
+        assert ob_in[0] == b0
+        assert ob_in[1] == b
+        assert ob_out[0] == b0
+        assert ob_out[1] == b
+
+        # Classical target bit will become quantum for quantum control bit,
+        # input should not be violated
+        b = bases.general(2)
+        b0 = b.subbasis([0])
+        b_in = (b, b0)
+        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
+        assert ob_in[0] == b
+        assert ob_in[1] == b0
+        assert ob_out[0] == b
+        assert ob_out[1] == b
