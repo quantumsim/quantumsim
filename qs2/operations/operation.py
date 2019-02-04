@@ -49,8 +49,16 @@ class Operation(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def dim_pauli(self):
-        """Pauli dimensionality of qubits the operation acts onto."""
+    def shape(self):
+        """Shape of a PTM, that represents the operation, qubit-wise.
+
+        For example, for a single-qubit gate, acting in a full basis,
+        shape should be :math:`\\left(d^2, d^2\\right)`, where d is a Hilbert
+        dimensionality of a qubit subspace. For a two-qubit gate it will be
+        :math:`\\left(d^2, d^2, d^2, d^2\\right)`. If PTM acts on a reduced
+        basis or reduces a basis (for example, it is a projection), elements
+        can be less than :math:`d^2`.
+        """
         pass
 
     @abc.abstractmethod
@@ -225,8 +233,11 @@ class Transformation(Operation):
         return self._dim_hilbert
 
     @property
-    def dim_pauli(self):
-        return tuple((d * d for d in self._dim_hilbert))
+    def shape(self):
+        if self._ptm is not None:
+            return self._ptm.shape
+        else:
+            return tuple((d * d for d in self._dim_hilbert)) * 2
 
     @property
     def num_subspaces(self):
@@ -396,7 +407,7 @@ class Initialization(Operation):
         raise NotImplementedError
 
     @property
-    def dim_pauli(self):
+    def shape(self):
         raise NotImplementedError
 
     def __call__(self, state, *qubit_indices):
@@ -415,7 +426,7 @@ class Projection(Operation):
         raise NotImplementedError
 
     @property
-    def dim_pauli(self):
+    def shape(self):
         raise NotImplementedError
 
     # FIXME Sampler should not be there.
