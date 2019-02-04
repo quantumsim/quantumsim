@@ -45,6 +45,12 @@ class PauliBasis:
 
         self.trace_index = self._to_unit_vector(traces)
 
+    def __eq__(self, other):
+        return np.all(self.vectors == other.vectors)
+
+    def __hash__(self):
+        return hash(np.ascontiguousarray(self.vectors).data.tobytes())
+
     @property
     def dim_hilbert(self):
         return self.vectors.shape[1]
