@@ -146,6 +146,8 @@ class TestOperations:
                                  [p_damp, 0, 0, 1-p_damp]])
 
         assert np.allclose(damp_ptm, expected_mat)
+        with pytest.raises(ValueError, match=r'.* should be a tuple, .*'):
+            damp_op.ptm(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
         cz_op = Transformation.from_kraus(cz_kraus_mat, (2, 2))

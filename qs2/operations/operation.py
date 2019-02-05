@@ -369,7 +369,12 @@ class Transformation(Operation):
         return reduce(np.kron, [b.vectors for b in bases])
 
     def _validate_bases(self, **kwargs):
+
         for name, bases in kwargs.items():
+            if not isinstance(bases, tuple):
+                raise ValueError(
+                    "`{n}` should be a tuple, got {t}."
+                    .format(n=name, t=type(bases)))
             dim_hilbert = tuple((b.dim_hilbert for b in bases))
             if self.dim_hilbert != dim_hilbert:
                 raise ValueError(
