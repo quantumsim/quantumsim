@@ -149,6 +149,7 @@ class Transformation(Operation):
         self._bases_in = None
         self._bases_out = None
         self._dim_hilbert = None
+        self._num_qubits = None
 
     @classmethod
     def from_ptm(cls, ptm, bases_in, bases_out):
@@ -174,7 +175,16 @@ class Transformation(Operation):
         out = cls(_i_know_what_i_do=True)
         out._bases_in = bases_in
         out._bases_out = bases_out
-        out._dim_hilbert = tuple([basis.dim_hilbert for basis in bases_in])
+        out._dim_hilbert = bases_in[0].dim_hilbert
+        out._num_qubits = len(bases_in)
+        if out._num_qubits != len(bases_out):
+            raise ValueError('Number of qubits should be the same in bases_in '
+                             '(has {} qubits) and bases_out (has {} qubits)'
+                             .format(len(bases_in), len(bases_out)))
+        for b in chain(bases_in, bases_out):
+            if b.dim_hilbert != out._dim_hilbert:
+                raise ValueError(
+                    'All bases must have the same Hilbert dimensionality.')
         out._validate_bases(bases_out=bases_out)
         shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
         if not ptm.shape == shape:
@@ -187,7 +197,7 @@ class Transformation(Operation):
         return out
 
     @classmethod
-    def from_kraus(cls, kraus, dim_hilbert):
+    def from_kraus(cls, kraus, dim_hilbert=2):
         """Construct completely positive map, based on a set of Kraus matrices.
 
         TODO: elaborate on Kraus matrices format.
@@ -196,8 +206,8 @@ class Transformation(Operation):
         ----------
         kraus: array_like
             Pauli transfer matrix in a form of Numpy array
-        dim_hilbert: tuple of int
-            Dimensionalities of qubit subspaces.
+        dim_hilbert: int
+            Dimensionality of qudits in the operation.
 
         Returns
         -------
@@ -205,6 +215,8 @@ class Transformation(Operation):
             Resulting operation
         """
         out = cls(_i_know_what_i_do=True)
+        out._dim_hilbert = dim_hilbert
+
         if not isinstance(kraus, np.ndarray):
             kraus = np.array(kraus)
         if len(kraus.shape) == 2:
@@ -212,17 +224,23 @@ class Transformation(Operation):
         elif len(kraus.shape) != 3:
             raise ValueError(
                 '`kraus` should be a 2D or 3D array, got shape {}'
-                    .format(kraus.shape))
-        expected_size = np.prod(dim_hilbert)
-        expected_shape = (expected_size, expected_size)
-        if kraus.shape[1:] != expected_shape:
+                .format(kraus.shape))
+
+        kraus_size = kraus.shape[1]
+        if kraus_size != kraus.shape[2]:
+            raise ValueError('Kraus operators should be square matrices, got '
+                             '{}x{}'.format(kraus.shape[1], kraus.shape[2]))
+        if kraus_size == dim_hilbert:
+            out._num_qubits = 1
+        elif kraus_size == dim_hilbert ** 2:
+            out._num_qubits = 2
+        else:
             raise ValueError(
-                'Shape of `kraus` is not compatible with the `dim_hilbert`\n'
-                '- expected shape from provided `dim_hilbert`: (?, {m}, {m})\n'
-                '- `ptm` shape: {shape}'
-                    .format(m=expected_size, shape=kraus.shape))
+                'Expected {n1}x{n1} (single-qubit transformation) or {n2}x{n2} '
+                '(two-qubit transformation) Kraus matrices, got {n}x{n}.'
+                .format(n=kraus_size, n1=dim_hilbert, n2=dim_hilbert**2))
+
         out._kraus = kraus
-        out._dim_hilbert = tuple(dim_hilbert)
         return out
 
     @property
@@ -234,15 +252,15 @@ class Transformation(Operation):
         if self._ptm is not None:
             return self._ptm.shape
         else:
-            return tuple((d * d for d in self._dim_hilbert)) * 2
+            return (self.dim_hilbert**2,) * (self.num_qubits*2)
 
     @property
-    def num_subspaces(self):
-        return len(self.dim_hilbert)
+    def num_qubits(self):
+        return self._num_qubits
 
     @property
     def size(self):
-        return np.product(self.dim_pauli)
+        return np.product(self.shape)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -324,10 +342,10 @@ class Transformation(Operation):
         """
         bases_in = (bases_in or
                     self._bases_in or
-                    tuple(general(d) for d in self.dim_hilbert))
+                    (general(self.dim_hilbert),) * self.num_qubits)
         bases_out = (bases_out or
                      self._bases_out or
-                     tuple(general(d) for d in self.dim_hilbert))
+                     (general(self.dim_hilbert),) * self.num_qubits)
         d_in = np.prod([b.dim_pauli for b in bases_in])
         d_out = np.prod([b.dim_pauli for b in bases_out])
         u, s, vh = np.linalg.svd(self.ptm(bases_in, bases_out)
@@ -369,25 +387,21 @@ class Transformation(Operation):
         return reduce(np.kron, [b.vectors for b in bases])
 
     def _validate_bases(self, **kwargs):
-
         for name, bases in kwargs.items():
             if not isinstance(bases, tuple):
                 raise ValueError(
                     "`{n}` should be a tuple, got {t}."
                     .format(n=name, t=type(bases)))
-            dim_hilbert = tuple((b.dim_hilbert for b in bases))
-            if self.dim_hilbert != dim_hilbert:
-                raise ValueError(
-                    "The dimensions of `{n}` do not match the operation's "
-                    "Hilbert dimensionality:\n"
-                    "- expected Hilbert dimensionality: {d_exp}\n"
-                    "- `{n}`' Hilbert dimensionality: {d_basis}"
-                    .format(n=name, d_exp=self.dim_hilbert, d_basis=dim_hilbert)
-                )
+            for b in bases:
+                if self.dim_hilbert != b.dim_hilbert:
+                    raise ValueError(
+                        "Expected bases with Hilbert dimensionality {}, "
+                        "but {} has elements with Hilbert dimensionality {}."
+                        .format(self.dim_hilbert, name, b.dim_hilbert))
 
     def __call__(self, state, *qubit_indices):
         # FIXME state should know its basis
-        proc_subspaces = self.num_subspaces
+        proc_subspaces = self.num_qubits
 
         if len(qubit_indices) != proc_subspaces:
             raise ValueError(
@@ -504,9 +518,9 @@ def join(*processes):
             '`Process.at()` method.')
 
     if cls is Transformation:
-        req_num_subspaces = init_proc.operator.num_subspaces
+        req_num_subspaces = init_proc.operator.num_qubits
 
-        if not all(proc.operator.num_subspaces == req_num_subspaces
+        if not all(proc.operator.num_qubits == req_num_subspaces
                    for proc in processes[1:]):
             raise ValueError(
                 'If joining processes the number of subspaces of each process must be the same.')
@@ -599,9 +613,9 @@ def _linear_addition(*weighted_processes):
                for proc_inst in processes):
         raise ValueError('All processes need to be Trace Perserving')
 
-    req_num_subspaces = processes[0].operator.num_subspaces
+    req_num_subspaces = processes[0].operator.num_qubits
 
-    if not all(proc.operator.num_subspaces == req_num_subspaces
+    if not all(proc.operator.num_qubits == req_num_subspaces
                for proc in processes):
         raise ValueError(
             'If joining processes the number of subspaces of each process must be the same.')
