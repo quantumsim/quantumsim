@@ -313,3 +313,30 @@ class TestOperations:
         assert op_cl.shape == (2, 2, 2, 2)
         op_cl = op.compile(bases_in=(b0, b))
         assert op_cl.shape == (1, 4, 1, 4)
+
+    def test_rescale_ptm_basis(self):
+        p_damp = 0.33
+        damp_kraus_mat = np.array(
+            [[[1, 0], [0, np.sqrt(1-p_damp)]],
+             [[0, np.sqrt(p_damp)], [0, 0]]])
+        b2 = (bases.gell_mann(2),)
+        b3 = (bases.gell_mann(3),)
+        b2c = (bases.gell_mann(2).computational_subbasis())
+        b3c = (bases.gell_mann(3).computational_subbasis())
+        op2 = Transformation.from_kraus(damp_kraus_mat, (2,))
+        assert op2.dim_hilbert == (2,)
+        ptm3 = op2.ptm(bases_in=b3, bases_out=b3)
+        op3 = Transformation.from_ptm(ptm3, b3, b3)
+        assert op3.dim_hilbert == (3,)
+        with pytest.raises(ValueError, '.* must have the same Hilbert .*'):
+            op3.ptm(b2, b3)
+        with pytest.raises(ValueError,
+                           'Hilbert dimensionality of .* is less than .*'):
+            op3.ptm(b2)
+        op3_c = op2.compile(b3c, b3c)
+        assert op3_c.dim_hilbert == (3,)
+        ptm2_c = op2.ptm(b2c, b2c)
+        ptm3_target = np.identity(3)
+        ptm2[:2,:2] = ptm2_c
+        ptm3_c = op3_c.ptm(b3c)
+        assert ptm3_c == ptm3_target
