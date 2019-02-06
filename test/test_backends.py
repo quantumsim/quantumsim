@@ -1,3 +1,8 @@
+# This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
+# (c) 2018 Quantumsim Authors
+# Distributed under the GNU GPLv3. See LICENSE.txt or
+# https://www.gnu.org/licenses/gpl.txt
+
 """Purpose of the tests in this file is mostly to check, that all interface
 methods in the bachends can be called and exceptions are raised,
 where necessary. Result sanity validation are done in test_state.py and
