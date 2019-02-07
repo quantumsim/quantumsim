@@ -3,10 +3,8 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
-import pytest
 import numpy as np
 
-from qs2.operations.operation import Transformation
 from qs2 import bases
 from qs2.operations import qutrits as lib
 from qs2.backends import DensityMatrix
@@ -77,8 +75,7 @@ class TestLibrary:
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, 0, sqrt2, 0, 0, 0, 0, 0])
-        superpos_dm = DensityMatrix(qubit_basis,
-                                    had_expansion)
+        superpos_dm = DensityMatrix(qubit_basis, had_expansion)
 
         rotate180(superpos_dm, 0)
         assert np.allclose(superpos_dm.expansion(),

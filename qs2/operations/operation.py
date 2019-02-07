@@ -1,4 +1,5 @@
 import abc
+from collections import namedtuple
 from functools import reduce, lru_cache
 from itertools import chain
 
@@ -49,17 +50,8 @@ class Operation(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def shape(self):
-        """Shape of a PTM, that represents the operation, qubit-wise.
-
-        For example, for a single-qubit gate, acting in a full basis,
-        shape should be :math:`\\left(d^2, d^2\\right)`, where d is a Hilbert
-        dimensionality of a qubit subspace. First item corresponds to the
-        output dimensionality, second -- to the input one. For a two-qubit
-        gate it will be :math:`\\left(d^2, d^2, d^2, d^2\\right)`.
-        If PTM acts on a reduced basis or reduces a basis (for example,
-        it is a projection), elements can be less than :math:`d^2`.
-        """
+    def num_qubits(self):
+        """Hilbert dimensionality of qubits the operation acts onto."""
         pass
 
     @abc.abstractmethod
@@ -91,21 +83,28 @@ class Operation(metaclass=abc.ABCMeta):
         """
         pass
 
+    def at(self, *indices):
+        """Returns a container with the operation, that provides also dumb
+        indices of qubits it acts on. Used during processes' concatenation
+        to match qubits they act onto.
 
-class _IndexedOperation:
-    """Internal representation of an operations during their multiplications.
-    Contains an operation itself and dumb indices of qubits it acts on.
-    """
-    def __init__(self, operation, indices):
-        self.op = operation
-        self.indices = indices
+        Parameters
+        ----------
+        i0, ..., iN: int
+            Dumb indices of qubits operation acts onto.
 
-    def __matmul__(self, other):
-        """Combines an operation with another operation in a clever manner."""
-        if not isinstance(other, _IndexedOperation):
-            raise ValueError('RHS must be an operation')
-        involved_indices = set(sorted(self.indices + other.indices))
-        raise NotImplementedError
+        Returns
+        -------
+        _IndexedOperation
+            Intermediate representation of an operation.
+        """
+        if not self.num_qubits == len(indices):
+            raise ValueError('Number of indices is not equal to the number of '
+                             'qubits in the operation.')
+        return _IndexedOperation(self, indices)
+
+
+_IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
 
 
 class Transformation(Operation):
@@ -249,6 +248,16 @@ class Transformation(Operation):
 
     @property
     def shape(self):
+        """Shape of a PTM, that represents the operation, qubit-wise.
+
+        For example, for a single-qubit gate, acting in a full basis,
+        shape should be :math:`\\left(d^2, d^2\\right)`, where d is a Hilbert
+        dimensionality of a qubit subspace. First item corresponds to the
+        output dimensionality, second -- to the input one. For a two-qubit
+        gate it will be :math:`\\left(d^2, d^2, d^2, d^2\\right)`.
+        If PTM acts on a reduced basis or reduces a basis (for example,
+        it is a projection), elements can be less than :math:`d^2`.
+        """
         if self._ptm is not None:
             return self._ptm.shape
         else:
@@ -261,23 +270,6 @@ class Transformation(Operation):
     @property
     def size(self):
         return np.product(self.shape)
-
-    def at(self, *indices):
-        """Returns a container with the operation, that provides also dumb
-        indices of qubits it acts on. Used during processes' concatenation
-        to match qubits they act onto.
-
-        Parameters
-        ----------
-        i0, ..., iN: int
-            Dumb indices of qubits operation acts onto.
-
-        Returns
-        -------
-        _IndexedOperation
-            Intermediate representation of an operation.
-        """
-        return _IndexedOperation(self, indices)
 
     def ptm(self, bases_in, bases_out=None):
         if bases_out is None:
@@ -421,6 +413,7 @@ class Transformation(Operation):
 
 
 class Initialization(Operation):
+
     @property
     def dim_hilbert(self):
         raise NotImplementedError
@@ -429,14 +422,18 @@ class Initialization(Operation):
     def shape(self):
         raise NotImplementedError
 
+    @property
+    def num_qubits(self):
+        raise NotImplementedError
+
     def __call__(self, state, *qubit_indices):
         """Not implemented yet as I am unsure how the state will look.
         Should be fairly straightforward to do so (state projection)
         """
-        pass
+        raise NotImplementedError
 
     def compile(self, basis_in, basis_out):
-        pass
+        raise NotImplementedError
 
 
 class Projection(Operation):
@@ -447,6 +444,10 @@ class Projection(Operation):
     @property
     def shape(self):
         raise NotImplementedError
+
+    @property
+    def num_qubits(self):
+        pass
 
     # FIXME Sampler should not be there.
     def __call__(self, state, sampler, *qubit_indices):
@@ -469,7 +470,65 @@ class Projection(Operation):
         return results
 
     def compile(self, basis_in, basis_out):
-        pass
+        raise NotImplementedError
+
+
+class Chain(Operation):
+    """
+    A chain of operations, that are applied sequentially.
+
+    Parameters
+    ----------
+    op0, ..., opN: _IndexedOperation
+        Operations with indices they are applied to
+    """
+    def __init__(self, *operations):
+        self._dim_hilbert = operations[0].operation.dim_hilbert
+        for op in operations[1:]:
+            if op.operation.dim_hilbert != self._dim_hilbert:
+                raise ValueError('All operations in the chain must have the '
+                                 'same Hilbert dimensionality.')
+        all_indices = np.unique(list(chain(*(op.indices for op in operations))))
+        if all_indices[0] != 0 or all_indices[-1] != len(all_indices) - 1:
+            raise ValueError('Indices of operations must form an ordered set '
+                             'from 0 to N-1')
+        self._num_qubits = len(all_indices)
+
+        joined_ops = []
+        for op_indices in operations:
+            # Flatten the operations chain
+            if isinstance(op_indices.operation, Chain):
+                for sub_ops, sub_indices in op_indices.operation.operations:
+                    op, indices = op_indices
+                    new_indices = tuple((indices[i] for i in sub_indices))
+                    joined_ops.append(_IndexedOperation(op, new_indices))
+            else:
+                joined_ops.append(op_indices)
+
+        self.operations = joined_ops
+
+    @property
+    def dim_hilbert(self):
+        return self._dim_hilbert
+
+    @property
+    def num_qubits(self):
+        return self._num_qubits
+
+    def compile(self, basis_in=None, basis_out=None):
+        raise NotImplementedError()
+
+    def __call__(self, state, *qubit_indices):
+        if len(qubit_indices) != self._num_qubits:
+            raise ValueError('This is a {}-qubit operation, number of qubit '
+                             'indices provided is {}'
+                             .format(self._num_qubits, len(qubit_indices)))
+        results = []
+        for op, indices in self.operations:
+            result = op(state, *(qubit_indices[i] for i in indices))
+            if result is not None:
+                results.append(result)
+        return results if len(results) > 0 else None
 
 
 def join(*processes):
