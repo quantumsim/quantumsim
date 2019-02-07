@@ -13,9 +13,9 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
 
     Parameters
     ----------
-    bases : list of qs2.bases.PauliBasis
+    bases : tuple of qs2.bases.PauliBasis
         A descrption of the basis for the subsystems.
-    expansion : numpy.ndarray, pycuda.gpuarray.GPUArray  or None
+    expansion : array, pycuda.gpuarray.GPUArray  or None
         Expansion of density matrix in the selected bases. If None, density
         matrix is initialized in :math:`\\left| 0 \\cdots 0 \\right\\rangle`
         state. Some sanity checks are done in the abstract class constructor,

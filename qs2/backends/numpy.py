@@ -12,10 +12,10 @@ class DensityMatrix(DensityMatrixBase):
 
         Parameters
         ----------
-        bases : list of qs2.bases.PauliBasis
+        bases : tuple of qs2.bases.PauliBasis
             Dimensions of qubits in the system.
 
-        expansion : numpy.ndarray or None.
+        expansion : array or None.
             Must be of size (2**no_qubits, 2**no_qubits). Only upper triangle
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
