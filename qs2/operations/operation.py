@@ -5,6 +5,7 @@ from itertools import chain
 
 import numpy as np
 from ..bases import general
+from .compiler import ChainCompiler
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -63,16 +64,16 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def compile(self, basis_in=None, basis_out=None):
+    def compile(self, bases_in=None, bases_out=None):
         """Return an optimized version of this circuit, based on the
         restrictions on input and output bases, that may not be full.
 
         Parameters
         ----------
-        basis_in : list of qs2.bases.PauliBasis or None
+        bases_in : list of qs2.bases.PauliBasis or None
             Input bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
-        basis_out : list of qs2.bases.PauliBasis
+        bases_out : list of qs2.bases.PauliBasis
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
 
@@ -432,7 +433,7 @@ class Initialization(Operation):
         """
         raise NotImplementedError
 
-    def compile(self, basis_in, basis_out):
+    def compile(self, bases_in, bases_out):
         raise NotImplementedError
 
 
@@ -469,7 +470,7 @@ class Projection(Operation):
             results.append(tuple(declared_state, proj_state, cond_prob))
         return results
 
-    def compile(self, basis_in, basis_out):
+    def compile(self, bases_in, bases_out):
         raise NotImplementedError
 
 
@@ -515,9 +516,6 @@ class Chain(Operation):
     def num_qubits(self):
         return self._num_qubits
 
-    def compile(self, basis_in=None, basis_out=None):
-        raise NotImplementedError()
-
     def __call__(self, state, *qubit_indices):
         if len(qubit_indices) != self._num_qubits:
             raise ValueError('This is a {}-qubit operation, number of qubit '
@@ -529,6 +527,10 @@ class Chain(Operation):
             if result is not None:
                 results.append(result)
         return results if len(results) > 0 else None
+
+    def compile(self, bases_in=None, bases_out=None):
+        compiler = ChainCompiler(self)
+        return compiler.compile(bases_in, bases_out)
 
 
 def join(*processes):

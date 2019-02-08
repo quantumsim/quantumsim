@@ -1,162 +1,202 @@
-from ..bases import general
-from .operation import Transformation, Projection
-from .operation import join
+from collections import deque
+import numpy as np
+
+from . import operation
 
 
-class _ProcessBlock:
-    """A process block is an internal structure used by the compiler.
+class Node:
+    def __init__(self, operation, qubits):
+        self.op = operation
+        self.qubits = qubits
+        self.prev = {i: None for i in qubits}
+        self.next = {i: None for i in qubits}
+        self.ptm = None
+        self.bases_in = {i: None for i in qubits}
+        self.bases_out = {i: None for i in qubits}
+        self.merged = False
 
-    Each block ultimately implements a process. However in addition a block is
-    aware of it's own bases and indicies, which are then used for the truncation
-    of the processes by the compiler, sparsity analysis and optimization.
+    def to_indexed_operation(self):
+        return operation.Transformation.from_ptm(
+            self.ptm,
+            tuple((self.bases_in[qubit] for qubit in self.qubits)),
+            tuple((self.bases_out[qubit] for qubit in self.qubits))
+        ).at(*self.qubits)
 
+
+class CompilerQueue:
+    def __init__(self, iterable=None):
+        self._queue = deque([])
+        if iterable:
+            for item in iterable:
+                self.add(item)
+
+    def add(self, item):
+        if item not in self._queue:
+            self._queue.append(item)
+
+    def get(self):
+        return self._queue.popleft()
+
+    def __len__(self):
+        return len(self._queue)
+
+    def compile_next(self):
+        node = self.get()
+        b_in = tuple((node.bases_in[q] for q in node.qubits))
+        b_out = tuple((node.bases_out[qubit] or node.bases_in[qubit].superbasis
+                       for qubit in node.qubits))
+        opt_b_in, opt_b_out = node.op.optimal_bases(b_in, b_out)
+        node.ptm = node.op.ptm(opt_b_in, opt_b_out)
+        assert node.ptm is not None
+
+        for qubit, bi, bo in zip(node.qubits, opt_b_in, opt_b_out):
+            node.bases_in[qubit] = bi
+            node.bases_out[qubit] = bo
+            if node.prev[qubit] is not None and node.prev[qubit].bases_out[qubit] != bi:
+                node.prev[qubit].bases_out[qubit] = bi
+                self.add(node.prev[qubit])
+            if node.next[qubit] is not None and node.next[qubit].bases_in[qubit] != bo:
+                node.next[qubit].bases_in[qubit] = bo
+                self.add(node.next[qubit])
+
+
+class CircuitGraph:
+    def __init__(self, chain, bases_in, bases_out):
+        self.starts = [None for _ in range(chain.num_qubits)]
+        self.ends = [None for _ in range(chain.num_qubits)]
+        self.nodes = []
+        for op, qubtis in chain.operations:
+            node_new = Node(op, qubtis)
+            for qubit in qubtis:
+                if self.starts[qubit] is None:
+                    assert self.ends[qubit] is None
+                    assert isinstance(qubit, int)
+                    self.starts[qubit] = node_new
+                    self.ends[qubit] = node_new
+                else:
+                    old_end = self.ends[qubit]
+                    old_end.next[qubit] = node_new
+                    node_new.prev[qubit] = old_end
+                    self.ends[qubit] = node_new
+            self.nodes.append(node_new)
+        for qubit, (b, node_start) in enumerate(zip(bases_in, self.starts)):
+            node_start.bases_in[qubit] = b
+        for qubit, (b, node_end) in enumerate(zip(bases_out, self.ends)):
+            node_end.bases_out[qubit] = b
+
+    def to_chain(self):
+        return operation.Chain(*(node.to_indexed_operation()
+                                 for node in self.nodes))
+
+    def filter_merged(self):
+        self.nodes = [node for node in self.nodes if not node.merged]
+
+    def node_try_merge(self, node, where='next'):
+        """
+
+        Parameters
+        ----------
+        node: Node
+        where: 'next' or 'prev'
+
+        Returns
+        -------
+
+        """
+        # Merge is possible, if there is only one next node
+        # Assumes that bases are aligned
+        if where == 'next':
+            contr_candidates = set(node.next.values())
+        elif where == 'prev':
+            contr_candidates = set(node.prev.values())
+        else:
+            raise ValueError
+
+        if len(contr_candidates) != 1 or None in contr_candidates:
+            return
+        other = contr_candidates.pop()
+
+        d_self = len(node.qubits)
+        d_other = len(other.qubits)
+        contr_indices = [other.qubits.index(qubit) for qubit in node.qubits]
+
+        i_other_out = list(range(d_other))
+        i_other_in = list(range(d_other, 2*d_other))
+
+        if where == 'next':
+            i_self_out = list(range(2*d_other, 2*d_other+d_self))
+            i_self_in = [i_other_in[i] for i in contr_indices]
+            for i, j in zip(contr_indices, i_self_out):
+                i_other_in[i] = j
+        else:
+            i_self_in = list(range(2*d_other, 2*d_other+d_self))
+            i_self_out = [i_other_out[i] for i in contr_indices]
+            for i, j in zip(contr_indices, i_self_in):
+                i_other_out[i] = j
+
+        other.ptm = np.einsum(node.ptm, i_self_out + i_self_in,
+                              other.ptm, i_other_out + i_other_in,
+                              optimize=True)
+
+        if where == 'next':
+            for qubit, node_prev in node.prev.items():
+                other.prev[qubit] = node_prev
+                assert other.bases_in[qubit] == node.bases_out[qubit]
+                other.bases_in[qubit] = node.bases_in[qubit]
+                if node_prev is None:
+                    self.starts[qubit] = other
+                else:
+                    node_prev.next[qubit] = other
+        else:
+            for qubit, node_next in node.next.items():
+                other.next[qubit] = node_next
+                assert other.bases_out[qubit] == node.bases_in[qubit]
+                other.bases_out[qubit] = node.bases_out[qubit]
+                if node_next is None:
+                    self.ends[qubit] = other
+                else:
+                    node_next.prev[qubit] = other
+
+        node.merged = True
+
+
+class ChainCompiler:
+    """
     Parameters
     ----------
-    in_bases : tuple, optional
-        The in bases for the operator (the default is None, which corresponds
-        to unknown bases)
-    out_bases : tuple, optional
-        The out bases for the operator (the default is None, which corresponds
-        to an unnown bases)
+    chain : Chain
+        A chain to compile
     """
-    def __init__(self, process, inds, in_bases=None, out_bases=None):
-        self.process = process
-        self.inds = inds
-        self.in_bases = in_bases
-        self.out_bases = out_bases
+    def __init__(self, chain):
+        self.chain = chain
 
-    def prepare(self):
-        if self.in_bases is None:
-            raise ValueError('In bases must be specified')
-        if self.out_bases is None:
-            raise ValueError('In bases must be specified')
+    def compile(self, bases_in, bases_out):
+        graph = CircuitGraph(self.chain, bases_in, bases_out)
+        self.stage1_compile_all_nodes(graph)
+        self.stage2_compress_chain(graph)
+        return graph.to_chain()
 
-        self.process.prepare(self.in_bases, self.out_bases)
+    @staticmethod
+    def stage1_compile_all_nodes(graph):
+        queue = CompilerQueue(graph.nodes)
+        while len(queue) > 0:
+            queue.compile_next()
 
+    @staticmethod
+    def stage2_compress_chain(graph):
+        """
 
-class _ExplandableBlock:
-    """The expandable block is a list of processes, which can be expanded or
-    merged with other such blocks. This block is not ready for execution until
-    converted to a process block by the compiler.
-    """
-    def __init__(self, inds):
-        self.processes = []
-        self.inds = set(inds)
+        Parameters
+        ----------
+        graph : CircuitGraph
 
-    @property
-    def num_bits(self):
-        return len(self.inds)
+        Returns
+        -------
 
-    def merge(self, expandable_block):
-        self.processes += expandable_block.processes
-        self.inds = self.inds.union(expandable_block.inds)
-
-    def add(self, process, inds):
-        self.processes.append(process.at(inds))
-        self.inds.update(inds)
-
-    def finalize(self):
-        joined_process = join(*self.processes)
-        return _ProcessBlock(joined_process, self.inds)
-
-
-class Compiler:
-    """The compiler is a link between the circuit (gates) and the processes.
-
-    The compiler serves to truncate the processes of the circuit to blocks,
-    while correctly handling specific processes (measurements, resets, etc).
-    The compiler blocks are a wrapper around a process and provide information
-    about the indicies of the process and bases.
-
-    The compiler can then analyze the sparsity of the process operators in order
-    to perform bases optimization for the calculation. These bases are then
-    returned for the processes to be prepared and for the state to use.
-    """
-    def __init__(self):
-        self.proc_blocks = None
-        self._blocks = {}
-
-    def create_blocks(self, *operations):
-        self.proc_blocks = []
-        for process, proc_inds in zip(operations):
-            if not isinstance(process, Transformation):
-                # Meaning it's either a measurement, initialization or reset.
-                # These go in their own blocks
-                for proc_ind in proc_inds:
-                    if proc_ind in self._blocks:
-                        cur_block = self._blocks[proc_ind]
-                        self.proc_blocks.append(cur_block.finalize())
-                        self._delete_block(proc_ind)
-                proc_block = _ProcessBlock(process, proc_inds)
-                self.proc_blocks.append(proc_block)
-            else:
-                self._add_to_blocks(process, proc_inds)
-
-        for block in self._blocks:
-            self.proc_blocks.append(block.finalize())
-
-    def get_optimal_bases(self, initial_bases=None):
-        if self.proc_blocks is None:
-            raise ValueError('Compile operations first')
-
-        last_out_bases = {}
-
-        def get_in_bases(ind, dim):
-            if ind in last_out_bases:
-                return last_out_bases[ind]
-            elif initial_bases is not None:
-                return initial_bases[ind]
-            return general(dim)
-
-        for block in self.proc_blocks:
-            process = block.process
-            operator = process.operator
-            dims = operator.dim_hilbert
-
-            in_bases = (get_in_bases(ind, dim)
-                        for ind, dim in zip(block.inds, dims))
-            block.in_bases = in_bases
-
-            if isinstance(process, Projection):
-                for ind, basis in zip(block.inds, in_bases):
-                    last_out_bases[ind] = basis.computational_subbasis()
-            elif isinstance(process, Transformation):
-                full_bases = (basis.superbasis() for basis in in_bases)
-
-                # TODO: Add sparsity analysis here to get the real out_basis
-                block.out_bases = full_bases
-                block.prepare()
-                for ind, basis in zip(block.inds, full_bases):
-                    last_out_bases[ind] = basis
-
-    def _add_to_blocks(self, process, proc_inds):
-        for ind in proc_inds:
-            self._register(ind)
-
-        first_block = self._blocks[proc_inds[0]]
-
-        if all(self._blocks[ind] == first_block for ind in proc_inds):
-            first_block.add(process, proc_inds)
-        else:
-            expanded_block = _ExplandableBlock(proc_inds)
-            for proc_ind in proc_inds:
-                if proc_ind in self._blocks:
-                    cur_block = self._blocks[proc_ind]
-                    if all(ind in proc_inds for ind in cur_block.inds):
-                        expanded_block.merge(cur_block)
-                    else:
-                        self.proc_blocks.append(cur_block.finalize())
-
-                    self._delete_block(proc_ind)
-                    self._blocks[proc_ind] = expanded_block
-
-            expanded_block.add(process, proc_inds)
-
-    def _delete_block(self, ind):
-        block_inds = self._blocks[ind].inds
-        for block_ind in block_inds:
-            del self._blocks[block_ind]
-
-    def _register(self, ind):
-        if ind not in self._blocks:
-            self._blocks[ind] = _ExplandableBlock(ind)
+        """
+        for node in graph.nodes:
+            graph.node_try_merge(node, 'next')
+        graph.filter_merged()
+        for node in reversed(graph.nodes):
+            graph.node_try_merge(node, 'prev')
+        graph.filter_merged()

@@ -5,6 +5,7 @@
 
 import pytest
 import numpy as np
+from pytest import approx
 
 from qs2.operations.operation import Transformation, Chain
 from qs2 import bases
@@ -268,3 +269,81 @@ class TestOperations:
         circuit(state2, 0, 1, 2)
 
         assert np.all(state1.expansion() == state2.expansion())
+
+    @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
+    def test_chain_compile_single_qubit(self, d, lib):
+        b = bases.general(d)
+
+        bases_full = (b,)
+        subbases = (b.subbasis([0, 1]),)
+        angle = np.pi/5
+        rx_angle = lib.rotate_x(angle)
+        rx_2angle = lib.rotate_x(2*angle)
+        chain0 = Chain(rx_angle.at(0), rx_angle.at(0))
+        assert chain0.num_qubits == 1
+        assert len(chain0.operations) == 2
+
+        chain1 = chain0.compile(bases_full, bases_full)
+        assert chain1.num_qubits == 1
+        assert len(chain1.operations) == 1
+        ptm_angle = chain1.operations[0].operation.ptm(bases_full, bases_full)
+        ptm_2angle = rx_2angle.ptm(bases_full, bases_full)
+        assert ptm_angle == approx(ptm_2angle)
+
+        rx_pi = lib.rotate_x(np.pi)
+        chain_2pi = Chain(rx_pi.at(0), rx_pi.at(0))
+        chain2 = chain_2pi.compile(subbases, bases_full)
+        op = chain2.operations[0].operation
+        assert op._bases_in == subbases
+        assert op._bases_out == subbases
+
+        chain3 = chain_2pi.compile(bases_full, subbases)
+        op = chain3.operations[0].operation
+        assert op._bases_in == subbases
+        assert op._bases_out == subbases
+
+    @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
+    def test_chain_compile_three_qubit(self, d, lib):
+        b = bases.general(d)
+        b0 = b.subbasis([0])
+
+        chain0 = Chain(
+            lib.rotate_x(0.5*np.pi).at(2),
+            lib.cphase().at(0, 2),
+            lib.cphase().at(1, 2),
+            lib.rotate_x(-0.75*np.pi).at(2),
+            lib.rotate_x(0.25*np.pi).at(2),
+        )
+        chain1 = chain0.compile((b, b, b0), (b, b, b))
+        assert chain1.operations[0].indices == (0, 2)
+        assert chain1.operations[0].operation._bases_in == (b, b0)
+        assert chain1.operations[0].operation._bases_out[0] == b
+        assert chain1.operations[1].indices == (1, 2)
+        assert chain1.operations[1].operation._bases_in[0] == b
+        assert chain1.operations[1].operation._bases_out[0] == b
+        for label in '0', '1', 'X10', 'Y10':
+            assert label in chain1.operations[1].operation._bases_out[1].labels
+
+    def test_chain_compile_leaking(self):
+        b = bases.general(3)
+        chain0 = Chain(
+            lib3.rotate_x(0.5*np.pi).at(2),
+            lib3.cphase(leakage=0.1).at(0, 2),
+            lib3.cphase(leakage=0.1).at(1, 2),
+            lib3.rotate_x(-0.75*np.pi).at(2),
+            lib3.rotate_x(0.25*np.pi).at(2),
+        )
+        b0 = b.subbasis([0])
+        b01 = b.subbasis([0, 1])
+        b0134 = b.subbasis([0, 1, 3, 4])
+        chain1 = chain0.compile((b0, b0, b0134), (b, b, b))
+        # Ancilla is not leaking here
+        anc_basis = chain1.operations[1].operation._bases_out[1]
+        for label in anc_basis.labels:
+            assert '2' not in label
+
+        chain2 = chain0.compile((b01, b01, b0134), (b, b, b))
+        # Ancilla is leaking here
+        anc_basis = chain2.operations[1].operation._bases_out[1]
+        for label in '2', 'X20', 'Y20', 'X21', 'Y21':
+            assert label in anc_basis.labels

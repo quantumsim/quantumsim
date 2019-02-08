@@ -46,7 +46,11 @@ class PauliBasis:
         self.trace_index = self._to_unit_vector(traces)
 
     def __eq__(self, other):
-        return np.all(self.vectors == other.vectors)
+        if isinstance(other, PauliBasis):
+            return (self.vectors.shape == other.vectors.shape and
+                    np.allclose(self.vectors, other.vectors))
+        else:
+            return False
 
     def __hash__(self):
         return hash(np.ascontiguousarray(self.vectors).data.tobytes())

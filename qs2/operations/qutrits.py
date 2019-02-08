@@ -129,5 +129,5 @@ def cphase(angle=np.pi, leakage=0.):
     dcphase[2, 4] = 1
     dcphase[4, 2] = 1
     angle_frac = 1 - np.arcsin(np.sqrt(leakage)) / np.pi
-    unitary = expm(-1j*np.pi*angle_frac*dcphase)
+    unitary = expm(-1j*angle*angle_frac*dcphase)
     return Transformation.from_kraus(unitary, 3)
