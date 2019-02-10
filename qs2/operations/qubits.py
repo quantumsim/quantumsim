@@ -1,6 +1,6 @@
 import numpy as np
 from functools import lru_cache
-from .operation import Transformation, join
+from .operation import Transformation, Chain
 from .. import bases
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
@@ -228,7 +228,7 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
 def amp_phase_damping(damp_rate, dephase_rate):
     amp_damp = amp_damping(damp_rate)
     phase_damp = phase_damping(dephase_rate)
-    return join(amp_damp, phase_damp)
+    return Chain(amp_damp, phase_damp)
 
 
 @lru_cache(maxsize=16)

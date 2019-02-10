@@ -1,7 +1,7 @@
 import numpy as np
 from functools import lru_cache
 from scipy.linalg import expm
-from .operation import Transformation, join
+from .operation import Transformation
 from .. import bases
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
