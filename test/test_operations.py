@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 from pytest import approx
 
-from qs2.operations.operation import Transformation, Chain
+from qs2.operations.operation import Operation, Chain
 from qs2 import bases
 from qs2.operations import qubits as lib2
 from qs2.operations import qutrits as lib3
@@ -24,27 +24,25 @@ class TestOperations:
         gm_qubit_basis = (bases.gell_mann(2),)
         gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
 
-        damp_op = Transformation.from_kraus(damp_kraus_mat, 2)
-        damp_ptm = damp_op.ptm(gm_qubit_basis)
-
-        assert damp_ptm.shape == (4, 4)
-        assert np.all(damp_ptm <= 1) and np.all(damp_ptm >= -1)
+        damp_op = Operation.from_kraus(damp_kraus_mat, 2)
+        damp_ptm = damp_op.compile(bases_in=gm_qubit_basis,
+                                   bases_out=gm_qubit_basis).ptm
 
         expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
                                  [0, 0, np.sqrt(1-p_damp), 0],
                                  [p_damp, 0, 0, 1-p_damp]])
-
         assert np.allclose(damp_ptm, expected_mat)
+
         with pytest.raises(ValueError, match=r'.* should be a tuple, .*'):
-            damp_op.ptm(bases.gell_mann(2), bases.gell_mann(2))
+            damp_op.compile(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        cz_op = Transformation.from_kraus(cz_kraus_mat, 2)
-        cz_ptm = cz_op.ptm(gm_two_qubit_basis)
+        cz = Operation.from_kraus(cz_kraus_mat, 2).compile(
+            gm_two_qubit_basis, gm_two_qubit_basis)
 
-        assert cz_ptm.shape == (4, 4, 4, 4)
-        cz_ptm = cz_ptm.reshape((16, 16))
+        assert cz.ptm.shape == (4, 4, 4, 4)
+        cz_ptm = cz.ptm.reshape((16, 16))
         assert np.all(cz_ptm.round(3) <= 1)
         assert np.all(cz_ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm[0, :]), 1)
@@ -55,31 +53,31 @@ class TestOperations:
         qutrit_basis = (bases.gell_mann(3),)
         system_bases = qutrit_basis * 2
 
-        cz_op = Transformation.from_kraus(cz_kraus_mat, 3)
-        cz_ptm = cz_op.ptm(system_bases)
+        cz = Operation.from_kraus(cz_kraus_mat, 3).compile(
+            system_bases, system_bases)
 
-        assert cz_ptm.shape == (9, 9, 9, 9)
-        cz_ptm_flat = cz_ptm.reshape((81, 81))
+        assert cz.ptm.shape == (9, 9, 9, 9)
+        cz_ptm_flat = cz.ptm.reshape((81, 81))
         assert np.all(cz_ptm_flat.round(3) <= 1) and np.all(
-            cz_ptm.round(3) >= -1)
+            cz.ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm_flat[0, :]), 1)
         assert np.isclose(np.sum(cz_ptm_flat[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
         qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = Transformation.from_kraus(cz_kraus_mat, 2)
+        kraus_op = Operation.from_kraus(cz_kraus_mat, 2)
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = Transformation.from_kraus(wrong_dim_kraus, 2)
+            _ = Operation.from_kraus(wrong_dim_kraus, 2)
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = Transformation.from_kraus(not_sqr_kraus, 2)
+            _ = Operation.from_kraus(not_sqr_kraus, 2)
         with pytest.raises(ValueError):
-            _ = Transformation.from_kraus(cz_kraus_mat, 3)
+            _ = Operation.from_kraus(cz_kraus_mat, 3)
         with pytest.raises(ValueError):
-            _ = kraus_op.ptm(qutrit_basis+qutrit_basis)
+            _ = kraus_op.compile(qutrit_basis+qutrit_basis)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
@@ -89,16 +87,13 @@ class TestOperations:
         gell_mann_basis = (bases.gell_mann(2),)
         general_basis = (bases.general(2),)
 
-        damp_op_kraus = Transformation.from_kraus(damp_kraus_mat, 2)
-        ptm_gell_mann = damp_op_kraus.ptm(gell_mann_basis)
-        damp_op_ptm = Transformation.from_ptm(ptm_gell_mann,
-                                              gell_mann_basis,
-                                              gell_mann_basis)
-
-        ptm_general_kraus = damp_op_kraus.ptm(general_basis)
-        ptm_general_converted = damp_op_ptm.ptm(general_basis)
-
-        assert np.allclose(ptm_general_kraus, ptm_general_converted)
+        damp_op_kraus = Operation.from_kraus(damp_kraus_mat, 2)
+        op1 = damp_op_kraus.compile(gell_mann_basis, gell_mann_basis)
+        op2 = damp_op_kraus.compile(general_basis, general_basis) \
+                           .compile(gell_mann_basis, gell_mann_basis)
+        assert np.allclose(op1.ptm, op2.ptm)
+        assert op1.bases_in == op2.bases_in
+        assert op1.bases_out == op2.bases_out
 
     def test_opt_basis_single_qubit_2d(self):
         b = bases.general(2)
@@ -107,31 +102,28 @@ class TestOperations:
         b01 = b.computational_subbasis()
 
         # Identity up to floating point error
-        rot = lib2.rotate_x(2 * np.pi)
-        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b0,))
-        assert ob_in == b0
-        assert ob_out == b0
-        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b1,))
-        assert ob_in == b1
-        assert ob_out == b1
+        rot = lib2.rotate_x(2 * np.pi).compile(bases_in=(b0,), optimize=True)
+        assert rot.bases_in == (b0,)
+        assert rot.bases_out == (b0,)
+        rot = lib2.rotate_x(2 * np.pi).compile(bases_in=(b1,), optimize=True)
+        assert rot.bases_in == (b1,)
+        assert rot.bases_out == (b1,)
 
         # RX(pi)
-        rot = lib2.rotate_x(np.pi)
-        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b0,))
-        assert ob_in == b0
-        assert ob_out == b1
-        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b1,))
-        assert ob_in == b1
-        assert ob_out == b0
+        rot = lib2.rotate_x(np.pi).compile(bases_in=(b0,))
+        assert rot.bases_in == (b0,)
+        assert rot.bases_out == (b1,)
+        rot = lib2.rotate_x(np.pi).compile(bases_in=(b1,))
+        assert rot.bases_in == (b1,)
+        assert rot.bases_out == (b0,)
 
         # RY(pi/2)
-        rot = lib2.rotate_y(np.pi / 2)
-        (ob_in,), (ob_out,) = rot.optimal_bases(bases_in=(b01,))
-        assert ob_in == b01
-        assert ob_out.dim_pauli == 3
-        assert '0' in ob_out.labels
-        assert '1' in ob_out.labels
-        assert 'X10' in ob_out.labels
+        rot = lib2.rotate_y(np.pi / 2).compile(bases_in=(b01,))
+        assert rot.bases_in[0] == b01
+        assert rot.bases_out[0].dim_pauli == 3
+        assert '0' in rot.bases_out[0].labels
+        assert '1' in rot.bases_out[0].labels
+        assert 'X10' in rot.bases_out[0].labels
 
     def test_opt_basis_two_qubit_2d(self):
         op = lib2.cnot()
@@ -142,32 +134,32 @@ class TestOperations:
         b0 = b.subbasis([0])
         b01 = b.subbasis([0, 1])
         b_in = (b01, b0)
-        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
-        assert ob_in[0] == b01
-        assert ob_in[1] == b0
-        assert ob_out[0] == b01
-        assert ob_out[1] == b01
+        op_c = op.compile(bases_in=b_in, optimize=True)
+        assert op_c.bases_in[0] == b01
+        assert op_c.bases_in[1] == b0
+        assert op_c.bases_out[0] == b01
+        assert op_c.bases_out[1] == b01
 
         # Classical control bit is not violated
         b = bases.general(2)
         b0 = b.subbasis([0])
         b_in = (b0, b)
-        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
-        assert ob_in[0] == b0
-        assert ob_in[1] == b
-        assert ob_out[0] == b0
-        assert ob_out[1] == b
+        op_c = op.compile(bases_in=b_in, optimize=True)
+        assert op_c.bases_in[0] == b0
+        assert op_c.bases_in[1] == b
+        assert op_c.bases_out[0] == b0
+        assert op_c.bases_out[1] == b
 
         # Classical target bit will become quantum for quantum control bit,
         # input should not be violated
         b = bases.general(2)
         b0 = b.subbasis([0])
         b_in = (b, b0)
-        ob_in, ob_out = op.optimal_bases(bases_in=b_in)
-        assert ob_in[0] == b
-        assert ob_in[1] == b0
-        assert ob_out[0] == b
-        assert ob_out[1] == b
+        op_c = op.compile(bases_in=b_in, optimize=True)
+        assert op_c.bases_in[0] == b
+        assert op_c.bases_in[1] == b0
+        assert op_c.bases_out[0] == b
+        assert op_c.bases_out[1] == b
 
     def test_compile_single_qubit_2d(self):
         b = bases.general(2)
@@ -286,21 +278,24 @@ class TestOperations:
         chain1 = chain0.compile(bases_full, bases_full)
         assert chain1.num_qubits == 1
         assert len(chain1.operations) == 1
-        ptm_angle = chain1.operations[0].operation.ptm(bases_full, bases_full)
-        ptm_2angle = rx_2angle.ptm(bases_full, bases_full)
-        assert ptm_angle == approx(ptm_2angle)
+        op_angle = chain1.operations[0].operation
+        op_2angle = rx_2angle.compile(bases_full, bases_full)
+        assert op_angle.shape == op_2angle.shape
+        assert op_angle.bases_in == op_2angle.bases_in
+        assert op_angle.bases_out == op_2angle.bases_out
+        assert op_angle.ptm == approx(op_2angle.ptm)
 
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Chain(rx_pi.at(0), rx_pi.at(0))
         chain2 = chain_2pi.compile(subbases, bases_full)
         op = chain2.operations[0].operation
-        assert op._bases_in == subbases
-        assert op._bases_out == subbases
+        assert op.bases_in == subbases
+        assert op.bases_out == subbases
 
         chain3 = chain_2pi.compile(bases_full, subbases)
         op = chain3.operations[0].operation
-        assert op._bases_in == subbases
-        assert op._bases_out == subbases
+        assert op.bases_in == subbases
+        assert op.bases_out == subbases
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
     def test_chain_compile_three_qubit(self, d, lib):
@@ -316,13 +311,13 @@ class TestOperations:
         )
         chain1 = chain0.compile((b, b, b0), (b, b, b))
         assert chain1.operations[0].indices == (0, 2)
-        assert chain1.operations[0].operation._bases_in == (b, b0)
-        assert chain1.operations[0].operation._bases_out[0] == b
+        assert chain1.operations[0].operation.bases_in == (b, b0)
+        assert chain1.operations[0].operation.bases_out[0] == b
         assert chain1.operations[1].indices == (1, 2)
-        assert chain1.operations[1].operation._bases_in[0] == b
-        assert chain1.operations[1].operation._bases_out[0] == b
+        assert chain1.operations[1].operation.bases_in[0] == b
+        assert chain1.operations[1].operation.bases_out[0] == b
         for label in '0', '1', 'X10', 'Y10':
-            assert label in chain1.operations[1].operation._bases_out[1].labels
+            assert label in chain1.operations[1].operation.bases_out[1].labels
 
     def test_chain_compile_leaking(self):
         b = bases.general(3)
@@ -338,12 +333,12 @@ class TestOperations:
         b0134 = b.subbasis([0, 1, 3, 4])
         chain1 = chain0.compile((b0, b0, b0134), (b, b, b))
         # Ancilla is not leaking here
-        anc_basis = chain1.operations[1].operation._bases_out[1]
+        anc_basis = chain1.operations[1].operation.bases_out[1]
         for label in anc_basis.labels:
             assert '2' not in label
 
         chain2 = chain0.compile((b01, b01, b0134), (b, b, b))
         # Ancilla is leaking here
-        anc_basis = chain2.operations[1].operation._bases_out[1]
+        anc_basis = chain2.operations[1].operation.bases_out[1]
         for label in '2', 'X20', 'Y20', 'X21', 'Y21':
             assert label in anc_basis.labels

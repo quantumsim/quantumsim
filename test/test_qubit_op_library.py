@@ -6,7 +6,7 @@
 import pytest
 import numpy as np
 
-from qs2.operations.operation import Transformation
+from qs2.operations.operation import Operation
 from qs2 import bases
 from qs2.operations import qubits as lib
 from qs2.backends import DensityMatrix

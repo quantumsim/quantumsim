@@ -34,11 +34,6 @@ def dm_basis(request):
 
 
 class TestBackends:
-    def test_not_implemented_raised(self, dm_class):
-        # Gell-Mann basis will certainly fail now
-        with pytest.raises(NotImplementedError):
-            dm_class([qs2.bases.gell_mann(2)])
-
     def test_create_trivial(self, dm_class):
         dm = dm_class([])
         assert dm.expansion() == approx(1)

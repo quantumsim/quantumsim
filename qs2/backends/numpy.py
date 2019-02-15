@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pytools
 from .backend import DensityMatrixBase
+from ..operations.operation import PTMOperation
 
 
 class DensityMatrix(DensityMatrixBase):
@@ -65,12 +66,16 @@ class DensityMatrix(DensityMatrixBase):
         return np.einsum(self._data, indices, *trace_argument, out_indices,
                          optimize=True).reshape(complex_dm_dimension)
 
-    def apply_two_qubit_ptm(self, qubit0, qubit1, two_ptm, basis_out=None):
-        d0 = self.dim_pauli[qubit0]
-        d1 = self.dim_pauli[qubit1]
+    def apply_ptm(self, ptm, *qubits):
+        if len(qubits) == 1:
+            self._apply_single_qubit_ptm(qubits[0], ptm)
+        elif len(qubits) == 2:
+            self._apply_two_qubit_ptm(qubits[0], qubits[1], ptm)
+        else:
+            raise NotImplementedError('Applying {}-qubit PTM is not '
+                                      'implemented in the active backend.')
 
-        two_ptm = two_ptm.reshape((d1, d0, d1, d0))
-
+    def _apply_two_qubit_ptm(self, qubit0, qubit1, two_ptm):
         n_qubits = self.n_qubits
         dummy_idx0, dummy_idx1 = n_qubits, n_qubits + 1
         out_indices = list(reversed(range(n_qubits)))
@@ -85,14 +90,9 @@ class DensityMatrix(DensityMatrixBase):
             self._data, in_indices, two_ptm, two_ptm_indices, out_indices,
             optimize=True)
 
-        if basis_out is not None:
-            self.bases[qubit0] = basis_out[0]
-            self.bases[qubit1] = basis_out[1]
-
-    def apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
+    def _apply_single_qubit_ptm(self, qubit, ptm):
         self._validate_qubit(qubit, 'bit')
         dim = self.dim_pauli[qubit]
-        self._validate_ptm_shape(ptm, (dim, dim), 'ptm')
 
         n_qubits = self.n_qubits
         dummy_idx = n_qubits
@@ -102,9 +102,6 @@ class DensityMatrix(DensityMatrixBase):
         ptm_indices = [qubit, dummy_idx]
         self._data = np.einsum(self._data, in_indices, ptm,
                                ptm_indices, out_indices, optimize=True)
-
-        if basis_out is not None:
-            self.bases[qubit] = basis_out
 
     def add_qubit(self, basis, classical_state):
         self._data = np.einsum(

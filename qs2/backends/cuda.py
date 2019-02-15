@@ -5,6 +5,7 @@
 import warnings
 
 from .backend import DensityMatrixBase
+from ..operations.operation import PTMOperation
 
 import numpy as np
 import pycuda.driver as drv
@@ -144,6 +145,15 @@ class DensityMatrix(DensityMatrixBase):
         cp = self.__class__(self.bases, data=data_cp)
         return cp
 
+    def apply_ptm(self, ptm, *qubits):
+        if len(qubits) == 1:
+            self._apply_single_qubit_ptm(qubits[0], ptm)
+        elif len(qubits) == 2:
+            self._apply_two_qubit_ptm(qubits[0], qubits[1], ptm)
+        else:
+            raise NotImplementedError('Applying {}-qubit PTM is not '
+                                      'implemented in the active backend.')
+
     def diagonal(self, *, get_data=True, target_array=None, flatten=True):
         """Obtain the diagonal of the density matrix.
 
@@ -218,7 +228,7 @@ class DensityMatrix(DensityMatrixBase):
                                gpudata=target_array.gpudata,
                                dtype=np.float64)
 
-    def apply_two_qubit_ptm(self, qubit0, qubit1, ptm, basis_out=None):
+    def _apply_two_qubit_ptm(self, qubit0, qubit1, ptm):
         """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
 
         Parameters
@@ -230,7 +240,6 @@ class DensityMatrix(DensityMatrixBase):
             Index of first qubit
         qubit1: int
             Index of second qubit
-        basis_out: tuple of two qs2.bases.PauliBasis
         """
         self._validate_qubit(qubit0, 'qubit0')
         self._validate_qubit(qubit1, 'qubit1')
@@ -242,9 +251,6 @@ class DensityMatrix(DensityMatrixBase):
         if qubit1 > qubit0:
             qubit1, qubit0 = qubit0, qubit1
             ptm = np.einsum("abcd -> badc", ptm)
-            if basis_out is not None:
-                basis_out = list(basis_out)
-                basis_out[1], basis_out[0] = basis_out[0], basis_out[1]
 
         new_shape = list(self._data.shape)
         dim1_out, dim0_out, dim1_in, dim0_in = ptm.shape
@@ -270,8 +276,6 @@ class DensityMatrix(DensityMatrixBase):
                     )
 
         ptm_gpu = self._cached_gpuarray(ptm)
-
-        # dint = max(min(16, self.data.size//(dim1_out*dim0_out)), 1)
 
         rest_shape = new_shape.copy()
         rest_shape[qubit0] = 1
@@ -309,11 +313,7 @@ class DensityMatrix(DensityMatrixBase):
 
         self._data, self._work_data = self._work_data, self._data
 
-        if basis_out is not None:
-            self.bases[qubit0] = basis_out[0]
-            self.bases[qubit1] = basis_out[1]
-
-    def apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
+    def _apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
         """Apply a one-qubit Pauli transfer matrix to qubit bit.
 
         Parameters

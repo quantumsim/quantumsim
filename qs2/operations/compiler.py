@@ -5,22 +5,33 @@ from . import operation
 
 
 class Node:
-    def __init__(self, operation, qubits):
-        self.op = operation
+    def __init__(self, op, qubits):
+        self.op = op
         self.qubits = qubits
         self.prev = {i: None for i in qubits}
         self.next = {i: None for i in qubits}
-        self.ptm = None
-        self.bases_in = {i: None for i in qubits}
-        self.bases_out = {i: None for i in qubits}
+        self.bases_in_dict = {i: None for i in qubits}
+        self.bases_out_dict = {i: None for i in qubits}
         self.merged = False
 
     def to_indexed_operation(self):
-        return operation.Transformation.from_ptm(
-            self.ptm,
-            tuple((self.bases_in[qubit] for qubit in self.qubits)),
-            tuple((self.bases_out[qubit] for qubit in self.qubits))
-        ).at(*self.qubits)
+        return self.op.at(*self.qubits)
+
+    @property
+    def bases_in_tuple(self):
+        return tuple(self.bases_in_dict[qubit] for qubit in self.qubits)
+
+    @property
+    def bases_out_tuple(self):
+        return tuple(self.bases_out_dict[qubit] for qubit in self.qubits)
+
+    @property
+    def ptm(self):
+        raise RuntimeError
+
+    @ptm.setter
+    def ptm_setter(self, value):
+        raise RuntimeError
 
 
 class CompilerQueue:
@@ -40,23 +51,25 @@ class CompilerQueue:
     def __len__(self):
         return len(self._queue)
 
-    def compile_next(self):
+    def compile_next(self, optimize=True):
         node = self.get()
-        b_in = tuple((node.bases_in[q] for q in node.qubits))
-        b_out = tuple((node.bases_out[qubit] or node.bases_in[qubit].superbasis
+        b_in = tuple((node.bases_in_dict[qubit] for qubit in node.qubits))
+        b_out = tuple((node.bases_out_dict[qubit] or
+                       node.bases_in_dict[qubit].superbasis
                        for qubit in node.qubits))
-        opt_b_in, opt_b_out = node.op.optimal_bases(b_in, b_out)
-        node.ptm = node.op.ptm(opt_b_in, opt_b_out)
-        assert node.ptm is not None
+        node.op = node.op.compile(b_in, b_out, optimize=optimize)
 
-        for qubit, bi, bo in zip(node.qubits, opt_b_in, opt_b_out):
-            node.bases_in[qubit] = bi
-            node.bases_out[qubit] = bo
-            if node.prev[qubit] is not None and node.prev[qubit].bases_out[qubit] != bi:
-                node.prev[qubit].bases_out[qubit] = bi
+        for qubit, bi, bo in zip(node.qubits, node.op.bases_in,
+                                 node.op.bases_out):
+            node.bases_in_dict[qubit] = bi
+            node.bases_out_dict[qubit] = bo
+            if (node.prev[qubit] is not None and
+                    node.prev[qubit].bases_out_dict[qubit] != bi):
+                node.prev[qubit].bases_out_dict[qubit] = bi
                 self.add(node.prev[qubit])
-            if node.next[qubit] is not None and node.next[qubit].bases_in[qubit] != bo:
-                node.next[qubit].bases_in[qubit] = bo
+            if (node.next[qubit] is not None and
+                    node.next[qubit].bases_in_dict[qubit] != bo):
+                node.next[qubit].bases_in_dict[qubit] = bo
                 self.add(node.next[qubit])
 
 
@@ -80,11 +93,13 @@ class CircuitGraph:
                     self.ends[qubit] = node_new
             self.nodes.append(node_new)
         for qubit, (b, node_start) in enumerate(zip(bases_in, self.starts)):
-            node_start.bases_in[qubit] = b
+            node_start.bases_in_dict[qubit] = b
         for qubit, (b, node_end) in enumerate(zip(bases_out, self.ends)):
-            node_end.bases_out[qubit] = b
+            node_end.bases_out_dict[qubit] = b
 
-    def to_chain(self):
+    def to_operation(self):
+        # TODO If len(self.nodes) == 1 -- return only the operation itself
+        # Need to check that its indices are ordered
         return operation.Chain(*(node.to_indexed_operation()
                                  for node in self.nodes))
 
@@ -134,15 +149,17 @@ class CircuitGraph:
             for i, j in zip(contr_indices, i_self_in):
                 i_other_out[i] = j
 
-        other.ptm = np.einsum(node.ptm, i_self_out + i_self_in,
-                              other.ptm, i_other_out + i_other_in,
+        other_ptm = np.einsum(node.op.ptm, i_self_out + i_self_in,
+                              other.op.ptm, i_other_out + i_other_in,
                               optimize=True)
 
         if where == 'next':
             for qubit, node_prev in node.prev.items():
                 other.prev[qubit] = node_prev
-                assert other.bases_in[qubit] == node.bases_out[qubit]
-                other.bases_in[qubit] = node.bases_in[qubit]
+                assert other.bases_in_dict[qubit] == node.bases_out_dict[qubit]
+                other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
+                other.op = operation.PTMOperation(
+                    other_ptm, other.bases_in_tuple, other.bases_out_tuple)
                 if node_prev is None:
                     self.starts[qubit] = other
                 else:
@@ -150,8 +167,10 @@ class CircuitGraph:
         else:
             for qubit, node_next in node.next.items():
                 other.next[qubit] = node_next
-                assert other.bases_out[qubit] == node.bases_in[qubit]
-                other.bases_out[qubit] = node.bases_out[qubit]
+                assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
+                other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
+                other.op = operation.PTMOperation(
+                    other_ptm, other.bases_in_tuple, other.bases_out_tuple)
                 if node_next is None:
                     self.ends[qubit] = other
                 else:
@@ -167,20 +186,21 @@ class ChainCompiler:
     chain : Chain
         A chain to compile
     """
-    def __init__(self, chain):
+    def __init__(self, chain, *, optimize=True):
         self.chain = chain
+        self.optimize = optimize
 
     def compile(self, bases_in, bases_out):
         graph = CircuitGraph(self.chain, bases_in, bases_out)
-        self.stage1_compile_all_nodes(graph)
+        self.stage1_compile_all_nodes(graph, optimize=self.optimize)
         self.stage2_compress_chain(graph)
-        return graph.to_chain()
+        return graph.to_operation()
 
     @staticmethod
-    def stage1_compile_all_nodes(graph):
+    def stage1_compile_all_nodes(graph, optimize=True):
         queue = CompilerQueue(graph.nodes)
         while len(queue) > 0:
-            queue.compile_next()
+            queue.compile_next(optimize=optimize)
 
     @staticmethod
     def stage2_compress_chain(graph):

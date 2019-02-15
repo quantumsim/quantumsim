@@ -28,17 +28,7 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     _size_max = 2**22
 
     def __init__(self, bases, expansion=None, *, force=False):
-        # FIXME: We do not support anything except general basis yet
-        for b in bases:
-            for k, v in b.computational_basis_indices.items():
-                if not k == v:
-                    raise NotImplementedError(
-                        "Currently backends implicitly assume that basis is "
-                        "always `qs2.basis.general()`. This should be fixed "
-                        "as soon as possible."
-                    )
-
-        self.bases = bases
+        self.bases = list(bases)
 
         if self.size > self._size_max and not force:
             raise ValueError(
@@ -81,11 +71,7 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
-        pass
-
-    @abc.abstractmethod
-    def apply_two_qubit_ptm(self, qubit0, qubit1, ptm, basis_out=None):
+    def apply_ptm(self, operation, *qubits):
         pass
 
     @abc.abstractmethod

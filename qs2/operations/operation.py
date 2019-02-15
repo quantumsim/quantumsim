@@ -38,7 +38,7 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def compile(self, bases_in=None, bases_out=None):
+    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
         """Return an optimized version of this circuit, based on the
         restrictions on input and output bases, that may not be full.
 
@@ -50,6 +50,9 @@ class Operation(metaclass=abc.ABCMeta):
         bases_out : list of qs2.bases.PauliBasis
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
+        optimize : bool
+            Whether or not compiling can throw out irrelevant elements of
+            `bases_in` and `bases_out`.
 
         Returns
         -------
@@ -57,6 +60,49 @@ class Operation(metaclass=abc.ABCMeta):
             Optimized representation of self.
         """
         pass
+
+    @staticmethod
+    def from_ptm(ptm, bases_in, bases_out):
+        """Construct completely positive map, based on Pauli transfer matrix.
+
+        TODO: elaborate on PTM format.
+
+        Parameters
+        ----------
+        ptm: array_like
+            Pauli transfer matrix in a form of Numpy array
+        bases_in: tuple of qs2.bases.PauliBasis
+            Input bases of qubits.
+        bases_out: tuple of qs2.bases.PauliBasis
+            Output bases of qubits. If None, assumed to be the same as input
+            bases.
+
+        Returns
+        -------
+        Transformation
+            Resulting operation
+        """
+        return PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
+
+    @staticmethod
+    def from_kraus(kraus, dim_hilbert):
+        """Construct completely positive map, based on a set of Kraus matrices.
+
+        TODO: elaborate on Kraus matrices format.
+
+        Parameters
+        ----------
+        kraus: array_like
+            Pauli transfer matrix in a form of Numpy array
+        dim_hilbert: int
+            Dimensionality of qudits in the operation.
+
+        Returns
+        -------
+        Transformation
+            Resulting operation
+        """
+        return KrausOperation(kraus, dim_hilbert)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -78,11 +124,29 @@ class Operation(metaclass=abc.ABCMeta):
                              'qubits in the operation.')
         return _IndexedOperation(self, indices)
 
+    @staticmethod
+    # @lru_cache(maxsize=8)
+    def _combine_bases_vectors(bases):
+        return reduce(np.kron, [b.vectors for b in bases])
+
+    def _validate_bases(self, **kwargs):
+        for name, bases in kwargs.items():
+            if not isinstance(bases, tuple):
+                raise ValueError(
+                    "`{n}` should be a tuple, got {t}."
+                    .format(n=name, t=type(bases)))
+            for b in bases:
+                if self.dim_hilbert != b.dim_hilbert:
+                    raise ValueError(
+                        "Expected bases with Hilbert dimensionality {}, "
+                        "but {} has elements with Hilbert dimensionality {}."
+                        .format(self.dim_hilbert, name, b.dim_hilbert))
+
 
 _IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
 
 
-class Transformation(Operation):
+class PTMOperation(Operation):
     """Generic transformation of a state.
 
     Any transformation, that should be a completely positive map, can be
@@ -109,57 +173,23 @@ class Transformation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
-
     sv_cutoff = 1e-5
 
-    def __init__(self, *, _i_know_what_i_do=False):
-        if not _i_know_what_i_do:
-            raise RuntimeError(
-                'TracePreservingProcess\'s constructor is not supposed to be '
-                'used explicitly. Use TracePreservingProcess.from_ptm() or '
-                'TracePreservingProcess.from_kraus()')
-        self._ptm = None
-        self._kraus = None
-        self._bases_in = None
-        self._bases_out = None
-        self._dim_hilbert = None
-        self._num_qubits = None
-
-    @classmethod
-    def from_ptm(cls, ptm, bases_in, bases_out):
-        """Construct completely positive map, based on Pauli transfer matrix.
-
-        TODO: elaborate on PTM format.
-
-        Parameters
-        ----------
-        ptm: array_like
-            Pauli transfer matrix in a form of Numpy array
-        bases_in: tuple of qs2.bases.PauliBasis
-            Input bases of qubits.
-        bases_out: tuple of qs2.bases.PauliBasis
-            Output bases of qubits. If None, assumed to be the same as input
-            bases.
-
-        Returns
-        -------
-        Transformation
-            Resulting operation
-        """
-        out = cls(_i_know_what_i_do=True)
-        out._bases_in = bases_in
-        out._bases_out = bases_out
-        out._dim_hilbert = bases_in[0].dim_hilbert
-        out._num_qubits = len(bases_in)
-        if out._num_qubits != len(bases_out):
+    def __init__(self, ptm, bases_in, bases_out):
+        self.ptm = ptm
+        self.bases_in = bases_in
+        self.bases_out = bases_out
+        self._dim_hilbert = bases_in[0].dim_hilbert
+        self._num_qubits = len(bases_in)
+        if self._num_qubits != len(bases_out):
             raise ValueError('Number of qubits should be the same in bases_in '
                              '(has {} qubits) and bases_out (has {} qubits)'
                              .format(len(bases_in), len(bases_out)))
         for b in chain(bases_in, bases_out):
-            if b.dim_hilbert != out._dim_hilbert:
+            if b.dim_hilbert != self._dim_hilbert:
                 raise ValueError(
                     'All bases must have the same Hilbert dimensionality.')
-        out._validate_bases(bases_out=bases_out)
+        self._validate_bases(bases_out=bases_out)
         shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
         if not ptm.shape == shape:
             raise ValueError(
@@ -167,55 +197,6 @@ class Transformation(Operation):
                 'dimensionality: \n'
                 '- expected shape from provided `bases`: {}\n'
                 '- `ptm` shape: {}'.format(shape, ptm.shape))
-        out._ptm = ptm
-        return out
-
-    @classmethod
-    def from_kraus(cls, kraus, dim_hilbert=2):
-        """Construct completely positive map, based on a set of Kraus matrices.
-
-        TODO: elaborate on Kraus matrices format.
-
-        Parameters
-        ----------
-        kraus: array_like
-            Pauli transfer matrix in a form of Numpy array
-        dim_hilbert: int
-            Dimensionality of qudits in the operation.
-
-        Returns
-        -------
-        Transformation
-            Resulting operation
-        """
-        out = cls(_i_know_what_i_do=True)
-        out._dim_hilbert = dim_hilbert
-
-        if not isinstance(kraus, np.ndarray):
-            kraus = np.array(kraus)
-        if len(kraus.shape) == 2:
-            kraus = kraus.reshape((1, *kraus.shape))
-        elif len(kraus.shape) != 3:
-            raise ValueError(
-                '`kraus` should be a 2D or 3D array, got shape {}'
-                .format(kraus.shape))
-
-        kraus_size = kraus.shape[1]
-        if kraus_size != kraus.shape[2]:
-            raise ValueError('Kraus operators should be square matrices, got '
-                             '{}x{}'.format(kraus.shape[1], kraus.shape[2]))
-        if kraus_size == dim_hilbert:
-            out._num_qubits = 1
-        elif kraus_size == dim_hilbert ** 2:
-            out._num_qubits = 2
-        else:
-            raise ValueError(
-                'Expected {n1}x{n1} (single-qubit transformation) or {n2}x{n2} '
-                '(two-qubit transformation) Kraus matrices, got {n}x{n}.'
-                .format(n=kraus_size, n1=dim_hilbert, n2=dim_hilbert**2))
-
-        out._kraus = kraus
-        return out
 
     @property
     def dim_hilbert(self):
@@ -233,49 +214,36 @@ class Transformation(Operation):
         If PTM acts on a reduced basis or reduces a basis (for example,
         it is a projection), elements can be less than :math:`d^2`.
         """
-        if self._ptm is not None:
-            return self._ptm.shape
-        else:
-            return (self.dim_hilbert**2,) * (self.num_qubits*2)
+        return self.ptm.shape
 
     @property
     def num_qubits(self):
         return self._num_qubits
 
-    @property
-    def size(self):
-        return np.product(self.shape)
+    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
+        b_in = bases_in or self.bases_in
+        b_out = bases_out or self.bases_out
+        if b_in == self.bases_in and b_out == self.bases_out:
+            new_op = self
+        else:
+            shape = tuple(b.dim_pauli for b in chain(b_out, b_in))
+            d_in = np.prod([b.dim_pauli for b in self.bases_in])
+            d_out = np.prod([b.dim_pauli for b in self.bases_out])
+            new_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw",
+                                self._combine_bases_vectors(b_out),
+                                self._combine_bases_vectors(self.bases_out),
+                                self.ptm.reshape((d_out, d_in)),
+                                self._combine_bases_vectors(self.bases_in),
+                                self._combine_bases_vectors(b_in),
+                                optimize=True).real.reshape(shape)
+            new_op = PTMOperation(new_ptm, b_in, b_out)
+        if optimize:
+            b_in, b_out = new_op.optimal_bases()
+            return new_op.compile(b_in, b_out, optimize=False)
+        else:
+            return new_op
 
-    def ptm(self, bases_in, bases_out=None):
-        if bases_out is None:
-            bases_out = bases_in
-        if (self._ptm is not None and bases_in == self._bases_in and
-                bases_out == self._bases_out):
-            return self._ptm
-        self._validate_bases(bases_in=bases_in, bases_out=bases_out)
-        shape = tuple(b.dim_pauli for b in chain (bases_out, bases_in))
-        if self._kraus is not None:
-            return np.einsum("xab, zbc, ycd, zad -> xy",
-                             self._combine_bases_vectors(bases_out),
-                             self._kraus,
-                             self._combine_bases_vectors(bases_in),
-                             self._kraus.conj(),
-                             optimize=True).real.reshape(shape)
-        if self._ptm is not None:
-            return np.einsum("xij, yji, yz, zkl, wlk -> xw",
-                             self._combine_bases_vectors(bases_out),
-                             self._combine_bases_vectors(self._bases_out),
-                             self._ptm,
-                             self._combine_bases_vectors(self._bases_in),
-                             self._combine_bases_vectors(bases_in),
-                             optimize=True).real.reshape(shape)
-        raise RuntimeError("Neither `self._kraus`, nor `self._ptm` are set.")
-
-    def compile(self, bases_in=None, bases_out=None):
-        opt_bases = self.optimal_bases(bases_in, bases_out)
-        return self.from_ptm(self.ptm(*opt_bases), *opt_bases)
-
-    def optimal_bases(self, bases_in=None, bases_out=None):
+    def optimal_bases(self):
         """Based on input or output bases provided, determine an optimal
         basis, throwing away all basis elements, that are guaranteed not to
         contribute to the result of PTM application.
@@ -307,34 +275,24 @@ class Transformation(Operation):
         opt_basis_in, opt_basis_out: tuple of qs2.bases.PauliBasis
             Subbases of input bases, that will contribute to computation.
         """
-        bases_in = (bases_in or
-                    self._bases_in or
-                    (general(self.dim_hilbert),) * self.num_qubits)
-        bases_out = (bases_out or
-                     self._bases_out or
-                     (general(self.dim_hilbert),) * self.num_qubits)
-        d_in = np.prod([b.dim_pauli for b in bases_in])
-        d_out = np.prod([b.dim_pauli for b in bases_out])
-        u, s, vh = np.linalg.svd(self.ptm(bases_in, bases_out)
-                                     .reshape(d_out, d_in),
+        d_in = np.prod([b.dim_pauli for b in self.bases_in])
+        d_out = np.prod([b.dim_pauli for b in self.bases_out])
+        u, s, vh = np.linalg.svd(self.ptm.reshape(d_out, d_in),
                                  full_matrices=False)
         (truncate_index,) = (s > self.sv_cutoff).shape
 
-        # mask_in = np.count_nonzero(vh[:truncate_index], axis=0) \
-        #             .reshape(tuple(b.dim_pauli for b in bases_in)) \
-        #             .nonzero()
         mask_in = np.any(np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
-                    .reshape(tuple(b.dim_pauli for b in bases_in)) \
+                    .reshape(tuple(b.dim_pauli for b in self.bases_in)) \
                     .nonzero()
         mask_out = np.any(np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
-                     .reshape(tuple(b.dim_pauli for b in bases_out)) \
+                     .reshape(tuple(b.dim_pauli for b in self.bases_out)) \
                      .nonzero()
 
         opt_bases_in = []
         opt_bases_out = []
         for opt_bases, bases, mask in (
-                (opt_bases_in, bases_in, mask_in),
-                (opt_bases_out, bases_out, mask_out)):
+                (opt_bases_in, self.bases_in, mask_in),
+                (opt_bases_out, self.bases_out, mask_out)):
             for basis, involved_indices in zip(bases, mask):
                 # Figure out what single-qubit basis elements are not
                 # involved at all
@@ -348,104 +306,127 @@ class Transformation(Operation):
 
         return tuple(opt_bases_in), tuple(opt_bases_out)
 
-    @staticmethod
-    @lru_cache(maxsize=8)
-    def _combine_bases_vectors(bases):
-        return reduce(np.kron, [b.vectors for b in bases])
-
-    def _validate_bases(self, **kwargs):
-        for name, bases in kwargs.items():
-            if not isinstance(bases, tuple):
-                raise ValueError(
-                    "`{n}` should be a tuple, got {t}."
-                    .format(n=name, t=type(bases)))
-            for b in bases:
-                if self.dim_hilbert != b.dim_hilbert:
-                    raise ValueError(
-                        "Expected bases with Hilbert dimensionality {}, "
-                        "but {} has elements with Hilbert dimensionality {}."
-                        .format(self.dim_hilbert, name, b.dim_hilbert))
-
     def __call__(self, state, *qubit_indices):
-        # FIXME state should know its basis
-        proc_subspaces = self.num_qubits
+        """
 
-        if len(qubit_indices) != proc_subspaces:
+        Parameters
+        ----------
+        state : qs2.backends.DensityMatrixBase
+        q0, ..., qN : indices of qubits to act on
+        """
+        if len(qubit_indices) != self.num_qubits:
+            raise ValueError('This is a {}-qubit operation, but number of '
+                             'qubits provdied is {}'
+                             .format(self.num_qubits, len(qubit_indices)))
+        op = self
+        for q, b in zip(qubit_indices, self.bases_in):
+            if state.bases[q] != b:
+                op = self.compile(
+                    bases_in=tuple(state.bases[q] for q in qubit_indices))
+                break
+
+        state.apply_ptm(op.ptm, *qubit_indices)
+        for q, b in zip(qubit_indices, op.bases_out):
+            state.bases[q] = b
+
+
+class KrausOperation(Operation):
+    """Construct completely positive map, based on a set of Kraus matrices.
+
+    TODO: elaborate on Kraus matrices format.
+
+    Parameters
+    ----------
+    kraus: array_like
+        Pauli transfer matrix in a form of Numpy array
+    dim_hilbert: int
+        Dimensionality of qudits in the operation.
+
+    Returns
+    -------
+    Transformation
+        Resulting operation
+    """
+    def __init__(self, kraus, dim_hilbert=2):
+        self._dim_hilbert = dim_hilbert
+
+        if not isinstance(kraus, np.ndarray):
+            kraus = np.array(kraus)
+        if len(kraus.shape) == 2:
+            kraus = kraus.reshape((1, *kraus.shape))
+        elif len(kraus.shape) != 3:
             raise ValueError(
-                'Incorrect number of indicies for a single qubit PTM')
+                '`kraus` should be a 2D or 3D array, got shape {}'
+                .format(kraus.shape))
 
-        if proc_subspaces == 1:
-            state.apply_single_qubit_ptm(
-                *qubit_indices,
-                self.ptm((state.bases[qubit_indices[0]],)))
-        elif proc_subspaces == 2:
-            state.apply_two_qubit_ptm(
-                *qubit_indices,
-                self.ptm((state.bases[qubit_indices[0]],
-                          state.bases[qubit_indices[1]])))
+        kraus_size = kraus.shape[1]
+        if kraus_size != kraus.shape[2]:
+            raise ValueError('Kraus operators should be square matrices, got '
+                             '{}x{}'.format(kraus.shape[1], kraus.shape[2]))
+        if kraus_size == dim_hilbert:
+            self._num_qubits = 1
+        elif kraus_size == dim_hilbert ** 2:
+            self._num_qubits = 2
         else:
-            raise NotImplementedError
+            raise ValueError(
+                'Expected {n1}x{n1} (single-qubit transformation) or {n2}x{n2} '
+                '(two-qubit transformation) Kraus matrices, got {n}x{n}.'
+                .format(n=kraus_size, n1=dim_hilbert, n2=dim_hilbert**2))
 
-
-class Initialization(Operation):
-
-    @property
-    def dim_hilbert(self):
-        raise NotImplementedError
+        self.kraus = kraus
 
     @property
     def shape(self):
-        raise NotImplementedError
+        return (self.dim_hilbert**2,) * (self.num_qubits*2)
 
     @property
     def num_qubits(self):
-        raise NotImplementedError
+        return self._num_qubits
+
+    @property
+    def dim_hilbert(self):
+        return self._dim_hilbert
 
     def __call__(self, state, *qubit_indices):
-        """Not implemented yet as I am unsure how the state will look.
-        Should be fairly straightforward to do so (state projection)
         """
-        raise NotImplementedError
 
-    def compile(self, bases_in, bases_out):
-        raise NotImplementedError
-
-
-class Projection(Operation):
-    @property
-    def dim_hilbert(self):
-        raise NotImplementedError
-
-    @property
-    def shape(self):
-        raise NotImplementedError
-
-    @property
-    def num_qubits(self):
-        pass
-
-    # FIXME Sampler should not be there.
-    def __call__(self, state, sampler, *qubit_indices):
-        """Returns the result of the measurement
-
-        NOTE: I don't think sampler should be part of the process. However the
-        measurement process needs information of the probability tree and which
-        state to project. I think the bast thing is to pass tuples of
-        (index, proj_state) and let the declared state be handled by the Gate
-        class.
+        Parameters
+        ----------
+        state : qs2.backends.DensityMatrixBase
+        q0, ..., qN : indices of qubits to act on
         """
-        results = []
-        for ind in qubit_indices:
-            probs = state.partial_trace(ind)
-            declared_state, proj_state, cond_prob = \
-                sampler.send(probs)
+        if len(qubit_indices) != self.num_qubits:
+            raise ValueError('This is a {}-qubit operation, but number of '
+                             'qubits provdied is {}'
+                             .format(self.num_qubits, len(qubit_indices)))
+        bases_in = tuple(state.bases[i] for i in qubit_indices)
+        op = self.compile(bases_in=bases_in)
+        state.apply_ptm(op.ptm, *qubit_indices)
+        for q, b in zip(qubit_indices, op.bases_out):
+            state.bases[q] = b
 
-            state.project(ind, proj_state)
-            results.append(tuple(declared_state, proj_state, cond_prob))
-        return results
+    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
+        if bases_in is None:
+            bases_in = (general(self.dim_hilbert),) * self.num_qubits
+        if bases_out is None:
+            bases_out = (general(self.dim_hilbert),) * self.num_qubits
+        self._validate_bases(bases_in=bases_in, bases_out=bases_out)
+        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        new_ptm = np.einsum("xab, zbc, ycd, zad -> xy",
+                            self._combine_bases_vectors(bases_out),
+                            self.kraus,
+                            self._combine_bases_vectors(bases_in),
+                            self.kraus.conj(),
+                            optimize=True).real.reshape(shape)
+        assert new_ptm.shape == shape
+        op = PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
+        if optimize:
+            op = op.compile(optimize=True)
+        return op
 
-    def compile(self, bases_in, bases_out):
-        raise NotImplementedError
+    def optimal_bases(self):
+        tmp_op = self.compile(optimize=True)
+        return tmp_op.bases_in, tmp_op.bases_out
 
 
 class Chain(Operation):
@@ -460,6 +441,9 @@ class Chain(Operation):
     def __init__(self, *operations):
         self._dim_hilbert = operations[0].operation.dim_hilbert
         for op in operations[1:]:
+            if not isinstance(op, _IndexedOperation):
+                raise ValueError('All operations must provide its indices in '
+                                 'a chain; please use Operation.at() method.')
             if op.operation.dim_hilbert != self._dim_hilbert:
                 raise ValueError('All operations in the chain must have the '
                                  'same Hilbert dimensionality.')
