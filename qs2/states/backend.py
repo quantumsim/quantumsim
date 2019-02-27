@@ -3,7 +3,7 @@ import pytools
 import numpy as np
 
 
-class DensityMatrixBase(metaclass=abc.ABCMeta):
+class State(metaclass=abc.ABCMeta):
     """A metaclass, that defines standard interface for Quantumsim density
     matrix backend.
 
@@ -27,27 +27,22 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     """
     _size_max = 2**22
 
-    def __init__(self, bases, expansion=None, *, force=False):
-        self.bases = list(bases)
+    @classmethod
+    def from_dm(cls, bases, dm, *, force=False):
+        if not hasattr(bases, '__iter__'):
+            n_qubits = len(dm) // bases.dim_hilbert
+            bases = [bases] * n_qubits
+        else:
+            n_qubits = len(bases)
 
-        if self.size > self._size_max and not force:
-            raise ValueError(
-                'Density matrix of the system is going to have {} items. It '
-                'is probably too much. If you know what you are doing, '
-                'pass `force=True` argument to the constructor.')
-
-        if expansion is not None:
-            if self.dim_pauli != expansion.shape:
-                raise ValueError(
-                    '`bases` Pauli dimensionality should be the same as the '
-                    'shape of `data` array.\n'
-                    ' - bases shapes: {}\n - data shape: {}'
-                    .format(self.dim_pauli, expansion.shape))
-            if expansion.dtype not in (np.float16, np.float32, np.float64):
-                raise ValueError(
-                    '`expansion` must have floating point data type, got {}'
-                    .format(expansion.dtype)
-                )
+        d = bases[0].dim_hilbert
+        einsum_args = [dm.reshape((d,)*(2*n_qubits)), list(range(2*n_qubits))]
+        for i, b in enumerate(bases):
+            einsum_args.append(b.vectors),
+            # einsum_args.append([2*n_qubits+i, i, i+n_qubits])
+            einsum_args.append([2*n_qubits+i, i+n_qubits, i])
+        pv = np.einsum(*einsum_args, optimize=True)
+        return cls(bases, pv.real, force=force)
 
     @property
     def n_qubits(self):
@@ -64,6 +59,11 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
     @property
     def dim_pauli(self):
         return tuple([pb.dim_pauli for pb in self.bases])
+
+    @property
+    @abc.abstractmethod
+    def bases(self):
+        pass
 
     @abc.abstractmethod
     def expansion(self):
@@ -84,6 +84,10 @@ class DensityMatrixBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def partial_trace(self, qubit):
+        pass
+
+    @abc.abstractmethod
+    def meas_prob(self, qubit):
         pass
 
     @abc.abstractmethod

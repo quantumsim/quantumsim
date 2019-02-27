@@ -2,12 +2,12 @@ import warnings
 
 import numpy as np
 import pytools
-from .backend import DensityMatrixBase
+from .backend import State
 from ..operations.operation import PTMOperation
 
 
-class DensityMatrix(DensityMatrixBase):
-    def __init__(self, bases, expansion=None):
+class DensityMatrix(State):
+    def __init__(self, bases, expansion=None, *, force=False):
         """A density matrix describing several subsystems with variable number
         of dimensions.
 
@@ -21,7 +21,25 @@ class DensityMatrix(DensityMatrixBase):
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
         """
-        super().__init__(bases, expansion)
+        self._bases = list(bases)
+        if self.size > self._size_max and not force:
+            raise ValueError(
+                'Density matrix of the system is going to have {} items. It '
+                'is probably too much. If you know what you are doing, '
+                'pass `force=True` argument to the constructor.')
+
+        if expansion is not None:
+            if self.dim_pauli != expansion.shape:
+                raise ValueError(
+                    '`bases` Pauli dimensionality should be the same as the '
+                    'shape of `data` array.\n'
+                    ' - bases shapes: {}\n - data shape: {}'
+                        .format(self.dim_pauli, expansion.shape))
+            if expansion.dtype not in (np.float16, np.float32, np.float64):
+                raise ValueError(
+                    '`expansion` must have floating point data type, got {}'
+                        .format(expansion.dtype)
+                )
 
         if isinstance(expansion, np.ndarray):
             self._data = expansion
@@ -32,6 +50,10 @@ class DensityMatrix(DensityMatrixBase):
             raise ValueError(
                 "`expansion` should be Numpy array or None, got type `{}`"
                 .format(type(expansion)))
+
+    @property
+    def bases(self):
+        return self._bases
 
     def expansion(self):
         return self._data
@@ -67,41 +89,20 @@ class DensityMatrix(DensityMatrixBase):
                          optimize=True).reshape(complex_dm_dimension)
 
     def apply_ptm(self, ptm, *qubits):
-        if len(qubits) == 1:
-            self._apply_single_qubit_ptm(qubits[0], ptm)
-        elif len(qubits) == 2:
-            self._apply_two_qubit_ptm(qubits[0], qubits[1], ptm)
-        else:
-            raise NotImplementedError('Applying {}-qubit PTM is not '
-                                      'implemented in the active backend.')
-
-    def _apply_two_qubit_ptm(self, qubit0, qubit1, two_ptm):
-        n_qubits = self.n_qubits
-        dummy_idx0, dummy_idx1 = n_qubits, n_qubits + 1
-        out_indices = list(reversed(range(n_qubits)))
-        in_indices = list(reversed(range(n_qubits)))
-        in_indices[n_qubits - qubit0 - 1] = dummy_idx0
-        in_indices[n_qubits - qubit1 - 1] = dummy_idx1
-        two_ptm_indices = [
-            qubit1, qubit0,
-            dummy_idx1, dummy_idx0
-        ]
+        if len(ptm.shape) != 2 * len(qubits):
+            raise ValueError(
+                '{}-qubit PTM must have {} dimensions, got {}'
+                .format(len(qubits), 2*len(qubits), len(ptm.shape)))
+        dm_in_idx = list(range(self.n_qubits))
+        ptm_in_idx = list(qubits)
+        ptm_out_idx = list(range(self.n_qubits, self.n_qubits + len(
+            qubits)))
+        dm_out_idx = list(dm_in_idx)
+        for i_in, i_out in zip(ptm_in_idx, ptm_out_idx):
+            dm_out_idx[i_in] = i_out
         self._data = np.einsum(
-            self._data, in_indices, two_ptm, two_ptm_indices, out_indices,
+            self._data, dm_in_idx, ptm, ptm_out_idx + ptm_in_idx, dm_out_idx,
             optimize=True)
-
-    def _apply_single_qubit_ptm(self, qubit, ptm):
-        self._validate_qubit(qubit, 'bit')
-        dim = self.dim_pauli[qubit]
-
-        n_qubits = self.n_qubits
-        dummy_idx = n_qubits
-        out_indices = list(reversed(range(n_qubits)))
-        in_indices = list(reversed(range(n_qubits)))
-        in_indices[n_qubits - qubit - 1] = dummy_idx
-        ptm_indices = [qubit, dummy_idx]
-        self._data = np.einsum(self._data, in_indices, ptm,
-                               ptm_indices, out_indices, optimize=True)
 
     def add_qubit(self, basis, classical_state):
         self._data = np.einsum(
@@ -112,23 +113,25 @@ class DensityMatrix(DensityMatrixBase):
 
     def partial_trace(self, qubit):
         self._validate_qubit(qubit, 'qubit')
+        einsum_args = [self._data, list(range(self.n_qubits))]
+        for i, b in enumerate(self.bases):
+            if i != qubit:
+                einsum_args.append(b.vectors)
+                einsum_args.append([i, self.n_qubits+i, self.n_qubits+i])
+        traced_dm = np.einsum(*einsum_args, optimize=True).real
+        return self.__class__([self.bases[qubit]], traced_dm)
 
-        trace_argument = []
-        for i, d in enumerate(self.dim_hilbert):
-            if i == qubit:
-                ntt = np.zeros((d, d**2))
-                ntt[:, :d] = np.eye(d)
-                trace_argument.append(ntt)
-                trace_argument.append([self.n_qubits + 1, i])
-            else:
-                tt = np.zeros(d**2)
-                tt[:d] = 1
-                trace_argument.append(tt)
-                trace_argument.append([i])
-
-        indices = list(reversed(range(self.n_qubits)))
-
-        return np.einsum(self._data, indices, *trace_argument, optimize=True)
+    def meas_prob(self, qubit):
+        self._validate_qubit(qubit, 'qubit')
+        einsum_args = [self._data, list(range(self.n_qubits))]
+        for i, b in enumerate(self.bases):
+            einsum_args.append(b.vectors)
+            einsum_args.append([i, self.n_qubits+i, self.n_qubits+i])
+        einsum_args.append([self.n_qubits + qubit])
+        try:
+            return np.einsum(*einsum_args, optimize=True).real
+        except Exception:
+            raise
 
     def trace(self):
         # TODO: can be made more effective

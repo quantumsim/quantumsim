@@ -93,15 +93,15 @@ __global__ void pauli_reshuffle(double *complex_dm, double *real_dm, unsigned in
 //Apply a general pauli transfer matrix, to (up to) two subsystems (arbitrary dimension)
 //a is the msb, b is the lsb.
 //If the PTM is diagonal, this works in-place, i.e. with dm_in == dm_out. Otherwise NOT!
-//You need to give the dimensions of two of the intermediate bystander spaces. 
+//You need to give the dimensions of two of the intermediate bystander spaces.
 
 //it is also important that a must be the msb in the ptm, but also the msb in the density matrix.
 //if not, you must reshape the ptm (switch a and b) before calling the kernel.
 __global__ void two_qubit_general_ptm(
         double *dm_in, double *dm_out,
-        const double * __restrict__ ptm_g, 
-        unsigned int dim_a_in, 
-        unsigned int dim_b_in, 
+        const double * __restrict__ ptm_g,
+        unsigned int dim_a_in,
+        unsigned int dim_b_in,
         unsigned int dim_z, unsigned int dim_y,
         unsigned int dim_rho) {
 
@@ -110,7 +110,7 @@ __global__ void two_qubit_general_ptm(
 
 
     //(structure worked out in Notebook II, p. 203 ff)
-        
+
     //blockDim.x = dim_a_out
     //blockDim.y = dim_b_out
     //blockDim.z = d_internal (arbitrary, to make blocksize and shared memory reasonable)
@@ -136,14 +136,14 @@ __global__ void two_qubit_general_ptm(
     // external memory required: (blockDim.x + dim_a*dim_b**2) double floats
     extern __shared__ double data[];
 
-    // load ptm to shared memory 
+    // load ptm to shared memory
 
     const int row = (ax*dim_b_out + bx)*dim_b_in*dim_a_in;
     /*for(int g = zx; g < dim_a_in*dim_b_in; g += d_internal) {*/
         /*ptm[row + g] = ptm_g[row + g];*/
     /*}*/
 
-    
+
 
     // load data to memory
     const int column = zx*dim_a_in*dim_b_in;
@@ -305,12 +305,12 @@ __global__ void dm_reduce(double *dm, unsigned int bit, double *dm0, unsigned in
 //set out = in[np.ix_(idx)]
 
 //indices are given in C order, i.e. most significant first
-__global__ void multitake(const double * __restrict__ in, 
-        double * __restrict__ out, 
-        const unsigned int * __restrict__ idx_i, 
-        const unsigned int * __restrict__ idx_j, 
-        const unsigned int * __restrict__ inshape, 
-        const unsigned int * __restrict__ outshape, 
+__global__ void multitake(const double * __restrict__ in,
+        double * __restrict__ out,
+        const unsigned int * __restrict__ idx_i,
+        const unsigned int * __restrict__ idx_j,
+        const unsigned int * __restrict__ inshape,
+        const unsigned int * __restrict__ outshape,
         unsigned int dim) {
 
     unsigned int addr_out, addr_in, s;
@@ -332,8 +332,8 @@ __global__ void multitake(const double * __restrict__ in,
         s *= inshape[i];
     }
 
-    // guard 
-    if(acc == 0) 
+    // guard
+    if(acc == 0)
         out[addr_out] = in[addr_in];
 }
 

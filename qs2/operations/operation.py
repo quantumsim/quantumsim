@@ -1,10 +1,10 @@
 import abc
 from collections import namedtuple
-from functools import reduce, lru_cache
 from itertools import chain
 
 import numpy as np
 from ..bases import general
+from .algebra import kraus_to_ptm, ptm_convert_basis
 from .compiler import ChainCompiler
 
 
@@ -30,10 +30,17 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def __call__(self, state, *qubit_indices):
+    def __call__(self, state, *qubits):
         """Applies the operation inline (modifying the state) to the state
         to certain qubits. Number of qubit indices should be aligned with a
         dimensionality of the operation.
+
+        Parameters
+        ----------
+        state : qs2.State
+            A state of a qubit
+        q0, ..., qN : int
+            Indices of a qubit in a state
         """
         pass
 
@@ -124,11 +131,6 @@ class Operation(metaclass=abc.ABCMeta):
                              'qubits in the operation.')
         return _IndexedOperation(self, indices)
 
-    @staticmethod
-    # @lru_cache(maxsize=8)
-    def _combine_bases_vectors(bases):
-        return reduce(np.kron, [b.vectors for b in bases])
-
     def _validate_bases(self, **kwargs):
         for name, bases in kwargs.items():
             if not isinstance(bases, tuple):
@@ -190,7 +192,10 @@ class PTMOperation(Operation):
                 raise ValueError(
                     'All bases must have the same Hilbert dimensionality.')
         self._validate_bases(bases_out=bases_out)
-        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        # shape = tuple(b.dim_pauli for b in chain(reversed(bases_out),
+        #                                          reversed(bases_in)))
+        shape = tuple(b.dim_pauli for b in chain(reversed(bases_out),
+                                                 reversed(bases_in)))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
@@ -226,16 +231,9 @@ class PTMOperation(Operation):
         if b_in == self.bases_in and b_out == self.bases_out:
             new_op = self
         else:
-            shape = tuple(b.dim_pauli for b in chain(b_out, b_in))
-            d_in = np.prod([b.dim_pauli for b in self.bases_in])
-            d_out = np.prod([b.dim_pauli for b in self.bases_out])
-            new_ptm = np.einsum("xij, yji, yz, zkl, wlk -> xw",
-                                self._combine_bases_vectors(b_out),
-                                self._combine_bases_vectors(self.bases_out),
-                                self.ptm.reshape((d_out, d_in)),
-                                self._combine_bases_vectors(self.bases_in),
-                                self._combine_bases_vectors(b_in),
-                                optimize=True).real.reshape(shape)
+            new_ptm = ptm_convert_basis(self.ptm,
+                                        self.bases_in, self.bases_out,
+                                        bases_in, bases_out)
             new_op = PTMOperation(new_ptm, b_in, b_out)
         if optimize:
             b_in, b_out = new_op.optimal_bases()
@@ -281,12 +279,14 @@ class PTMOperation(Operation):
                                  full_matrices=False)
         (truncate_index,) = (s > self.sv_cutoff).shape
 
-        mask_in = np.any(np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
-                    .reshape(tuple(b.dim_pauli for b in self.bases_in)) \
-                    .nonzero()
-        mask_out = np.any(np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
-                     .reshape(tuple(b.dim_pauli for b in self.bases_out)) \
-                     .nonzero()
+        mask_in = np.any(
+            np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
+            .reshape(tuple(b.dim_pauli for b in self.bases_in)) \
+            .nonzero()
+        mask_out = np.any(
+            np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
+            .reshape(tuple(b.dim_pauli for b in self.bases_out)) \
+            .nonzero()
 
         opt_bases_in = []
         opt_bases_out = []
@@ -311,7 +311,7 @@ class PTMOperation(Operation):
 
         Parameters
         ----------
-        state : qs2.backends.DensityMatrixBase
+        state : qs2.State
         q0, ..., qN : indices of qubits to act on
         """
         if len(qubit_indices) != self.num_qubits:
@@ -392,7 +392,7 @@ class KrausOperation(Operation):
 
         Parameters
         ----------
-        state : qs2.backends.DensityMatrixBase
+        state : qs2.State
         q0, ..., qN : indices of qubits to act on
         """
         if len(qubit_indices) != self.num_qubits:
@@ -411,14 +411,7 @@ class KrausOperation(Operation):
         if bases_out is None:
             bases_out = (general(self.dim_hilbert),) * self.num_qubits
         self._validate_bases(bases_in=bases_in, bases_out=bases_out)
-        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
-        new_ptm = np.einsum("xab, zbc, ycd, zad -> xy",
-                            self._combine_bases_vectors(bases_out),
-                            self.kraus,
-                            self._combine_bases_vectors(bases_in),
-                            self.kraus.conj(),
-                            optimize=True).real.reshape(shape)
-        assert new_ptm.shape == shape
+        new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
         op = PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
         if optimize:
             op = op.compile(optimize=True)

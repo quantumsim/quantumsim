@@ -6,6 +6,13 @@ from . import operation
 
 class Node:
     def __init__(self, op, qubits):
+        """
+
+        Parameters
+        ----------
+        op : qs2.operations.Operation
+        qubits : tuple of int
+        """
         self.op = op
         self.qubits = qubits
         self.prev = {i: None for i in qubits}
@@ -15,6 +22,8 @@ class Node:
         self.merged = False
 
     def to_indexed_operation(self):
+        assert self.op.bases_in == self.bases_in_tuple
+        assert self.op.bases_out == self.bases_out_tuple
         return self.op.at(*self.qubits)
 
     @property
@@ -24,14 +33,6 @@ class Node:
     @property
     def bases_out_tuple(self):
         return tuple(self.bases_out_dict[qubit] for qubit in self.qubits)
-
-    @property
-    def ptm(self):
-        raise RuntimeError
-
-    @ptm.setter
-    def ptm_setter(self, value):
-        raise RuntimeError
 
 
 class CompilerQueue:
@@ -53,10 +54,9 @@ class CompilerQueue:
 
     def compile_next(self, optimize=True):
         node = self.get()
-        b_in = tuple((node.bases_in_dict[qubit] for qubit in node.qubits))
-        b_out = tuple((node.bases_out_dict[qubit] or
-                       node.bases_in_dict[qubit].superbasis
-                       for qubit in node.qubits))
+        b_in = node.bases_in_tuple
+        b_out = tuple(bo or bi.superbasis for bo, bi in
+                      zip(node.bases_out_tuple, node.bases_in_tuple))
         node.op = node.op.compile(b_in, b_out, optimize=optimize)
 
         for qubit, bi, bo in zip(node.qubits, node.op.bases_in,
@@ -98,8 +98,6 @@ class CircuitGraph:
             node_end.bases_out_dict[qubit] = b
 
     def to_operation(self):
-        # TODO If len(self.nodes) == 1 -- return only the operation itself
-        # Need to check that its indices are ordered
         return operation.Chain(*(node.to_indexed_operation()
                                  for node in self.nodes))
 
@@ -133,25 +131,31 @@ class CircuitGraph:
 
         d_self = len(node.qubits)
         d_other = len(other.qubits)
-        contr_indices = [other.qubits.index(qubit) for qubit in node.qubits]
-
         i_other_out = list(range(d_other))
-        i_other_in = list(range(d_other, 2*d_other))
+        i_other_in = list(range(d_other, 2 * d_other))
 
+        contr_indices = [other.qubits.index(qubit)
+                         for qubit in reversed(node.qubits)]
         if where == 'next':
-            i_self_out = list(range(2*d_other, 2*d_other+d_self))
-            i_self_in = [i_other_in[i] for i in contr_indices]
+            i_self_out = list(range(2 * d_other, 2 * d_other + d_self))
+            i_self_in = [2 * d_other - i - 1 for i in contr_indices]
             for i, j in zip(contr_indices, i_self_out):
-                i_other_in[i] = j
+                i_other_in[d_other - i - 1] = j
         else:
-            i_self_in = list(range(2*d_other, 2*d_other+d_self))
-            i_self_out = [i_other_out[i] for i in contr_indices]
+            i_self_in = list(range(2 * d_other, 2 * d_other + d_self))
+            i_self_out = [d_other - i - 1 for i in contr_indices]
             for i, j in zip(contr_indices, i_self_in):
-                i_other_out[i] = j
+                i_other_out[d_other - i - 1] = j
 
-        other_ptm = np.einsum(node.op.ptm, i_self_out + i_self_in,
-                              other.op.ptm, i_other_out + i_other_in,
-                              optimize=True)
+        try:
+            other_ptm = np.einsum(node.op.ptm, i_self_out + i_self_in,
+                                  other.op.ptm, i_other_out + i_other_in,
+                                  optimize=True)
+        except ValueError:
+            einsum_args = [node.op.ptm, i_self_out + i_self_in,
+                           other.op.ptm, i_other_out + i_other_in]
+            raise
+
 
         if where == 'next':
             for qubit, node_prev in node.prev.items():
@@ -186,6 +190,7 @@ class ChainCompiler:
     chain : Chain
         A chain to compile
     """
+
     def __init__(self, chain, *, optimize=True):
         self.chain = chain
         self.optimize = optimize

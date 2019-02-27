@@ -1,8 +1,8 @@
 import numpy as np
 from functools import lru_cache
 from scipy.linalg import expm
-from .operation import Operation
-from .. import bases
+from qs2.operations.operation import Operation
+from qs2 import bases
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 

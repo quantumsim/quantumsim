@@ -4,7 +4,7 @@
 # https://www.gnu.org/licenses/gpl.txt
 import warnings
 
-from .backend import DensityMatrixBase
+from .backend import State
 from ..operations.operation import PTMOperation
 
 import numpy as np
@@ -27,14 +27,14 @@ package_path = os.path.dirname(os.path.realpath(__file__))
 mod = None
 
 for kernel_file in [
-        sys.prefix +
-        "/pycudakernels/primitives.cu",
-        package_path +
-        "/primitives.cu"]:
+    sys.prefix +
+    "/pycudakernels/primitives.cu",
+    package_path +
+    "/primitives.cu"]:
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
-                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS+[
+                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
                     "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
@@ -52,18 +52,18 @@ _multitake = mod.get_function("multitake")
 _multitake.prepare("PPPPPPI")
 
 sum_along_axis = pycuda.reduction.ReductionKernel(
-        dtype_out=np.float64,
-        neutral="0", reduce_expr="a+b",
-        map_expr="(i/stride) % dim == offset ? in[i] : 0",
-        arguments="const double *in, unsigned int stride, unsigned int dim, "
-                  "unsigned int offset"
-        )
+    dtype_out=np.float64,
+    neutral="0", reduce_expr="a+b",
+    map_expr="(i/stride) % dim == offset ? in[i] : 0",
+    arguments="const double *in, unsigned int stride, unsigned int dim, "
+              "unsigned int offset"
+)
 
 
-class DensityMatrix(DensityMatrixBase):
+class DensityMatrix(State):
     _gpuarray_cache = {}
 
-    def __init__(self, bases, expansion=None):
+    def __init__(self, bases, expansion=None, *, force=False):
         """Create a new density matrix for several qudits.
 
         Parameters
@@ -76,25 +76,61 @@ class DensityMatrix(DensityMatrixBase):
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
         """
-        super().__init__(bases, expansion)
+        self._bases = list(bases)
+        if self.size > self._size_max and not force:
+            raise ValueError(
+                'Density matrix of the system is going to have {} items. It '
+                'is probably too much. If you know what you are doing, '
+                'pass `force=True` argument to the constructor.')
 
-        if isinstance(expansion, ga.GPUArray):
+        if expansion is not None:
+            if self.dim_pauli != expansion.shape:
+                raise ValueError(
+                    '`bases` Pauli dimensionality should be the same as the '
+                    'shape of `data` array.\n'
+                    ' - bases shapes: {}\n - data shape: {}'
+                        .format(self.dim_pauli, expansion.shape))
+        else:
+            expansion = np.zeros(self.dim_pauli, np.float64)
+            ground_state_index = [pb.computational_basis_indices[0]
+                                  for pb in self.bases]
+            expansion[tuple(ground_state_index)] = 1
+
+        if isinstance(expansion, np.ndarray):
+            if expansion.dtype not in (np.float16, np.float32, np.float64):
+                raise ValueError(
+                    '`expansion` must have float64 data type, got {}'
+                        .format(expansion.dtype)
+                )
+
+            # Looks like there are some issues with ordering, so the line
+            # below per se does not work.
+            # self._data = ga.to_gpu(expansion.astype(np.float64))
+
+            self._work_data = ga.to_gpu(
+                expansion.reshape(expansion.size, order='C').astype(np.float64))
+            self._data = ga.empty(expansion.shape, dtype=np.float64, order='C')
+            self._data.set(self._work_data.reshape(expansion.shape))
+            self._work_data.gpudata.free()
+        elif isinstance(expansion, ga.GPUArray):
+            if expansion.dtype != np.float64:
+                raise ValueError(
+                    '`expansion` must have float64 data type, got {}'
+                        .format(expansion.dtype)
+                )
             self._data = expansion
         else:
-            if expansion is None:
-                expansion = np.zeros(self.dim_pauli, np.float64)
-                ground_state_index = [pb.computational_basis_indices[0]
-                                      for pb in self.bases]
-                expansion[tuple(ground_state_index)] = 1
-            elif not isinstance(expansion, np.ndarray):
-                raise ValueError(
-                    "`expansion` should be Numpy array, PyCUDA GPU array or "
-                    "None, got type `{}`".format(type(expansion)))
-            self._data = ga.to_gpu(expansion)
+            raise ValueError(
+                "`expansion` must be Numpy array, PyCUDA GPU array or "
+                "None, got type `{}`".format(type(expansion)))
 
         self._data.gpudata.size = self._data.nbytes
         self._work_data = ga.empty_like(self._data)
         self._work_data.gpudata.size = self._work_data.nbytes
+
+    @property
+    def bases(self):
+        return self._bases
 
     def expansion(self):
         return self._data.get()
@@ -172,7 +208,7 @@ class DensityMatrix(DensityMatrixBase):
         diag_size = pytools.product(diag_shape)
 
         if target_array is None:
-            if self._work_data.gpudata.size < diag_size*8:
+            if self._work_data.gpudata.size < diag_size * 8:
                 self._work_data.gpudata.free()
                 self._work_data = ga.empty(diag_shape, np.float64)
                 self._work_data.gpudata.size = self._work_data.nbytes
@@ -182,7 +218,7 @@ class DensityMatrix(DensityMatrixBase):
                 raise ValueError(
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {}."
-                    .format(target_array.size, diag_size))
+                        .format(target_array.size, diag_size))
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -190,7 +226,7 @@ class DensityMatrix(DensityMatrixBase):
                for pb in self.bases]
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
-        idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
+        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
 
         xshape = np.array(self._data.shape, np.uint32)
         yshape = np.array(diag_shape, np.uint32)
@@ -201,8 +237,8 @@ class DensityMatrix(DensityMatrixBase):
         idx_i_gpu = self._cached_gpuarray(idx_i)
         idx_j_gpu = self._cached_gpuarray(idx_j)
 
-        block = (2**8, 1, 1)
-        grid = (max(1, (diag_size-1)//2**8 + 1), 1, 1)
+        block = (2 ** 8, 1, 1)
+        grid = (max(1, (diag_size - 1) // 2 ** 8 + 1), 1, 1)
 
         if len(yshape) == 0:
             # brain-dead case, but should be handled according to exp.
@@ -218,7 +254,7 @@ class DensityMatrix(DensityMatrixBase):
         if get_data:
             if flatten:
                 return (target_array.get()
-                        .ravel()[:diag_size])
+                            .ravel()[:diag_size])
             else:
                 return (target_array.get()
                         .ravel()[:diag_size]
@@ -236,28 +272,28 @@ class DensityMatrix(DensityMatrixBase):
         ptm: array-like
             A two-qubit ptm in the basis of `bit0` and `bit1`. Must be a 4D
             matrix with dimensions, that correspond to the qubits.
-        qubit0 : int
+        qubit1 : int
             Index of first qubit
-        qubit1: int
+        qubit0: int
             Index of second qubit
         """
-        self._validate_qubit(qubit0, 'qubit0')
-        self._validate_qubit(qubit1, 'qubit1')
+        self._validate_qubit(qubit1, 'qubit0')
+        self._validate_qubit(qubit0, 'qubit1')
         if len(ptm.shape) != 4:
             raise ValueError(
                 "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
 
-        # bit1 must be the more significant bit (bit 0 is msb)
-        if qubit1 > qubit0:
-            qubit1, qubit0 = qubit0, qubit1
+        # bit0 must be the more significant bit (bit 0 is msb)
+        if qubit0 > qubit1:
+            qubit0, qubit1 = qubit1, qubit0
             ptm = np.einsum("abcd -> badc", ptm)
 
         new_shape = list(self._data.shape)
-        dim1_out, dim0_out, dim1_in, dim0_in = ptm.shape
-        assert new_shape[qubit0] == dim0_in
+        dim0_out, dim1_out, dim0_in, dim1_in = ptm.shape
         assert new_shape[qubit1] == dim1_in
-        new_shape[qubit0] = dim0_out
+        assert new_shape[qubit0] == dim0_in
         new_shape[qubit1] = dim1_out
+        new_shape[qubit0] = dim0_out
         new_size = pytools.product(new_shape)
         new_size_bytes = new_size * 8
 
@@ -270,33 +306,33 @@ class DensityMatrix(DensityMatrixBase):
             # reallocation not required,
             # reshape but reuse allocation
             self._work_data = ga.GPUArray(
-                    shape=new_shape,
-                    dtype=np.float64,
-                    gpudata=self._work_data.gpudata,
-                    )
+                shape=new_shape,
+                dtype=np.float64,
+                gpudata=self._work_data.gpudata,
+            )
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
         rest_shape = new_shape.copy()
-        rest_shape[qubit0] = 1
         rest_shape[qubit1] = 1
+        rest_shape[qubit0] = 1
 
         dint = 1
         for i in sorted(rest_shape):
-            if i*dint > 256//(dim1_out*dim0_out):
+            if i * dint > 256 // (dim0_out * dim1_out):
                 break
             else:
                 dint *= i
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
-        block = (dim1_out, dim0_out, dint)
-        blocksize = dim0_out*dim1_out*dint
-        sh_mem_size = dint*dim0_in*dim1_in  # + ptm.size
-        grid_size = max(1, (new_size-1)//blocksize+1)
+        block = (dim0_out, dim1_out, dint)
+        blocksize = dim1_out * dim0_out * dint
+        sh_mem_size = dint * dim1_in * dim0_in  # + ptm.size
+        grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = pytools.product(self._data.shape[qubit0 + 1:])
-        dim_y = pytools.product(self._data.shape[qubit1 + 1:qubit0])
+        dim_z = pytools.product(self._data.shape[qubit1 + 1:])
+        dim_y = pytools.product(self._data.shape[qubit0 + 1:qubit1])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
@@ -305,11 +341,11 @@ class DensityMatrix(DensityMatrixBase):
             self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
-            dim1_in, dim0_in,
+            dim0_in, dim1_in,
             dim_z,
             dim_y,
             dim_rho,
-            shared_size=8*sh_mem_size)
+            shared_size=8 * sh_mem_size)
 
         self._data, self._work_data = self._work_data, self._data
 
@@ -349,17 +385,17 @@ class DensityMatrix(DensityMatrixBase):
             # reallocation not required,
             # reshape but reuse allocation
             self._work_data = ga.GPUArray(
-                    shape=new_shape,
-                    dtype=np.float64,
-                    gpudata=self._work_data.gpudata,
-                    )
+                shape=new_shape,
+                dtype=np.float64,
+                gpudata=self._work_data.gpudata,
+            )
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
         dint = min(64, self._data.size // dim_bit_in)
         block = (1, dim_bit_out, dint)
-        blocksize = dim_bit_out*dint
-        grid_size = max(1, (new_size-1)//blocksize+1)
+        blocksize = dim_bit_out * dint
+        grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
         dim_z = pytools.product(self._data.shape[qubit + 1:])
@@ -409,18 +445,18 @@ class DensityMatrix(DensityMatrixBase):
             # reallocation not required,
             # reshape but reuse allocation
             self._work_data = ga.GPUArray(
-                    shape=new_shape,
-                    dtype=np.float64,
-                    gpudata=self._work_data.gpudata,
-                    )
+                shape=new_shape,
+                dtype=np.float64,
+                gpudata=self._work_data.gpudata,
+            )
 
         # perform projection
         ptm_gpu = self._cached_gpuarray(ptm)
 
         dim_bit = basis.dim_pauli
-        dint = min(64, new_size_bytes//8//dim_bit)
+        dint = min(64, new_size_bytes // 8 // dim_bit)
         block = (1, dim_bit, dint)
-        blocksize = dim_bit*dint
+        blocksize = dim_bit * dint
         grid_size = max(1, (new_size_bytes // 8 - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
@@ -445,6 +481,9 @@ class DensityMatrix(DensityMatrixBase):
         self.bases.insert(0, basis)
 
     def partial_trace(self, qubit):
+        raise NotImplementedError
+
+    def meas_prob(self, qubit):
         """ Return the diagonal of the reduced density matrix of a qubit.
 
         Parameters
@@ -458,13 +497,22 @@ class DensityMatrix(DensityMatrixBase):
         diag = self.diagonal(get_data=False)
 
         res = []
-        stride = diag.strides[qubit]//8
+        stride = diag.strides[qubit] // 8
         dim = diag.shape[qubit]
         for offset in range(dim):
             pt = sum_along_axis(diag, stride, dim, offset)
             res.append(pt)
 
-        return [p.get() for p in res]
+        out = [np.asscalar(p.get()) for p in res]
+        if len(out) == self.dim_hilbert:
+            return out
+        else:
+            # We need to insert zeros at the basis elements, that are missing
+            # from the basis
+            it = iter(out)
+            return [next(it) if qbi is not None else 0.
+                    for qbi in self.bases[qubit]
+                                   .computational_basis_indices.values()]
 
     # noinspection PyMethodOverriding
     def project(self, qubit, state, *, lazy_alloc=True):
@@ -482,7 +530,7 @@ class DensityMatrix(DensityMatrixBase):
         """
         self._validate_qubit(qubit, 'bit')
         target_qubit_state_index = self.bases[qubit] \
-                                       .computational_basis_indices[state]
+            .computational_basis_indices[state]
         if target_qubit_state_index is None:
             raise RuntimeError(
                 'Projected state is not in the computational basis indices; '
@@ -515,7 +563,7 @@ class DensityMatrix(DensityMatrixBase):
                 idx.append(list(range(pb.dim_pauli)))
 
         idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
-        idx_i = np.cumsum([0]+[len(i) for i in idx][:-1]).astype(np.uint32)
+        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
 
         xshape = np.array(self._data.shape, np.uint32)
         yshape = np.array(new_shape, np.uint32)
@@ -526,18 +574,18 @@ class DensityMatrix(DensityMatrixBase):
         idx_i_gpu = self._cached_gpuarray(idx_i)
         idx_j_gpu = self._cached_gpuarray(idx_j)
 
-        block = (2**8, 1, 1)
-        grid = (max(1, (self._work_data.size-1)//2**8 + 1), 1, 1)
+        block = (2 ** 8, 1, 1)
+        grid = (max(1, (self._work_data.size - 1) // 2 ** 8 + 1), 1, 1)
 
         _multitake.prepared_call(
-                grid,
-                block,
-                self._data.gpudata,
-                self._work_data.gpudata,
-                idx_i_gpu.gpudata, idx_j_gpu.gpudata,
-                xshape_gpu.gpudata, yshape_gpu.gpudata,
-                np.uint32(len(xshape))
-                )
+            grid,
+            block,
+            self._data.gpudata,
+            self._work_data.gpudata,
+            idx_i_gpu.gpudata, idx_j_gpu.gpudata,
+            xshape_gpu.gpudata, yshape_gpu.gpudata,
+            np.uint32(len(xshape))
+        )
 
         self._data, self._work_data = self._work_data, self._data
 
