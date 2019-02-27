@@ -1,10 +1,9 @@
 import abc
 import pytools
-import numpy as np
-from ..algebra import dm_to_pv, pv_to_dm
+from qs2.algebra.algebra import dm_to_pv, pv_to_dm
 
 
-class State(metaclass=abc.ABCMeta):
+class StateBase(metaclass=abc.ABCMeta):
     """A metaclass, that defines standard interface for Quantumsim density
     matrix backend.
 
@@ -14,13 +13,12 @@ class State(metaclass=abc.ABCMeta):
 
     Parameters
     ----------
-    bases : tuple of qs2.bases.PauliBasis
+    bases : list of qs2.bases.PauliBasis
         A descrption of the basis for the subsystems.
-    expansion : array, pycuda.gpuarray.GPUArray  or None
-        Expansion of density matrix in the selected bases. If None, density
-        matrix is initialized in :math:`\\left| 0 \\cdots 0 \\right\\rangle`
-        state. Some sanity checks are done in the abstract class constructor,
-        but handling the data is a task of implementation.
+    pv : array or None
+        Pauli vector, that represents the density matrix in the selected
+        bases. If `None`, density matrix is initialized in
+        :math:`\\left| 0 \\cdots 0 \\right\\rangle` state.
     force : bool
         By default creation of too large density matrix (more than
         :math:`2^22` elements currently) is not allowed. Set this to `True`
@@ -28,12 +26,26 @@ class State(metaclass=abc.ABCMeta):
     """
     _size_max = 2**22
 
+    # noinspection PyUnusedLocal
+    @abc.abstractmethod
+    def __init__(self, bases, pv=None, *, force=False):
+        self.bases = list(bases)
+        if self.size > self._size_max and not force:
+            raise ValueError(
+                'Density matrix of the system is going to have {} items. It '
+                'is probably too much. If you know what you are doing, '
+                'pass `force=True` argument to the constructor.')
+
     @classmethod
-    def from_dm(cls, bases, dm, *, force=False):
+    def from_dm(cls, dm, bases, *, force=False):
         if not hasattr(bases, '__iter__'):
             n_qubits = len(dm) // bases.dim_hilbert
             bases = [bases] * n_qubits
         return cls(bases, dm_to_pv(dm, bases), force=force)
+
+    @classmethod
+    def from_pv(cls, pv, bases, *, force=False):
+        return cls(bases, pv, force=force)
 
     def to_dm(self):
         return pv_to_dm(self.expansion(), self.bases)
@@ -53,11 +65,6 @@ class State(metaclass=abc.ABCMeta):
     @property
     def dim_pauli(self):
         return tuple([pb.dim_pauli for pb in self.bases])
-
-    @property
-    @abc.abstractmethod
-    def bases(self):
-        pass
 
     @abc.abstractmethod
     def expansion(self):

@@ -22,9 +22,6 @@ class Node:
         self.merged = False
 
     def to_indexed_operation(self):
-        assert isinstance(self.op, operation.PTMOperation)
-        assert self.op.bases_in == self.bases_in_tuple
-        assert self.op.bases_out == self.bases_out_tuple
         return self.op.at(*self.qubits)
 
     @property
@@ -97,8 +94,6 @@ class CircuitGraph:
             node_new = Node(op, qubtis)
             for qubit in qubtis:
                 if self.starts[qubit] is None:
-                    assert self.ends[qubit] is None
-                    assert isinstance(qubit, int)
                     self.starts[qubit] = node_new
                     self.ends[qubit] = node_new
                 else:
@@ -155,8 +150,6 @@ class CircuitGraph:
 
         for qubit, node_prev in node.prev.items():
             other.prev[qubit] = node_prev
-            # We didn't einsum over different bases
-            assert other.bases_in_dict[qubit] == node.bases_out_dict[qubit]
             other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
             other.op = operation.PTMOperation(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)

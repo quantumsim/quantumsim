@@ -15,8 +15,9 @@ from qs2.models import transmons as lib3
 from qs2.states import State
 
 
-def random_density_matrix(dim, seed):
+def random_density_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)
+    # noinspection PyArgumentList
     diag = rng.rand(dim)
     diag /= np.sum(diag)
     dm = np.diag(diag)
@@ -24,7 +25,7 @@ def random_density_matrix(dim, seed):
     return unitary @ dm @ unitary.conj().T
 
 
-def random_unitary_matrix(dim, seed):
+def random_unitary_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)
     return unitary_group.rvs(dim, random_state=rng)
 
@@ -32,7 +33,7 @@ def random_unitary_matrix(dim, seed):
 @pytest.fixture(params=['numpy'])
 def dm_class(request):
     mod = pytest.importorskip('qs2.states.' + request.param)
-    return mod.DensityMatrix
+    return mod.State
 
 
 class TestOperations:
@@ -59,8 +60,8 @@ class TestOperations:
             damp_op.compile(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        cz = Operation.from_kraus(cz_kraus_mat, 2).compile(
-            gm_two_qubit_basis, gm_two_qubit_basis)
+        cz = Operation.from_kraus(cz_kraus_mat, 2).compile(gm_two_qubit_basis,
+                                                           gm_two_qubit_basis)
 
         assert cz.ptm.shape == (4, 4, 4, 4)
         cz_ptm = cz.ptm.reshape((16, 16))
@@ -74,8 +75,8 @@ class TestOperations:
         qutrit_basis = (bases.gell_mann(3),)
         system_bases = qutrit_basis * 2
 
-        cz = Operation.from_kraus(cz_kraus_mat, 3).compile(
-            system_bases, system_bases)
+        cz = Operation.from_kraus(cz_kraus_mat, 3).compile(system_bases,
+                                                           system_bases)
 
         assert cz.ptm.shape == (9, 9, 9, 9)
         cz_ptm_flat = cz.ptm.reshape((81, 81))
@@ -98,7 +99,7 @@ class TestOperations:
         with pytest.raises(ValueError):
             _ = Operation.from_kraus(cz_kraus_mat, 3)
         with pytest.raises(ValueError):
-            _ = kraus_op.compile(qutrit_basis+qutrit_basis)
+            _ = kraus_op.compile(qutrit_basis + qutrit_basis)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
@@ -111,11 +112,10 @@ class TestOperations:
         damp_op_kraus = Operation.from_kraus(damp_kraus_mat, 2)
         op1 = damp_op_kraus.compile(gell_mann_basis, gell_mann_basis)
         op2 = damp_op_kraus.compile(general_basis, general_basis) \
-                           .compile(gell_mann_basis, gell_mann_basis)
+            .compile(gell_mann_basis, gell_mann_basis)
         assert np.allclose(op1.ptm, op2.ptm)
         assert op1.bases_in == op2.bases_in
         assert op1.bases_out == op2.bases_out
-
 
     def test_opt_basis_single_qubit_2d(self):
         b = bases.general(2)
@@ -267,8 +267,8 @@ class TestOperations:
     def test_chain_apply(self, dm_class):
         b = (bases.general(2),) * 3
         dm = random_density_matrix(8, seed=93)
-        state1 = dm_class.from_dm(b, dm)
-        state2 = dm_class.from_dm(b, dm)
+        state1 = dm_class.from_dm(dm, b)
+        state2 = dm_class.from_dm(dm, b)
 
         # Some random gate sequence
         op_indices = [(lib2.rotate_x(np.pi/2), (0,)),
@@ -296,13 +296,13 @@ class TestOperations:
         rx_angle = lib.rotate_x(angle)
         rx_2angle = lib.rotate_x(2*angle)
         chain0 = Chain(rx_angle.at(0), rx_angle.at(0))
-        state0 = dm_class.from_dm(bases_full, dm)
+        state0 = dm_class.from_dm(dm, bases_full)
         chain0(state0, 0)
         assert chain0.num_qubits == 1
         assert len(chain0.operations) == 2
 
         chain1 = chain0.compile(bases_full, bases_full)
-        state1 = dm_class.from_dm(bases_full, dm)
+        state1 = dm_class.from_dm(dm, bases_full)
         chain1(state1, 0)
         assert chain1.num_qubits == 1
         assert len(chain1.operations) == 1
@@ -345,8 +345,8 @@ class TestOperations:
         assert chain_c.operations[0].indices == \
             approx(sorted(chain.operations[1].indices))
 
-        state1 = dm_class.from_dm(bases_full, dm)
-        state2 = dm_class.from_dm(bases_full, dm)
+        state1 = dm_class.from_dm(dm, bases_full)
+        state2 = dm_class.from_dm(dm, bases_full)
         chain(state1, 0, 1)
         chain_c(state2, 0, 1)
 
@@ -373,8 +373,8 @@ class TestOperations:
         assert len(chain.operations) == 2
         assert len(chain_c.operations) == 1
 
-        state1 = State.from_dm(bases_full, dm)
-        state2 = State.from_dm(bases_full, dm)
+        state1 = State.from_dm(dm, bases_full)
+        state2 = State.from_dm(dm, bases_full)
         chain(state1, 0, 1)
         chain_c(state2, 0, 1)
 
@@ -461,8 +461,8 @@ class TestOperations:
         assert op2.bases_out[1] == bases_out[2]
 
         dm = random_density_matrix(3**3, seed=85)
-        state1 = dm_class.from_dm((b01, b01, b0), dm)
-        state2 = dm_class.from_dm((b01, b01, b0), dm)
+        state1 = dm_class.from_dm(dm, (b01, b01, b0))
+        state2 = dm_class.from_dm(dm, (b01, b01, b0))
 
         zz(state1, 0, 1, 2)
         zzc(state2, 0, 1, 2)

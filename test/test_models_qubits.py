@@ -3,10 +3,8 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
-import pytest
 import numpy as np
 
-from qs2.operations.operation import Operation
 from qs2 import bases
 from qs2.models import qubits as lib
 from qs2.states import State
@@ -124,14 +122,13 @@ class TestLibrary:
         assert np.allclose(dm.meas_prob(1), (1, 0))
 
     def test_cnot(self):
-        import qs2.models.qubits as lib
         cnot = lib.cnot()
         qubit_bases = (bases.general(2),
                        bases.general(2),
                        bases.general(2))
 
         dm = np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0])
-        s = State.from_dm(qubit_bases, dm)
+        s = State.from_dm(dm, qubit_bases)
         assert np.allclose(s.meas_prob(0), (1, 0))
         assert np.allclose(s.meas_prob(1), (0.25, 0.75))
         assert np.allclose(s.meas_prob(2), (1, 0))
@@ -143,13 +140,3 @@ class TestLibrary:
         assert np.allclose(s.meas_prob(0), (1, 0))
         assert np.allclose(s.meas_prob(1), (0.25, 0.75))
         assert np.allclose(s.meas_prob(2), (0.25, 0.75))
-
-        #
-        # dm = np.zeros((4, 4), dtype=complex)
-        # dm[0, 0] = 1.
-        # s = State.from_dm(qubit_bases, dm)
-        # assert np.allclose(s.meas_prob(0), (1, 0))
-        # assert np.allclose(s.meas_prob(1), (1, 0))
-        # cnot(s, 0, 1)
-        # assert np.allclose(s.meas_prob(0), (1, 0))
-        # assert np.allclose(s.meas_prob(1), (1, 0))

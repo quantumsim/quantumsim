@@ -140,7 +140,7 @@ and then :math:`d^2-d` of :math:`\hat{\sigma}_x`- and
 This basis can be constructed in Quantumsim with :func:`qs2.bases.general`
 and is used as a default basis in Quantumsim.
 
-State representation
+StateBase representation
 --------------------
 
 Suppose we have a system of :math:`N` qubits.

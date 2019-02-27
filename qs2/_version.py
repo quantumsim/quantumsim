@@ -174,6 +174,7 @@ def _write_version(fname):
                 "version = '{}'\n".format(__version__))
 
 
+# noinspection PyPep8Naming
 class _build_py(build_py_orig):
     def run(self):
         super().run()
@@ -181,6 +182,7 @@ class _build_py(build_py_orig):
                                     STATIC_VERSION_FILE))
 
 
+# noinspection PyPep8Naming
 class _sdist(sdist_orig):
     def make_release_tree(self, base_dir, files):
         super().make_release_tree(base_dir, files)

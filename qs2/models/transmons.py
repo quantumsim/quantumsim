@@ -134,6 +134,7 @@ def cphase(angle=np.pi, leakage=0.):
     unitary = expm(-1j*angle*angle_frac*dcphase)
     return Operation.from_kraus(unitary, 3)
 
+
 @lru_cache(maxsize=32)
 def cnot():
     dcnot = np.zeros((9, 9))

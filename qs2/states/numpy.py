@@ -2,58 +2,47 @@ import warnings
 
 import numpy as np
 import pytools
-from .backend import State
-from ..operations.operation import PTMOperation
+from .state import StateBase
 
 
-class DensityMatrix(State):
-    def __init__(self, bases, expansion=None, *, force=False):
+class State(StateBase):
+    def __init__(self, bases, pv=None, *, force=False):
         """A density matrix describing several subsystems with variable number
         of dimensions.
 
         Parameters
         ----------
-        bases : tuple of qs2.bases.PauliBasis
+        bases : list of qs2.bases.PauliBasis
             Dimensions of qubits in the system.
 
-        expansion : array or None.
+        pv : array or None.
             Must be of size (2**no_qubits, 2**no_qubits). Only upper triangle
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
         """
-        self._bases = list(bases)
-        if self.size > self._size_max and not force:
-            raise ValueError(
-                'Density matrix of the system is going to have {} items. It '
-                'is probably too much. If you know what you are doing, '
-                'pass `force=True` argument to the constructor.')
-
-        if expansion is not None:
-            if self.dim_pauli != expansion.shape:
+        super().__init__(bases, pv, force=force)
+        if pv is not None:
+            if self.dim_pauli != pv.shape:
                 raise ValueError(
                     '`bases` Pauli dimensionality should be the same as the '
                     'shape of `data` array.\n'
                     ' - bases shapes: {}\n - data shape: {}'
-                        .format(self.dim_pauli, expansion.shape))
-            if expansion.dtype not in (np.float16, np.float32, np.float64):
+                    .format(self.dim_pauli, pv.shape))
+            if pv.dtype not in (np.float16, np.float32, np.float64):
                 raise ValueError(
-                    '`expansion` must have floating point data type, got {}'
-                        .format(expansion.dtype)
+                    '`pv` must have floating point data type, got {}'
+                    .format(pv.dtype)
                 )
 
-        if isinstance(expansion, np.ndarray):
-            self._data = expansion
-        elif expansion is None:
+        if isinstance(pv, np.ndarray):
+            self._data = pv
+        elif pv is None:
             self._data = np.zeros(self.dim_pauli)
             self._data[tuple([0] * self.n_qubits)] = 1
         else:
             raise ValueError(
-                "`expansion` should be Numpy array or None, got type `{}`"
-                .format(type(expansion)))
-
-    @property
-    def bases(self):
-        return self._bases
+                "`pv` should be Numpy array or None, got type `{}`"
+                .format(type(pv)))
 
     def expansion(self):
         return self._data

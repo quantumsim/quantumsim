@@ -6,4 +6,4 @@
 .. autosummary::
    :toctree: generated/
 
-   State
+   StateBase

@@ -14,16 +14,6 @@ def single_kraus_to_ptm(kraus, basis_in, basis_out):
                      optimize=True).real
 
 
-# def kraus_to_ptm(kraus, bases_in, bases_out):
-#     shape = tuple(b.dim_pauli for b in chain(reversed(bases_out),
-#                                              reversed(bases_in)))
-#     # shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
-#     return np.einsum("xab, zbc, ycd, zad -> xy",
-#                      bases_kron(bases_out), kraus,
-#                      bases_kron(bases_in), kraus.conj(),
-#                      optimize=True).real.reshape(shape)
-
-
 def kraus_to_ptm(kraus, bases_in, bases_out):
     dim = bases_in[0].dim_hilbert
     nq = len(bases_in)
@@ -74,4 +64,4 @@ def pv_to_dm(pv, bases):
     for i, b in enumerate(bases):
         einsum_args.append(b.vectors)
         einsum_args.append([2*nq+i, i, nq+i])
-    return np.einsum(*einsum_args, optimize=True).reshape((dim**nq, dim**nq))
+    return np.einsum(*einsum_args, optimize=True).reshape((dim**nq,) * 2)

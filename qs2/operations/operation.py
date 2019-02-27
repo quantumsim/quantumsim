@@ -4,7 +4,7 @@ from itertools import chain
 
 import numpy as np
 from ..bases import general
-from qs2.algebra import kraus_to_ptm, ptm_convert_basis
+from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis
 from .compiler import ChainCompiler
 
 
@@ -12,7 +12,7 @@ class Operation(metaclass=abc.ABCMeta):
     """A metaclass for all quantum operations.
 
     Every operation has to implement call method, that takes a
-    :class:`qs2.state.State` object and modifies it inline. This method may
+    :class:`qs2.state.StateBase` object and modifies it inline. This method may
     return nothing or a result of a measurement, if the operation is a
     measurement.
     """
@@ -63,7 +63,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        qs2.operations.Operation
+        qs2.operations.PTMOperation
             Optimized representation of self.
         """
         pass
@@ -177,10 +177,10 @@ class PTMOperation(Operation):
     """
     sv_cutoff = 1e-5
 
-    def __init__(self, ptm, bases_in, bases_out):
+    def __init__(self, ptm, bases_in, bases_out=None):
         self.ptm = ptm
         self.bases_in = bases_in
-        self.bases_out = bases_out
+        self.bases_out = bases_out or bases_in
         self._dim_hilbert = bases_in[0].dim_hilbert
         self._num_qubits = len(bases_in)
         if self._num_qubits != len(bases_out):
@@ -253,17 +253,6 @@ class PTMOperation(Operation):
         optimization: usage of subbasis instead of a full basis in a density
         matrix will exponentially reduce memory consumption and computational
         time.
-
-        Parameters
-        ----------
-        bases_in : tuple of qs2.bases.PauliBasis or None
-            Basis of input elements, that is involved in computation. If
-            None, either internal representation is taken (if available) or
-            full :func:`qs2.bases.general` basis is used.
-        bases_out : tuple of qs2.bases.PauliBasis or None
-            Basis of output elements, that is involved in computation. If
-            None, either internal representation is taken (if available) or
-            full :func:`qs2.bases.general` basis is used.
 
         Returns
         -------
@@ -476,6 +465,6 @@ class Chain(Operation):
                 results.append(result)
         return results if len(results) > 0 else None
 
-    def compile(self, bases_in=None, bases_out=None):
-        compiler = ChainCompiler(self)
+    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
+        compiler = ChainCompiler(self, optimize=optimize)
         return compiler.compile(bases_in, bases_out)

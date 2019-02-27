@@ -2,35 +2,29 @@
 # (c) 2016 Brian Tarasinski
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
-import warnings
-
-from .backend import State
-from ..operations.operation import PTMOperation
+import sys
 
 import numpy as np
+import os
+import pytools
+import warnings
+
+# noinspection PyUnresolvedReferences
+import pycuda.autoinit
 import pycuda.driver as drv
 import pycuda.gpuarray as ga
-
-import pytools
-
-import pycuda.autoinit
 import pycuda.reduction
-
-# load the kernels
+# noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
-import sys
-import os
+from .state import StateBase
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
 mod = None
 
-for kernel_file in [
-    sys.prefix +
-    "/pycudakernels/primitives.cu",
-    package_path +
-    "/primitives.cu"]:
+for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
+                    package_path + "/primitives.cu"]:
     try:
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
@@ -60,10 +54,10 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
 )
 
 
-class DensityMatrix(State):
+class State(StateBase):
     _gpuarray_cache = {}
 
-    def __init__(self, bases, expansion=None, *, force=False):
+    def __init__(self, bases, pv=None, *, force=False):
         """Create a new density matrix for several qudits.
 
         Parameters
@@ -71,66 +65,56 @@ class DensityMatrix(State):
         bases : tuple of qs2.bases.PauliBasis
             Dimensions of qubits in the system.
 
-        expansion : array or None.
+        pv : array or None.
             Must be of size (2**no_qubits, 2**no_qubits). Only upper triangle
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
         """
-        self._bases = list(bases)
-        if self.size > self._size_max and not force:
-            raise ValueError(
-                'Density matrix of the system is going to have {} items. It '
-                'is probably too much. If you know what you are doing, '
-                'pass `force=True` argument to the constructor.')
-
-        if expansion is not None:
-            if self.dim_pauli != expansion.shape:
+        super().__init__(bases, pv, force=force)
+        if pv is not None:
+            if self.dim_pauli != pv.shape:
                 raise ValueError(
                     '`bases` Pauli dimensionality should be the same as the '
                     'shape of `data` array.\n'
                     ' - bases shapes: {}\n - data shape: {}'
-                        .format(self.dim_pauli, expansion.shape))
+                    .format(self.dim_pauli, pv.shape))
         else:
-            expansion = np.zeros(self.dim_pauli, np.float64)
+            pv = np.zeros(self.dim_pauli, np.float64)
             ground_state_index = [pb.computational_basis_indices[0]
                                   for pb in self.bases]
-            expansion[tuple(ground_state_index)] = 1
+            pv[tuple(ground_state_index)] = 1
 
-        if isinstance(expansion, np.ndarray):
-            if expansion.dtype not in (np.float16, np.float32, np.float64):
+        if isinstance(pv, np.ndarray):
+            if pv.dtype not in (np.float16, np.float32, np.float64):
                 raise ValueError(
-                    '`expansion` must have float64 data type, got {}'
-                        .format(expansion.dtype)
+                    '`pv` must have float64 data type, got {}'
+                    .format(pv.dtype)
                 )
 
             # Looks like there are some issues with ordering, so the line
             # below per se does not work.
-            # self._data = ga.to_gpu(expansion.astype(np.float64))
+            # self._data = ga.to_gpu(pv.astype(np.float64))
 
             self._work_data = ga.to_gpu(
-                expansion.reshape(expansion.size, order='C').astype(np.float64))
-            self._data = ga.empty(expansion.shape, dtype=np.float64, order='C')
-            self._data.set(self._work_data.reshape(expansion.shape))
+                pv.reshape(pv.size, order='C').astype(np.float64))
+            self._data = ga.empty(pv.shape, dtype=np.float64, order='C')
+            self._data.set(self._work_data.reshape(pv.shape))
             self._work_data.gpudata.free()
-        elif isinstance(expansion, ga.GPUArray):
-            if expansion.dtype != np.float64:
+        elif isinstance(pv, ga.GPUArray):
+            if pv.dtype != np.float64:
                 raise ValueError(
-                    '`expansion` must have float64 data type, got {}'
-                        .format(expansion.dtype)
+                    '`pv` must have float64 data type, got {}'
+                    .format(pv.dtype)
                 )
-            self._data = expansion
+            self._data = pv
         else:
             raise ValueError(
-                "`expansion` must be Numpy array, PyCUDA GPU array or "
-                "None, got type `{}`".format(type(expansion)))
+                "`pv` must be Numpy array, PyCUDA GPU array or "
+                "None, got type `{}`".format(type(pv)))
 
         self._data.gpudata.size = self._data.nbytes
         self._work_data = ga.empty_like(self._data)
         self._work_data.gpudata.size = self._work_data.nbytes
-
-    @property
-    def bases(self):
-        return self._bases
 
     def expansion(self):
         return self._data.get()
@@ -218,7 +202,7 @@ class DensityMatrix(State):
                 raise ValueError(
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {}."
-                        .format(target_array.size, diag_size))
+                    .format(target_array.size, diag_size))
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -253,11 +237,9 @@ class DensityMatrix(State):
 
         if get_data:
             if flatten:
-                return (target_array.get()
-                            .ravel()[:diag_size])
+                return target_array.get().ravel()[:diag_size]
             else:
-                return (target_array.get()
-                        .ravel()[:diag_size]
+                return (target_array.get().ravel()[:diag_size]
                         .reshape(diag_shape))
         else:
             return ga.GPUArray(shape=diag_shape,

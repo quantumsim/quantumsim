@@ -4,7 +4,7 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 """Purpose of the tests in this file is mostly to check, that all interface
-methods in the bachends can be called and exceptions are raised,
+methods in the bacends can be called and exceptions are raised,
 where necessary. Result sanity validation are done in test_state.py and
 test_operations.py
 """
@@ -14,13 +14,14 @@ import numpy as np
 
 from pytest import approx
 from scipy.stats import unitary_group
-from qs2.algebra import kraus_to_ptm, single_kraus_to_ptm, ptm_convert_basis
+from qs2.algebra.algebra import (kraus_to_ptm, single_kraus_to_ptm,
+                                 ptm_convert_basis)
 
 
 @pytest.fixture(params=['numpy', 'cuda'])
-def dm_class(request):
+def state_cls(request):
     mod = pytest.importorskip('qs2.states.' + request.param)
-    return mod.DensityMatrix
+    return mod.State
 
 
 @pytest.fixture(params=[[2]*9, [3, 2, 2]])
@@ -61,17 +62,17 @@ def random_unitary_matrix(dim, seed):
 
 
 class TestBackends:
-    def test_create_trivial(self, dm_class):
-        dm = dm_class([])
+    def test_create_trivial(self, state_cls):
+        dm = state_cls([])
         assert dm.expansion() == approx(1)
         assert dm.diagonal() == approx(1)
 
-    def test_create(self, dm_class, dm_dims):
+    def test_create(self, state_cls, dm_dims):
         target_shape = [dim**2 for dim in dm_dims]
         data = np.random.random_sample(target_shape)
         bases = [qs2.bases.general(dim) for dim in dm_dims]
         for expansion in (None, data):
-            dm = dm_class(bases, expansion)
+            dm = state_cls(bases, expansion)
             assert dm.n_qubits == len(dm_dims)
             assert dm.dim_hilbert == approx(dm_dims)
             assert dm.dim_pauli == approx(target_shape)
@@ -85,17 +86,17 @@ class TestBackends:
         wrong_shape = (wrong_dim, wrong_dim)
         data = data.reshape(wrong_shape)
         with pytest.raises(ValueError):
-            dm_class(bases, data)
+            state_cls(bases, data)
 
         # we require expansion in basis, it should be float
         for shape in (target_shape, wrong_shape):
             data = np.zeros(shape, dtype=complex)
             with pytest.raises(ValueError):
-                dm_class(bases=bases, expansion=data)
+                state_cls(bases=bases, pv=data)
 
         # 16 qubits is too much
         with pytest.raises(ValueError):
-            dm_class(bases=[qs2.bases.general(2)]*16)
+            state_cls(bases=[qs2.bases.general(2)]*16)
 
     @pytest.mark.parametrize(
         'bases', [
@@ -104,13 +105,13 @@ class TestBackends:
              qs2.bases.general(2).subbasis([0, 1]),
              qs2.bases.general(2))
         ])
-    def test_create_from_dm_general(self, dm_class, bases):
+    def test_create_from_dm_general(self, state_cls, bases):
         dm = np.zeros((8, 8), dtype=complex)
         dm[0, 0] = 0.25  # |000><000|
         dm[1, 1] = 0.75  # |001><001|
         dm[0, 1] = 0.5 - 0.33j  # |000><001|
-        dm[1, 0] = 0.5 + 0.33j # |001><000|
-        s = dm_class.from_dm(bases, dm)
+        dm[1, 0] = 0.5 + 0.33j  # |001><000|
+        s = state_cls.from_dm(dm, bases)
         pv = s.expansion()
         assert pv.shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
@@ -122,10 +123,10 @@ class TestBackends:
         assert pv[0, 0, 2] == approx(0.5 * 2**0.5)
         assert pv[0, 0, 3] == approx(0.33 * 2**0.5)
 
-    def test_create_from_random_dm(self, dm_class, dm_basis):
+    def test_create_from_random_dm(self, state_cls, dm_basis):
         dm = random_density_matrix(8, 34)
         bases = (dm_basis(2),) * 3
-        s = dm_class.from_dm(bases, dm)
+        s = state_cls.from_dm(dm, bases)
         assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
@@ -137,7 +138,7 @@ class TestBackends:
                         bases[2].vectors, optimize=True).reshape(8, 8)
         assert dm2 == approx(dm)
 
-    def test_apply_random_ptm1q_state1q(self, dm_class, dm_basis):
+    def test_apply_random_ptm1q_state1q(self, state_cls, dm_basis):
         unitary = random_unitary_matrix(2, 45)
 
         dm_before = random_density_matrix(2, seed=256)
@@ -146,8 +147,8 @@ class TestBackends:
         assert dm_after.trace() == approx(1)
 
         b = (dm_basis(2),)
-        state0 = dm_class.from_dm(b, dm_before)
-        state1 = dm_class.from_dm(b, dm_after)
+        state0 = state_cls.from_dm(dm_before, b)
+        state1 = state_cls.from_dm(dm_after, b)
         # sanity check
         assert state0.meas_prob(0) != approx(state1.meas_prob(0))
 
@@ -161,7 +162,7 @@ class TestBackends:
         assert state0.expansion() == approx(state1.expansion())
 
     @pytest.mark.parametrize('qubit', [0, 1, 2])
-    def test_apply_1q_random_ptm(self, dm_class, dm_basis, qubit):
+    def test_apply_1q_random_ptm(self, state_cls, dm_basis, qubit):
         unity = np.identity(2)
         unitary = random_unitary_matrix(2, 45)
         einsum_args = [unity, [0, 3], unity, [1, 4], unity, [2, 5]]
@@ -175,8 +176,8 @@ class TestBackends:
 
         b = (dm_basis(2),)
         bases = b * 3
-        state0 = dm_class.from_dm(bases, dm_before)
-        state1 = dm_class.from_dm(bases, dm_after)
+        state0 = state_cls.from_dm(dm_before, bases)
+        state1 = state_cls.from_dm(dm_after, bases)
         # sanity check
         for q in range(3):
             if q != qubit:
@@ -191,7 +192,7 @@ class TestBackends:
     @pytest.mark.parametrize('qubits', [
         (0, 1), (0, 2), (1, 2), (1, 0), (2, 0), (2, 1)
     ])
-    def test_apply_2q_random_ptm(self, dm_class, dm_basis, qubits):
+    def test_apply_2q_random_ptm(self, state_cls, dm_basis, qubits):
         unity = np.identity(2)
         unitary = random_unitary_matrix(4, 45).reshape(2, 2, 2, 2)
         decay = np.array([[0.9, 0], [0, 0.7]])
@@ -209,18 +210,12 @@ class TestBackends:
 
         b = (dm_basis(2),)
         bases = b * 3
-        state0 = dm_class.from_dm(bases, dm_before)
-        state1 = dm_class.from_dm(bases, dm_after)
+        state0 = state_cls.from_dm(dm_before, bases)
+        state1 = state_cls.from_dm(dm_after, bases)
 
         ptm = kraus_to_ptm(op.reshape(1, 4, 4), b * 2, b * 2)
         state0.apply_ptm(ptm, *qubits)
         assert state0.expansion() == approx(state1.expansion())
-
-
-    def test_project(self, dm_class, dm_basis, qubits):
-        dm_before = random_density_matrix(8, seed=46)
-        assert dm_before.trace() == approx(1)
-
 
     @pytest.mark.parametrize(
         'bases', [
@@ -231,10 +226,10 @@ class TestBackends:
              qs2.bases.general(2).subbasis([0, 1]),
              qs2.bases.general(2).subbasis([0, 1, 2]))
         ])
-    def test_diagonal_meas_prob(self, dm_class, bases):
+    def test_diagonal_meas_prob(self, state_cls, bases):
         diag = np.array([0.25, 0, 0.75, 0, 0, 0, 0, 0])
         dm = np.diag(diag)
-        s = dm_class.from_dm(bases, dm)
+        s = state_cls.from_dm(dm, bases)
         assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
@@ -246,7 +241,7 @@ class TestBackends:
 
         diag = np.array([0.25, 0.5, 0, 0, 0, 0, 0, 0])
         dm = np.diag(diag)
-        s = dm_class.from_dm(bases, dm)
+        s = state_cls.from_dm(dm, bases)
         assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
@@ -257,12 +252,12 @@ class TestBackends:
         assert np.allclose(s.meas_prob(2), (0.25, 0.5))
 
     @pytest.mark.parametrize('dim1,dim2', [[2, 2], [2, 3], [3, 3]])
-    def test_get_diagonal(self, dm_class, dm_basis, dim1, dim2):
+    def test_get_diagonal(self, state_cls, dm_basis, dim1, dim2):
         basis1 = dm_basis(dim1)
         basis2 = dm_basis(dim2)
 
         # Default initialization
-        dm = dm_class([basis1, basis2])
+        dm = state_cls([basis1, basis2])
         diag = dm.diagonal()
         diag_ref = np.zeros(dim1*dim2)
         diag_ref[0] = 1.
@@ -279,21 +274,21 @@ class TestBackends:
                     qs2.bases.general(2).subbasis([0, 1]),
             )
         ])
-    def test_diagonal_indicated(self, dm_class, bases):
+    def test_diagonal_indicated(self, state_cls, bases):
         dm = np.array([[min(i, j)*10 + max(i, j) for i in range(1, 9)]
                        for j in range(1, 9)])
         # dm = np.array([[min(i, j)*10 + max(i, j) for i in range(1, 5)]
         #                for j in range(1, 5)])
         diag = np.diag(dm)
 
-        s = dm_class.from_dm(bases, dm)
+        s = state_cls.from_dm(dm, bases)
         # assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
 
-    def test_add_qubit(self, dm_class, dm_basis):
-        dm = dm_class([])
+    def test_add_qubit(self, state_cls, dm_basis):
+        dm = state_cls([])
         bases = []
         expected_dim_pauli = []
         assert dm.n_qubits == 0
@@ -308,10 +303,10 @@ class TestBackends:
             assert dm.dim_pauli == approx(expected_dim_pauli)
             assert dm.expansion().shape == approx(expected_dim_pauli)
 
-    def test_project(self, dm_class, dm_basis):
+    def test_project(self, state_cls, dm_basis):
         # matrix in |0, 0, 0> state
         dim_hilbert = [2, 2, 3]
-        dm = dm_class([dm_basis(d) for d in dim_hilbert])
+        dm = state_cls([dm_basis(d) for d in dim_hilbert])
         assert dm.trace() == 1
         assert dm.dim_pauli == approx([4, 4, 9])
         dm.project(0, 0)
@@ -330,7 +325,7 @@ class TestBackends:
         data = np.zeros([b.dim_pauli for b in bases], dtype=float)
         data[0, 0, 0] = 0.8
         data[1, 1, 0] = 0.2
-        dm = dm_class(bases, data)
+        dm = state_cls(bases, data)
         assert dm.trace() == approx(1)
         assert dm.dim_pauli == approx([9, 4, 4])
         dm.project(0, 0)
