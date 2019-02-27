@@ -4,7 +4,7 @@ from itertools import chain
 
 import numpy as np
 from ..bases import general
-from .algebra import kraus_to_ptm, ptm_convert_basis
+from qs2.algebra import kraus_to_ptm, ptm_convert_basis
 from .compiler import ChainCompiler
 
 
@@ -192,10 +192,7 @@ class PTMOperation(Operation):
                 raise ValueError(
                     'All bases must have the same Hilbert dimensionality.')
         self._validate_bases(bases_out=bases_out)
-        # shape = tuple(b.dim_pauli for b in chain(reversed(bases_out),
-        #                                          reversed(bases_in)))
-        shape = tuple(b.dim_pauli for b in chain(reversed(bases_out),
-                                                 reversed(bases_in)))
+        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '

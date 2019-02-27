@@ -14,7 +14,7 @@ import numpy as np
 
 from pytest import approx
 from scipy.stats import unitary_group
-from qs2.operations.algebra import kraus_to_ptm, single_kraus_to_ptm, ptm_convert_basis
+from qs2.algebra import kraus_to_ptm, single_kraus_to_ptm, ptm_convert_basis
 
 
 @pytest.fixture(params=['numpy', 'cuda'])

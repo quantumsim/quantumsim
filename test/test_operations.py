@@ -15,12 +15,13 @@ from qs2.models import transmons as lib3
 from qs2.states import State
 
 
-def random_hermitean_matrix(dim, seed):
+def random_density_matrix(dim, seed):
     rng = np.random.RandomState(seed)
-    dm = rng.randn(dim, dim) + 1j * rng.randn(dim, dim)
-    dm += dm.conjugate().transpose()
-    dm /= dm.trace()
-    return dm
+    diag = rng.rand(dim)
+    diag /= np.sum(diag)
+    dm = np.diag(diag)
+    unitary = random_unitary_matrix(dim, seed+1)
+    return unitary @ dm @ unitary.conj().T
 
 
 def random_unitary_matrix(dim, seed):
@@ -28,7 +29,7 @@ def random_unitary_matrix(dim, seed):
     return unitary_group.rvs(dim, random_state=rng)
 
 
-@pytest.fixture(params=['numpy', 'cuda'])
+@pytest.fixture(params=['numpy'])
 def dm_class(request):
     mod = pytest.importorskip('qs2.states.' + request.param)
     return mod.DensityMatrix
@@ -214,7 +215,7 @@ class TestOperations:
         op_cl = op.compile(bases_in=(b01, b01))
         assert op_cl.shape == (2, 2, 2, 2)
         op_cl = op.compile(bases_in=(b0, b))
-        assert op_cl.shape == (4, 1, 4, 1)
+        assert op_cl.shape == (1, 4, 1, 4)
 
     def test_chain_create(self):
         op1 = lib2.rotate_x()
@@ -263,10 +264,11 @@ class TestOperations:
         assert circuit4q.operations[1].indices == (0,)
         assert circuit4q.operations[2].indices == (2, 0)
 
-    def test_chain_apply(self):
+    def test_chain_apply(self, dm_class):
         b = (bases.general(2),) * 3
-        state1 = State(b)
-        state2 = State(b)
+        dm = random_density_matrix(8, seed=93)
+        state1 = dm_class.from_dm(b, dm)
+        state2 = dm_class.from_dm(b, dm)
 
         # Some random gate sequence
         op_indices = [(lib2.rotate_x(np.pi/2), (0,)),
@@ -284,8 +286,9 @@ class TestOperations:
         assert np.all(state1.expansion() == state2.expansion())
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
-    def test_chain_compile_single_qubit(self, d, lib):
+    def test_chain_compile_single_qubit(self, dm_class, d, lib):
         b = bases.general(d)
+        dm = random_density_matrix(d, seed=487)
 
         bases_full = (b,)
         subbases = (b.subbasis([0, 1]),)
@@ -293,10 +296,14 @@ class TestOperations:
         rx_angle = lib.rotate_x(angle)
         rx_2angle = lib.rotate_x(2*angle)
         chain0 = Chain(rx_angle.at(0), rx_angle.at(0))
+        state0 = dm_class.from_dm(bases_full, dm)
+        chain0(state0, 0)
         assert chain0.num_qubits == 1
         assert len(chain0.operations) == 2
 
         chain1 = chain0.compile(bases_full, bases_full)
+        state1 = dm_class.from_dm(bases_full, dm)
+        chain1(state1, 0)
         assert chain1.num_qubits == 1
         assert len(chain1.operations) == 1
         op_angle = chain1.operations[0].operation
@@ -305,6 +312,7 @@ class TestOperations:
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm == approx(op_2angle.ptm)
+        assert state1.expansion() == approx(state0.expansion())
 
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Chain(rx_pi.at(0), rx_pi.at(0))
@@ -322,26 +330,28 @@ class TestOperations:
     def test_chain_merge_next(self, dm_class, d, lib):
         b = bases.general(d)
 
-        dm = random_hermitean_matrix(seed=42)
+        dm = random_density_matrix(d**2, seed=574)
 
         chain = Chain(
             lib.rotate_x(np.pi / 5).at(0),
             (lib.cphase(angle=3*np.pi/7, leakage=0.1)
-             if d == 3 else lib.cphase(3*np.pi / 7)).at(1, 0),
+             if d == 3 else lib.cphase(3*np.pi / 7)).at(0, 1),
         )
 
         bases_full = (b, b)
         chain_c = chain.compile(bases_full, bases_full)
         assert len(chain.operations) == 2
         assert len(chain_c.operations) == 1
+        assert chain_c.operations[0].indices == \
+            approx(sorted(chain.operations[1].indices))
 
         state1 = dm_class.from_dm(bases_full, dm)
         state2 = dm_class.from_dm(bases_full, dm)
         chain(state1, 0, 1)
         chain_c(state2, 0, 1)
 
-        assert np.allclose(state1.meas_prob(0), state2.meas_prob(0))
-        assert np.allclose(state1.meas_prob(1), state2.meas_prob(1))
+        assert state1.meas_prob(0) == approx(state2.meas_prob(0))
+        assert state1.meas_prob(1) == approx(state2.meas_prob(1))
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
     def test_chain_merge_prev(self, d, lib):
@@ -428,46 +438,35 @@ class TestOperations:
         zz = Chain(
             lib3.rotate_x(-np.pi/2).at(2),
             lib3.cphase(leakage=0.1).at(0, 2),
-            # lib3.cphase(leakage=0.25).at(2, 1),
-            # lib3.rotate_x(np.pi/2).at(2),
-            # lib3.rotate_x(np.pi).at(0),
+            lib3.cphase(leakage=0.25).at(2, 1),
+            lib3.rotate_x(np.pi/2).at(2),
+            lib3.rotate_x(np.pi).at(0),
             lib3.rotate_x(np.pi).at(1)
         )
         zzc = zz.compile(bases_in=bases_in, bases_out=bases_out)
-        # assert np.allclose(state1.expansion(), state2.expansion())
 
-        # assert len(zzc.operations) == 2
-        # op1, ix1 = zzc.operations[0]
-        # op2, ix2 = zzc.operations[1]
-        # assert ix1 == (0, 2)
-        # assert ix2 == (2, 1)
-        # assert op1.bases_in == (
-        #     b_full.subbasis([0, 1]),
-        #     b_full.subbasis([0]),
-        # )
-        # assert op1.bases_out == (
-        #     b_full.subbasis([0, 1, 3, 4]),
-        #     b_full.subbasis([0, 1, 2, 3, 5, 6, 7, 8]),
-        # )
-        # assert op2.bases_in == (
-        #     b_full.subbasis([0, 1, 2, 3, 5, 6, 7, 8]),
-        #     b_full.subbasis([0, 1]),
-        # )
-        # assert op1.bases_out == (
-        #     b_full.subbasis([0, 1, 2]),
-        #     b_full.subbasis([0, 1, 2, 3, 5, 6, 7, 8]),
-        # )
-        diag = np.zeros(27, dtype=complex)
-        diag[0] = 0.5
-        diag[4] = 0.5
-        dm = np.diag(diag)
+        assert len(zzc.operations) == 2
+        op1, ix1 = zzc.operations[0]
+        op2, ix2 = zzc.operations[1]
+        assert ix1 == (0, 2)
+        assert ix2 == (1, 2)
+        assert op1.bases_in[0] == bases_in[0]
+        assert op2.bases_in[0] == bases_in[1]
+        assert op1.bases_in[1] == bases_in[2]
+        # Qubit 0 did not leak
+        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1, 3, 4])
+        # Qubit 1 leaked
+        assert op2.bases_out[0] == bases_out[1].subbasis([0, 1, 2, 6])
+        # Qubit 2 is measured
+        assert op2.bases_out[1] == bases_out[2]
+
+        dm = random_density_matrix(3**3, seed=85)
         state1 = dm_class.from_dm((b01, b01, b0), dm)
         state2 = dm_class.from_dm((b01, b01, b0), dm)
 
         zz(state1, 0, 1, 2)
         zzc(state2, 0, 1, 2)
 
-        # assert np.allclose(state1.diagonal(), state2.diagonal())
-        # assert np.allclose(state1.meas_prob(0), state2.meas_prob(0))
-        assert state1.meas_prob(1) == approx(state2.meas_prob(1))
-        # assert np.allclose(state1.meas_prob(2), state2.meas_prob(2))
+        # Compiled version still needs to be projected, so we can't compare
+        # Pauli vectors, so we can to check only DM diagonals.
+        assert np.allclose(state1.diagonal(), state2.diagonal())

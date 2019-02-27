@@ -1,6 +1,7 @@
 import abc
 import pytools
 import numpy as np
+from ..algebra import dm_to_pv, pv_to_dm
 
 
 class State(metaclass=abc.ABCMeta):
@@ -32,17 +33,10 @@ class State(metaclass=abc.ABCMeta):
         if not hasattr(bases, '__iter__'):
             n_qubits = len(dm) // bases.dim_hilbert
             bases = [bases] * n_qubits
-        else:
-            n_qubits = len(bases)
+        return cls(bases, dm_to_pv(dm, bases), force=force)
 
-        d = bases[0].dim_hilbert
-        einsum_args = [dm.reshape((d,)*(2*n_qubits)), list(range(2*n_qubits))]
-        for i, b in enumerate(bases):
-            einsum_args.append(b.vectors),
-            # einsum_args.append([2*n_qubits+i, i, i+n_qubits])
-            einsum_args.append([2*n_qubits+i, i+n_qubits, i])
-        pv = np.einsum(*einsum_args, optimize=True)
-        return cls(bases, pv.real, force=force)
+    def to_dm(self):
+        return pv_to_dm(self.expansion(), self.bases)
 
     @property
     def n_qubits(self):

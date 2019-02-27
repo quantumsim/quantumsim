@@ -14,7 +14,7 @@ class Node:
         qubits : tuple of int
         """
         self.op = op
-        self.qubits = qubits
+        self.qubits = list(qubits)
         self.prev = {i: None for i in qubits}
         self.next = {i: None for i in qubits}
         self.bases_in_dict = {i: None for i in qubits}
@@ -22,6 +22,7 @@ class Node:
         self.merged = False
 
     def to_indexed_operation(self):
+        assert isinstance(self.op, operation.PTMOperation)
         assert self.op.bases_in == self.bases_in_tuple
         assert self.op.bases_out == self.bases_out_tuple
         return self.op.at(*self.qubits)
@@ -33,6 +34,17 @@ class Node:
     @property
     def bases_out_tuple(self):
         return tuple(self.bases_out_dict[qubit] for qubit in self.qubits)
+
+    def is_arranged(self):
+        return np.all(self.qubits[:-1] <= self.qubits[1:])
+
+    def arrange(self):
+        offset = max(self.qubits) + 1
+        idx = self.qubits + [q + offset for q in self.qubits]
+        new_ptm = np.einsum(self.op.ptm, idx, sorted(idx))
+        self.qubits = sorted(self.qubits)
+        self.op = operation.PTMOperation(
+            new_ptm, self.bases_in_tuple, self.bases_out_tuple)
 
 
 class CompilerQueue:
@@ -72,6 +84,9 @@ class CompilerQueue:
                 node.next[qubit].bases_in_dict[qubit] = bo
                 self.add(node.next[qubit])
 
+        if not node.is_arranged():
+            node.arrange()
+
 
 class CircuitGraph:
     def __init__(self, chain, bases_in, bases_out):
@@ -104,13 +119,12 @@ class CircuitGraph:
     def filter_merged(self):
         self.nodes = [node for node in self.nodes if not node.merged]
 
-    def node_try_merge(self, node, where='next'):
+    def try_merge_next(self, node):
         """
 
         Parameters
         ----------
         node: Node
-        where: 'next' or 'prev'
 
         Returns
         -------
@@ -118,67 +132,85 @@ class CircuitGraph:
         """
         # Merge is possible, if there is only one next node
         # Assumes that bases are aligned
-        if where == 'next':
-            contr_candidates = set(node.next.values())
-        elif where == 'prev':
-            contr_candidates = set(node.prev.values())
-        else:
-            raise ValueError
-
+        contr_candidates = set(node.next.values())
         if len(contr_candidates) != 1 or None in contr_candidates:
             return
         other = contr_candidates.pop()
 
-        d_self = len(node.qubits)
+        d_node = len(node.qubits)
         d_other = len(other.qubits)
-        i_other_out = list(range(d_other))
-        i_other_in = list(range(d_other, 2 * d_other))
 
         contr_indices = [other.qubits.index(qubit)
-                         for qubit in reversed(node.qubits)]
-        if where == 'next':
-            i_self_out = list(range(2 * d_other, 2 * d_other + d_self))
-            i_self_in = [2 * d_other - i - 1 for i in contr_indices]
-            for i, j in zip(contr_indices, i_self_out):
-                i_other_in[d_other - i - 1] = j
-        else:
-            i_self_in = list(range(2 * d_other, 2 * d_other + d_self))
-            i_self_out = [d_other - i - 1 for i in contr_indices]
-            for i, j in zip(contr_indices, i_self_in):
-                i_other_out[d_other - i - 1] = j
+                         for qubit in node.qubits]
+        other_out = list(range(d_other))
+        other_in = list(range(d_other, 2 * d_other))
+        node_out = list(range(2 * d_other, 2 * d_other + d_node))
+        node_in = [other_in[i] for i in contr_indices]
+        for i, j in zip(contr_indices, node_out):
+            other_in[i] = j
 
-        try:
-            other_ptm = np.einsum(node.op.ptm, i_self_out + i_self_in,
-                                  other.op.ptm, i_other_out + i_other_in,
-                                  optimize=True)
-        except ValueError:
-            einsum_args = [node.op.ptm, i_self_out + i_self_in,
-                           other.op.ptm, i_other_out + i_other_in]
-            raise
+        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
+                              other.op.ptm, other_out + other_in,
+                              optimize=True)
 
+        for qubit, node_prev in node.prev.items():
+            other.prev[qubit] = node_prev
+            # We didn't einsum over different bases
+            assert other.bases_in_dict[qubit] == node.bases_out_dict[qubit]
+            other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
+            other.op = operation.PTMOperation(
+                other_ptm, other.bases_in_tuple, other.bases_out_tuple)
+            if node_prev is None:
+                self.starts[qubit] = other
+            else:
+                node_prev.next[qubit] = other
 
-        if where == 'next':
-            for qubit, node_prev in node.prev.items():
-                other.prev[qubit] = node_prev
-                assert other.bases_in_dict[qubit] == node.bases_out_dict[qubit]
-                other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
-                other.op = operation.PTMOperation(
-                    other_ptm, other.bases_in_tuple, other.bases_out_tuple)
-                if node_prev is None:
-                    self.starts[qubit] = other
-                else:
-                    node_prev.next[qubit] = other
-        else:
-            for qubit, node_next in node.next.items():
-                other.next[qubit] = node_next
-                assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
-                other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
-                other.op = operation.PTMOperation(
-                    other_ptm, other.bases_in_tuple, other.bases_out_tuple)
-                if node_next is None:
-                    self.ends[qubit] = other
-                else:
-                    node_next.prev[qubit] = other
+        node.merged = True
+
+    def try_merge_prev(self, node):
+        """
+
+        Parameters
+        ----------
+        node: Node
+
+        Returns
+        -------
+
+        """
+        # Merge is possible, if there is only one previous node
+        # Assumes that bases are aligned
+        contr_candidates = set(node.prev.values())
+        if len(contr_candidates) != 1 or None in contr_candidates:
+            return
+        other = contr_candidates.pop()
+
+        d_node = len(node.qubits)
+        d_other = len(other.qubits)
+
+        contr_indices = [other.qubits.index(qubit)
+                         for qubit in node.qubits]
+        other_out = list(range(d_other))
+        other_in = list(range(d_other, 2 * d_other))
+        node_in = list(range(2 * d_other, 2 * d_other + d_node))
+        node_out = contr_indices
+        for i, j in zip(contr_indices, node_in):
+            other_out[i] = j
+
+        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
+                              other.op.ptm, other_out + other_in,
+                              optimize=True)
+
+        for qubit, node_next in node.next.items():
+            other.next[qubit] = node_next
+            assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
+            other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
+            other.op = operation.PTMOperation(
+                other_ptm, other.bases_in_tuple, other.bases_out_tuple)
+            if node_next is None:
+                self.ends[qubit] = other
+            else:
+                node_next.prev[qubit] = other
 
         node.merged = True
 
@@ -220,8 +252,8 @@ class ChainCompiler:
 
         """
         for node in graph.nodes:
-            graph.node_try_merge(node, 'next')
+            graph.try_merge_next(node)
         graph.filter_merged()
         for node in reversed(graph.nodes):
-            graph.node_try_merge(node, 'prev')
+            graph.try_merge_prev(node)
         graph.filter_merged()
