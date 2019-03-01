@@ -178,21 +178,23 @@ class PTMOperation(Operation):
     sv_cutoff = 1e-5
 
     def __init__(self, ptm, bases_in, bases_out=None):
+        if bases_in is None:
+            raise ValueError('`bases_in` must not be None')
         self.ptm = ptm
         self.bases_in = bases_in
         self.bases_out = bases_out or bases_in
         self._dim_hilbert = bases_in[0].dim_hilbert
-        self._num_qubits = len(bases_in)
-        if self._num_qubits != len(bases_out):
+        self._num_qubits = len(self.bases_in)
+        if self._num_qubits != len(self.bases_out):
             raise ValueError('Number of qubits should be the same in bases_in '
                              '(has {} qubits) and bases_out (has {} qubits)'
-                             .format(len(bases_in), len(bases_out)))
-        for b in chain(bases_in, bases_out):
+                             .format(len(self.bases_in), len(self.bases_out)))
+        for b in chain(self.bases_in, self.bases_out):
             if b.dim_hilbert != self._dim_hilbert:
                 raise ValueError(
                     'All bases must have the same Hilbert dimensionality.')
-        self._validate_bases(bases_out=bases_out)
-        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        self._validate_bases(bases_out=self.bases_out)
+        shape = tuple(b.dim_pauli for b in chain(self.bases_out, self.bases_in))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
@@ -230,7 +232,7 @@ class PTMOperation(Operation):
         else:
             new_ptm = ptm_convert_basis(self.ptm,
                                         self.bases_in, self.bases_out,
-                                        bases_in, bases_out)
+                                        b_in, b_out)
             new_op = PTMOperation(new_ptm, b_in, b_out)
         if optimize:
             b_in, b_out = new_op.optimal_bases()
@@ -418,11 +420,12 @@ class Chain(Operation):
         Operations with indices they are applied to
     """
     def __init__(self, *operations):
-        self._dim_hilbert = operations[0].operation.dim_hilbert
-        for op in operations[1:]:
+        for op in operations:
             if not isinstance(op, _IndexedOperation):
                 raise ValueError('All operations must provide its indices in '
                                  'a chain; please use Operation.at() method.')
+        self._dim_hilbert = operations[0].operation.dim_hilbert
+        for op in operations[1:]:
             if op.operation.dim_hilbert != self._dim_hilbert:
                 raise ValueError('All operations in the chain must have the '
                                  'same Hilbert dimensionality.')
@@ -436,14 +439,18 @@ class Chain(Operation):
         for op_indices in operations:
             # Flatten the operations chain
             if isinstance(op_indices.operation, Chain):
-                for sub_ops, sub_indices in op_indices.operation.operations:
-                    op, indices = op_indices
+                for sub_op, sub_indices in op_indices.operation.operations:
+                    _, indices = op_indices
                     new_indices = tuple((indices[i] for i in sub_indices))
-                    joined_ops.append(_IndexedOperation(op, new_indices))
+                    joined_ops.append(_IndexedOperation(sub_op, new_indices))
             else:
                 joined_ops.append(op_indices)
 
         self.operations = joined_ops
+        for op in self.operations:
+            if isinstance(op.operation, Chain):
+                raise RuntimeError('Chain must not contain chains; this is '
+                                   'probably a bug.')
 
     @property
     def dim_hilbert(self):
