@@ -169,7 +169,7 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
             [0, np.sqrt((1 - comb_rate)), 0, 0],
             [0, 0, np.sqrt((1 - comb_rate)), 0],
             [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
-        return PTMOperation(ptm, (bases.gell_mann(3).subbasis(0, 1, 3, 4),))
+        return PTMOperation(ptm, (bases.gell_mann(3).subbasis([0, 1, 3, 4]),))
 
 
 @lru_cache(maxsize=32)
