@@ -320,11 +320,16 @@ class KrausOperation(Operation):
             state.bases[q] = b
 
     def set_bases(self, bases_in=None, bases_out=None):
-        if bases_in is None:
-            bases_in = (general(self.dim_hilbert),) * self.num_qubits
-        if bases_out is None:
-            bases_out = (general(self.dim_hilbert),) * self.num_qubits
-        self._validate_bases(bases_in=bases_in, bases_out=bases_out)
+        if bases_in is None and bases_out is None:
+            raise ValueError('Either bases_in or bases_out must be specified.')
+        elif bases_in is None:
+            self._validate_bases(bases_out=bases_out)
+            bases_in = tuple(b.superbasis for b in bases_out)
+        elif bases_out is None:
+            self._validate_bases(bases_in=bases_in)
+            bases_out = tuple(b.superbasis for b in bases_in)
+        else:
+            self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
         op = PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
         return op
