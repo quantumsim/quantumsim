@@ -25,8 +25,14 @@ class Node:
         self.qubits = list(qubits)
         self.prev = {i: None for i in qubits}
         self.next = {i: None for i in qubits}
-        self.bases_in_dict = {i: None for i in qubits}
-        self.bases_out_dict = {i: None for i in qubits}
+        if hasattr(op, 'bases_in'):
+            self.bases_in_dict = {q: b for q, b in zip(qubits, op.bases_in)}
+        else:
+            self.bases_in_dict = {q: None for q in qubits}
+        if hasattr(op, 'bases_out'):
+            self.bases_out_dict = {q: b for q, b in zip(qubits, op.bases_out)}
+        else:
+            self.bases_out_dict = {q: None for q in qubits}
         self.merged = False
 
     def to_indexed_operation(self):
