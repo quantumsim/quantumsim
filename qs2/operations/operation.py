@@ -5,7 +5,6 @@ from itertools import chain
 import numpy as np
 from ..bases import general
 from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis
-from .compiler import ChainCompiler
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -45,9 +44,9 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
-        """Return an optimized version of this circuit, based on the
-        restrictions on input and output bases, that may not be full.
+    def set_bases(self, bases_in=None, bases_out=None):
+        """Return an version of this operation with the input and output
+        bases set to provided in arguments or unchanged.
 
         Parameters
         ----------
@@ -57,13 +56,10 @@ class Operation(metaclass=abc.ABCMeta):
         bases_out : list of qs2.bases.PauliBasis
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
-        optimize : bool
-            Whether or not compiling can throw out irrelevant elements of
-            `bases_in` and `bases_out`.
 
         Returns
         -------
-        qs2.operations.PTMOperation
+        qs2.operations.Operation
             Optimized representation of self.
         """
         pass
@@ -158,16 +154,6 @@ class PTMOperation(Operation):
     :func:`CompletelyPositiveMap.from_ptm`. Constructor of this class is not
     supposed to be called in user code.
 
-    Attributes
-    ----------
-    sv_cutoff : float
-        During the Pauli transfer matrix optimizations, singular value
-        decomposition of a transfer matrix is used to determine optimal
-        computational basis. All singular values less than `sv_cutoff`
-        are considered weakly contributed and neglected. This attribute
-        should be set before any compilation of a circuit, otherwise default
-        is used (1e-5).
-
     References
     ----------
     .. [1] M. A. Nielsen, I. L. Chuang, "Quantum Computation and Quantum
@@ -175,8 +161,6 @@ class PTMOperation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
-    sv_cutoff = 1e-5
-
     def __init__(self, ptm, bases_in, bases_out=None):
         if bases_in is None:
             raise ValueError('`bases_in` must not be None')
@@ -224,7 +208,7 @@ class PTMOperation(Operation):
     def num_qubits(self):
         return self._num_qubits
 
-    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
+    def set_bases(self, bases_in=None, bases_out=None):
         b_in = bases_in or self.bases_in
         b_out = bases_out or self.bases_out
         if b_in == self.bases_in and b_out == self.bases_out:
@@ -234,65 +218,7 @@ class PTMOperation(Operation):
                                         self.bases_in, self.bases_out,
                                         b_in, b_out)
             new_op = PTMOperation(new_ptm, b_in, b_out)
-        if optimize:
-            b_in, b_out = new_op.optimal_bases()
-            return new_op.compile(b_in, b_out, optimize=False)
-        else:
-            return new_op
-
-    def optimal_bases(self):
-        """Based on input or output bases provided, determine an optimal
-        basis, throwing away all basis elements, that are guaranteed not to
-        contribute to the result of PTM application.
-
-        Circuits provide some restrictions on input and output basis. For
-        example, after the ideal initialization gate system is guaranteed to
-        stay in :math:`|0\rangle` state, which means that input basis will
-        consist of a single element. Similarly, if after the gate application
-        qubit will be measured, only :math:`|0\rangle` and :math:`|1\rangle`
-        states need to be computed, therefore we may reduce output basis to
-        the classical subbasis. This method is used to perform such sort of
-        optimization: usage of subbasis instead of a full basis in a density
-        matrix will exponentially reduce memory consumption and computational
-        time.
-
-        Returns
-        -------
-        opt_basis_in, opt_basis_out: tuple of qs2.bases.PauliBasis
-            Subbases of input bases, that will contribute to computation.
-        """
-        d_in = np.prod([b.dim_pauli for b in self.bases_in])
-        d_out = np.prod([b.dim_pauli for b in self.bases_out])
-        u, s, vh = np.linalg.svd(self.ptm.reshape(d_out, d_in),
-                                 full_matrices=False)
-        (truncate_index,) = (s > self.sv_cutoff).shape
-
-        mask_in = np.any(
-            np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
-            .reshape(tuple(b.dim_pauli for b in self.bases_in)) \
-            .nonzero()
-        mask_out = np.any(
-            np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
-            .reshape(tuple(b.dim_pauli for b in self.bases_out)) \
-            .nonzero()
-
-        opt_bases_in = []
-        opt_bases_out = []
-        for opt_bases, bases, mask in (
-                (opt_bases_in, self.bases_in, mask_in),
-                (opt_bases_out, self.bases_out, mask_out)):
-            for basis, involved_indices in zip(bases, mask):
-                # Figure out what single-qubit basis elements are not
-                # involved at all
-                unique_indices = np.unique(involved_indices)
-                if len(unique_indices) < basis.dim_pauli:
-                    # We can safely use a subbasis
-                    opt_bases.append(basis.subbasis(unique_indices))
-                else:
-                    # Nothing can be thrown out
-                    opt_bases.append(basis)
-
-        return tuple(opt_bases_in), tuple(opt_bases_out)
+        return new_op
 
     def __call__(self, state, *qubit_indices):
         """
@@ -309,7 +235,7 @@ class PTMOperation(Operation):
         op = self
         for q, b in zip(qubit_indices, self.bases_in):
             if state.bases[q] != b:
-                op = self.compile(
+                op = self.set_bases(
                     bases_in=tuple(state.bases[q] for q in qubit_indices))
                 break
 
@@ -388,12 +314,12 @@ class KrausOperation(Operation):
                              'qubits provdied is {}'
                              .format(self.num_qubits, len(qubit_indices)))
         bases_in = tuple(state.bases[i] for i in qubit_indices)
-        op = self.compile(bases_in=bases_in)
+        op = self.set_bases(bases_in=bases_in)
         state.apply_ptm(op.ptm, *qubit_indices)
         for q, b in zip(qubit_indices, op.bases_out):
             state.bases[q] = b
 
-    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
+    def set_bases(self, bases_in=None, bases_out=None):
         if bases_in is None:
             bases_in = (general(self.dim_hilbert),) * self.num_qubits
         if bases_out is None:
@@ -401,13 +327,7 @@ class KrausOperation(Operation):
         self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
         op = PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
-        if optimize:
-            op = op.compile(optimize=True)
         return op
-
-    def optimal_bases(self):
-        tmp_op = self.compile(optimize=True)
-        return tmp_op.bases_in, tmp_op.bases_out
 
 
 class Chain(Operation):
@@ -416,19 +336,64 @@ class Chain(Operation):
 
     Parameters
     ----------
-    op0, ..., opN: _IndexedOperation
-        Operations with indices they are applied to
+    op0, ..., opN: Operation, _IndexedOperation or list
+        Operations to concatenate, or a single list of operations. If not all
+        operations match in qubit dimensionality or in order of qubits
+        to be applied to, they must be indexed
+        (see :func:`Operation.at` method).
     """
     def __init__(self, *operations):
-        for op in operations:
-            if not isinstance(op, _IndexedOperation):
-                raise ValueError('All operations must provide its indices in '
-                                 'a chain; please use Operation.at() method.')
+        if len(operations) == 1 and hasattr(operations[0], '__getitem__'):
+            operations = operations[0]
+        op0 = operations[0]
+        if isinstance(op0, Operation):
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Provide index for operation number 0 (see "
+                        "`Operation.at()` method).")
+                if not isinstance(op, Operation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.dim_hilbert != op.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.dim_hilbert, i, op.dim_hilbert))
+                if op0.num_qubits != op.num_qubits:
+                    raise ValueError(
+                        "Number of qubits in operation 0 ({}) does not match "
+                        "with a number of qubits in operation {} ({}). "
+                        "Provide indices explicitly (see `Operation.at()` "
+                        "method).".format(op0.num_qubits, i, op.num_qubits))
+        elif isinstance(op0, _IndexedOperation):
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, Operation):
+                    raise ValueError(
+                        "Provide index for operation number {} (see "
+                        "`Operation.at()` method).".format(i))
+                if not isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.operation.dim_hilbert != op.operation.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.operation.dim_hilbert, i,
+                                op.operation.dim_hilbert))
+        else:
+            raise ValueError(
+                "Wrong type of operation number 0: {}".format(type(op0)))
+
+        if isinstance(operations[0], Operation):
+            indices = tuple(range(operations[0].num_qubits))
+            operations = [op.at(*indices) for op in operations]
+
         self._dim_hilbert = operations[0].operation.dim_hilbert
-        for op in operations[1:]:
-            if op.operation.dim_hilbert != self._dim_hilbert:
-                raise ValueError('All operations in the chain must have the '
-                                 'same Hilbert dimensionality.')
         all_indices = np.unique(list(chain(*(op.indices for op in operations))))
         if all_indices[0] != 0 or all_indices[-1] != len(all_indices) - 1:
             raise ValueError('Indices of operations must form an ordered set '
@@ -472,6 +437,8 @@ class Chain(Operation):
                 results.append(result)
         return results if len(results) > 0 else None
 
-    def compile(self, bases_in=None, bases_out=None, *, optimize=True):
-        compiler = ChainCompiler(self, optimize=optimize)
+    def set_bases(self, bases_in=None, bases_out=None):
+        # To avoid circular import
+        from .compiler import ChainCompiler
+        compiler = ChainCompiler(self, optimize=False)
         return compiler.compile(bases_in, bases_out)

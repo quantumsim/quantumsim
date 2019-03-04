@@ -1,7 +1,15 @@
 from collections import deque
+from itertools import repeat
 import numpy as np
 
-from . import operation
+from .operation import Chain, PTMOperation
+
+
+def optimize(op, bases_in=None, bases_out=None):
+    if not isinstance(op, Chain):
+        op = Chain([op])
+    compiler = ChainCompiler(op, optimize=True)
+    return compiler.compile(bases_in, bases_out)
 
 
 class Node:
@@ -40,7 +48,7 @@ class Node:
         idx = self.qubits + [q + offset for q in self.qubits]
         new_ptm = np.einsum(self.op.ptm, idx, sorted(idx))
         self.qubits = sorted(self.qubits)
-        self.op = operation.PTMOperation(
+        self.op = PTMOperation(
             new_ptm, self.bases_in_tuple, self.bases_out_tuple)
 
 
@@ -61,35 +69,15 @@ class CompilerQueue:
     def __len__(self):
         return len(self._queue)
 
-    def compile_next(self, optimize=True):
-        node = self.get()
-        b_in = node.bases_in_tuple
-        b_out = tuple(bo or bi.superbasis for bo, bi in
-                      zip(node.bases_out_tuple, node.bases_in_tuple))
-        node.op = node.op.compile(b_in, b_out, optimize=optimize)
-
-        for qubit, bi, bo in zip(node.qubits, node.op.bases_in,
-                                 node.op.bases_out):
-            node.bases_in_dict[qubit] = bi
-            node.bases_out_dict[qubit] = bo
-            if (node.prev[qubit] is not None and
-                    node.prev[qubit].bases_out_dict[qubit] != bi):
-                node.prev[qubit].bases_out_dict[qubit] = bi
-                self.add(node.prev[qubit])
-            if (node.next[qubit] is not None and
-                    node.next[qubit].bases_in_dict[qubit] != bo):
-                node.next[qubit].bases_in_dict[qubit] = bo
-                self.add(node.next[qubit])
-
-        if not node.is_arranged():
-            node.arrange()
-
 
 class CircuitGraph:
-    def __init__(self, chain, bases_in, bases_out):
+    # noinspection PyTypeChecker
+    def __init__(self, chain, bases_in=None, bases_out=None):
         self.starts = [None for _ in range(chain.num_qubits)]
         self.ends = [None for _ in range(chain.num_qubits)]
         self.nodes = []
+        bases_in = bases_in or repeat(None)
+        bases_out = bases_out or repeat(None)
         for op, qubtis in chain.operations:
             node_new = Node(op, qubtis)
             for qubit in qubtis:
@@ -108,17 +96,137 @@ class CircuitGraph:
             node_end.bases_out_dict[qubit] = b
 
     def to_operation(self):
-        return operation.Chain(*(node.to_indexed_operation()
-                                 for node in self.nodes))
+        if len(self.nodes) > 1:
+            return Chain(*(node.to_indexed_operation()
+                           for node in self.nodes))
+        elif len(self.nodes) == 1:
+            return self.nodes[0].op
+        else:
+            raise RuntimeError('No operations in the graph.')
 
     def filter_merged(self):
         self.nodes = [node for node in self.nodes if not node.merged]
 
-    def try_merge_next(self, node):
+
+class ChainCompiler:
+    """
+    Parameters
+    ----------
+    chain : Chain
+        A chain to compile
+    optimize : bool
+        Whether to throw away inactive degrees of freedom or not.
+    sv_cutoff : float
+        During the Pauli transfer matrix optimizations, singular value
+        decomposition of a transfer matrix is used to determine optimal
+        computational basis. All singular values less than `sv_cutoff`
+        are considered weakly contributed and neglected. This attribute
+        should be set before any compilation of a circuit, otherwise default
+        is used (1e-5).
+    """
+
+    def __init__(self, chain, *, optimize=True, sv_cutoff=1e-5):
+        self.chain = chain
+        self.optimize = optimize
+        self.sv_cutoff = sv_cutoff
+
+    def compile_next(self, queue):
         """
 
         Parameters
         ----------
+        queue : CompilerQueue
+        """
+        node = queue.get()
+        b_in = node.bases_in_tuple
+        b_out = tuple(bo or bi.superbasis for bo, bi in
+                      zip(node.bases_out_tuple, node.bases_in_tuple))
+        node.op = node.op.set_bases(b_in, b_out)
+        if self.optimize:
+            b_in, b_out = self.optimal_bases(node.op)
+            node.op = node.op.set_bases(b_in, b_out)
+
+        for qubit, bi, bo in zip(node.qubits, node.op.bases_in,
+                                 node.op.bases_out):
+            node.bases_in_dict[qubit] = bi
+            node.bases_out_dict[qubit] = bo
+            if (node.prev[qubit] is not None and
+                    node.prev[qubit].bases_out_dict[qubit] != bi):
+                node.prev[qubit].bases_out_dict[qubit] = bi
+                queue.add(node.prev[qubit])
+            if (node.next[qubit] is not None and
+                    node.next[qubit].bases_in_dict[qubit] != bo):
+                node.next[qubit].bases_in_dict[qubit] = bo
+                queue.add(node.next[qubit])
+
+        if not node.is_arranged():
+            node.arrange()
+
+    def optimal_bases(self, op):
+        """Based on input or output bases provided, determine an optimal
+        basis, throwing away all basis elements, that are guaranteed not to
+        contribute to the result of PTM application.
+
+        Circuits provide some restrictions on input and output basis. For
+        example, after the ideal initialization gate system is guaranteed to
+        stay in :math:`|0\rangle` state, which means that input basis will
+        consist of a single element. Similarly, if after the gate application
+        qubit will be measured, only :math:`|0\rangle` and :math:`|1\rangle`
+        states need to be computed, therefore we may reduce output basis to
+        the classical subbasis. This method is used to perform such sort of
+        optimization: usage of subbasis instead of a full basis in a density
+        matrix will exponentially reduce memory consumption and computational
+        time.
+
+        Parameters
+        ----------
+        op : qs2.operations.Operation
+
+        Returns
+        -------
+        opt_basis_in, opt_basis_out: tuple of qs2.bases.PauliBasis
+            Subbases of input bases, that will contribute to computation.
+        """
+        d_in = np.prod([b.dim_pauli for b in op.bases_in])
+        d_out = np.prod([b.dim_pauli for b in op.bases_out])
+        u, s, vh = np.linalg.svd(op.ptm.reshape(d_out, d_in),
+                                 full_matrices=False)
+        (truncate_index,) = (s > self.sv_cutoff).shape
+
+        mask_in = np.any(
+            np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
+            .reshape(tuple(b.dim_pauli for b in op.bases_in)) \
+            .nonzero()
+        mask_out = np.any(
+            np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
+            .reshape(tuple(b.dim_pauli for b in op.bases_out)) \
+            .nonzero()
+
+        opt_bases_in = []
+        opt_bases_out = []
+        for opt_bases, bases, mask in (
+                (opt_bases_in, op.bases_in, mask_in),
+                (opt_bases_out, op.bases_out, mask_out)):
+            for basis, involved_indices in zip(bases, mask):
+                # Figure out what single-qubit basis elements are not
+                # involved at all
+                unique_indices = np.unique(involved_indices)
+                if len(unique_indices) < basis.dim_pauli:
+                    # We can safely use a subbasis
+                    opt_bases.append(basis.subbasis(unique_indices))
+                else:
+                    # Nothing can be thrown out
+                    opt_bases.append(basis)
+
+        return tuple(opt_bases_in), tuple(opt_bases_out)
+
+    @staticmethod
+    def try_merge_next(graph, node):
+        """
+
+        Parameters
+        ----------
+        graph: CircuitGraph
         node: Node
 
         Returns
@@ -151,20 +259,22 @@ class CircuitGraph:
         for qubit, node_prev in node.prev.items():
             other.prev[qubit] = node_prev
             other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
-            other.op = operation.PTMOperation(
+            other.op = PTMOperation(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_prev is None:
-                self.starts[qubit] = other
+                graph.starts[qubit] = other
             else:
                 node_prev.next[qubit] = other
 
         node.merged = True
 
-    def try_merge_prev(self, node):
+    @staticmethod
+    def try_merge_prev(graph, node):
         """
 
         Parameters
         ----------
+        graph: CircuitGraph
         node: Node
 
         Returns
@@ -198,42 +308,27 @@ class CircuitGraph:
             other.next[qubit] = node_next
             assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
             other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
-            other.op = operation.PTMOperation(
+            other.op = PTMOperation(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_next is None:
-                self.ends[qubit] = other
+                graph.ends[qubit] = other
             else:
                 node_next.prev[qubit] = other
 
         node.merged = True
 
-
-class ChainCompiler:
-    """
-    Parameters
-    ----------
-    chain : Chain
-        A chain to compile
-    """
-
-    def __init__(self, chain, *, optimize=True):
-        self.chain = chain
-        self.optimize = optimize
-
-    def compile(self, bases_in, bases_out):
+    def compile(self, bases_in=None, bases_out=None):
         graph = CircuitGraph(self.chain, bases_in, bases_out)
-        self.stage1_compile_all_nodes(graph, optimize=self.optimize)
+        self.stage1_compile_all_nodes(graph)
         self.stage2_compress_chain(graph)
         return graph.to_operation()
 
-    @staticmethod
-    def stage1_compile_all_nodes(graph, optimize=True):
+    def stage1_compile_all_nodes(self, graph):
         queue = CompilerQueue(graph.nodes)
         while len(queue) > 0:
-            queue.compile_next(optimize=optimize)
+            self.compile_next(queue)
 
-    @staticmethod
-    def stage2_compress_chain(graph):
+    def stage2_compress_chain(self, graph):
         """
 
         Parameters
@@ -245,8 +340,8 @@ class ChainCompiler:
 
         """
         for node in graph.nodes:
-            graph.try_merge_next(node)
+            self.try_merge_next(graph, node)
         graph.filter_merged()
         for node in reversed(graph.nodes):
-            graph.try_merge_prev(node)
+            self.try_merge_prev(graph, node)
         graph.filter_merged()
