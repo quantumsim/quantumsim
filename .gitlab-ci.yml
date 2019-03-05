@@ -1,4 +1,4 @@
-image: quantumsim/testing
+image: registry.gitlab.com/quantumsim/testing
 
 stages:
   - build
