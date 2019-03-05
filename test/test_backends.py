@@ -14,8 +14,7 @@ import numpy as np
 
 from pytest import approx
 from scipy.stats import unitary_group
-from qs2.algebra.algebra import (kraus_to_ptm, single_kraus_to_ptm,
-                                 ptm_convert_basis)
+from qs2.algebra import kraus_to_ptm, ptm_convert_basis
 
 
 @pytest.fixture(params=['numpy', 'cuda'])
@@ -152,7 +151,7 @@ class TestBackends:
         # sanity check
         assert state0.meas_prob(0) != approx(state1.meas_prob(0))
 
-        ptm = single_kraus_to_ptm(unitary.reshape(1, 2, 2), b[0], b[0])
+        ptm = kraus_to_ptm(unitary.reshape(1, 2, 2), b, b)
         b_gm = (qs2.bases.gell_mann(2),)
         ptm2 = ptm_convert_basis(ptm, b, b, b_gm, b_gm)
         assert np.allclose(ptm2[0, 1:], 0)
@@ -185,7 +184,7 @@ class TestBackends:
             else:
                 assert state0.meas_prob(q) != approx(state1.meas_prob(q))
 
-        ptm = single_kraus_to_ptm(unitary.reshape(1, 2, 2), b[0], b[0])
+        ptm = kraus_to_ptm(unitary.reshape(1, 2, 2), b, b)
         state0.apply_ptm(ptm, qubit)
         assert state0.expansion() == approx(state1.expansion())
 

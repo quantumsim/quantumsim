@@ -3,7 +3,6 @@ from collections import namedtuple
 from itertools import chain
 
 import numpy as np
-from ..bases import general
 from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis
 
 

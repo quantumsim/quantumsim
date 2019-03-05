@@ -7,7 +7,7 @@ import pytest
 import numpy as np
 
 from qs2.algebra.tools import random_density_matrix
-from qs2.operations.operation import Operation, Chain
+from qs2.operations import Operation, Chain
 from qs2 import bases
 from qs2.models import qubits as lib2
 from qs2.models import transmons as lib3

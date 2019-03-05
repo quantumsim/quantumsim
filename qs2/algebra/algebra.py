@@ -8,12 +8,6 @@ def bases_kron(bases):
     return reduce(np.kron, [b.vectors for b in bases])
 
 
-def single_kraus_to_ptm(kraus, basis_in, basis_out):
-    return np.einsum("xab, zbc, ycd, zad -> xy",
-                     basis_out.vectors, kraus, basis_in.vectors, kraus.conj(),
-                     optimize=True).real
-
-
 def kraus_to_ptm(kraus, bases_in, bases_out):
     dim = bases_in[0].dim_hilbert
     nq = len(bases_in)

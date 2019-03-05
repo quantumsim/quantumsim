@@ -6,3 +6,5 @@ except ImportError:
                   'installed, or your PC has no NVidia GPU. Be wise with a '
                   'difficulty of the problem you state to Quantumsim.')
     from .numpy import State
+
+__all__ = ['State']
