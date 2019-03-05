@@ -84,7 +84,7 @@ class StateBase(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def partial_trace(self, qubit):
+    def partial_trace(self, *qubits):
         pass
 
     @abc.abstractmethod

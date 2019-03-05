@@ -462,7 +462,7 @@ class State(StateBase):
         self._data, self._work_data = self._work_data, self._data
         self.bases.insert(0, basis)
 
-    def partial_trace(self, qubit):
+    def partial_trace(self, *qubits):
         raise NotImplementedError
 
     def meas_prob(self, qubit):

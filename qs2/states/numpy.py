@@ -50,7 +50,7 @@ class State(StateBase):
     def renormalize(self):
         tr = self.trace()
         if tr > 1e-8:
-            self._data /= self.trace()
+            self._data *= self.trace() ** -1
         else:
             warnings.warn(
                 "Density matrix trace is 0; likely your further computation "
@@ -75,7 +75,7 @@ class State(StateBase):
         out_indices = list(range(n_qubits, 2 * n_qubits))
         complex_dm_dimension = pytools.product(self.dim_hilbert)
         return np.einsum(self._data, indices, *trace_argument, out_indices,
-                         optimize=True).reshape(complex_dm_dimension)
+                         optimize=True).real.reshape(complex_dm_dimension)
 
     def apply_ptm(self, ptm, *qubits):
         if len(ptm.shape) != 2 * len(qubits):
@@ -100,15 +100,16 @@ class State(StateBase):
             optimize=True)
         self.bases.insert(0, basis)
 
-    def partial_trace(self, qubit):
-        self._validate_qubit(qubit, 'qubit')
+    def partial_trace(self, *qubits):
+        for q in qubits:
+            self._validate_qubit(q, 'qubit')
         einsum_args = [self._data, list(range(self.n_qubits))]
         for i, b in enumerate(self.bases):
-            if i != qubit:
+            if i not in qubits:
                 einsum_args.append(b.vectors)
                 einsum_args.append([i, self.n_qubits+i, self.n_qubits+i])
         traced_dm = np.einsum(*einsum_args, optimize=True).real
-        return self.__class__([self.bases[qubit]], traced_dm)
+        return self.__class__([self.bases[q] for q in qubits], traced_dm)
 
     def meas_prob(self, qubit):
         self._validate_qubit(qubit, 'qubit')
