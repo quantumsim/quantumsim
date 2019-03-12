@@ -115,6 +115,14 @@ class TestDensityTrace:
 
         assert np.allclose(trace_dm, trace_np)
 
+    def test_trace_large(self):
+        if hascuda:
+            dm = dm10.Density(11)
+            trace = dm.trace()
+            assert np.allclose(trace, 1)
+
+		
+
 
 class TestCopy:
 
