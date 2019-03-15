@@ -1,7 +1,7 @@
 import numpy as np
 from functools import lru_cache
 from scipy.linalg import expm
-from qs2.operations import KrausOperation, PTMOperation, Chain
+from qs2.operations import KrausOperation, PTMOperation
 from qs2 import bases
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
@@ -147,54 +147,17 @@ def cnot():
     return KrausOperation(unitary, 3)
 
 
-@lru_cache(maxsize=32)
-def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
-    if total_rate is not None:
-        kraus = np.array([
-            [[1, 0, 0],
-             [0, np.sqrt(1 - total_rate), 0],
-             [0, 0, 1]],
-            [[0, np.sqrt(total_rate), 0],
-             [0, 0, 0],
-             [0, 0, 1]]])
-        return KrausOperation(kraus, 3)
-    else:
-        if None in (exc_rate, damp_rate):
-            raise ValueError(
-                "Either the total_rate or both the exc_rate and damp_rate "
-                "must be provided")
-        comb_rate = exc_rate + damp_rate
-        ptm = np.array([
-            [1, 0, 0, 0],
-            [0, np.sqrt((1 - comb_rate)), 0, 0],
-            [0, 0, np.sqrt((1 - comb_rate)), 0],
-            [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
-        return PTMOperation(ptm, (bases.gell_mann(3).subbasis([0, 1, 3, 4]),))
-
-
-@lru_cache(maxsize=32)
-def phase_damping(total_rate=None, *, x_deph_rate=None,
-                  y_deph_rate=None, z_deph_rate=None):
-    if total_rate is not None:
-        kraus = np.array([[[1, 0, 0],
-                           [0, np.sqrt(1 - total_rate), 0],
-                           [0, 0, 1]],
-                          [[0, 0, 0],
-                           [0, np.sqrt(total_rate), 0],
-                           [0, 0, 1]]])
-        return KrausOperation(kraus, 3)
-    else:
-        if None in (x_deph_rate, y_deph_rate, z_deph_rate):
-            raise ValueError(
-                "Either the total_rate or the dephasing rates along each of "
-                "the three axis must be provided")
-        ptm = np.diag(
-            [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
-        return PTMOperation(ptm, (bases.gell_mann(3).subbasis([0, 1, 3, 4]),))
-
-
 @lru_cache(maxsize=64)
-def amp_phase_damping(damp_rate, deph_rate):
-    amp_damp = amp_damping(damp_rate)
-    phase_damp = phase_damping(deph_rate)
-    return Chain(amp_damp.at(0), phase_damp.at(0))
+def amp_phase_damping(duration, t1, t2):
+    t_phi = 1./(1./t2 - 0.5/t1)
+    op_t1 = np.sqrt(duration / t1) * np.array([
+        [0, 1, 0],
+        [0, 0, np.sqrt(2)],
+        [0, 0, 0]
+    ])
+    op_t2 = np.sqrt(2 * duration / t_phi) * np.array([
+        [0, 0, 0],
+        [0, 1, 0],
+        [0, 0, 2]
+    ])
+    return PTMOperation.from_lindblad_repr([op_t1, op_t2], bases.general(3))

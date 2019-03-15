@@ -3,7 +3,8 @@ from collections import namedtuple
 from itertools import chain
 
 import numpy as np
-from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis
+import scipy.linalg.matfuncs
+from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis, lindblad_plm
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -184,6 +185,14 @@ class PTMOperation(Operation):
                 'dimensionality: \n'
                 '- expected shape from provided `bases`: {}\n'
                 '- `ptm` shape: {}'.format(shape, ptm.shape))
+
+    @classmethod
+    def from_lindblad_repr(cls, ops, basis):
+        if basis is None:
+            raise ValueError('`basis` must not be None')
+        plm = lindblad_plm(ops, basis, basis)
+        ptm = scipy.linalg.matfuncs.expm(plm)
+        return cls(ptm, (basis,))
 
     @property
     def dim_hilbert(self):
