@@ -16,11 +16,20 @@ build HTML documentation:
     - doc/build/html
     expire_in: 1 hour
 
+build distribution packages:
+  stage: build
+  script:
+    - python3 setup.py check --strict
+    - python3 setup.py sdist bdist_wheel
+  artifacts:
+    paths:
+      - dist
+
 run tests:
   stage: test
   script:
-  - python3 setup.py install
-  - py.test --cov=quantumsim --cov-report=xml
+  - pip install dist/quantumsim-*-py3-none-any.whl
+  - pytest --cov=quantumsim --cov-report=xml
   artifacts:
     paths:
     - coverage.xml
@@ -51,11 +60,17 @@ upload documentation to docs repo:
   - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
   - git push --force docs_deploy_origin master
 
-
 trigger codecov.io analysis:
   stage: deploy
   script:
   - codecov
+
+upload new release to PyPI:
+  stage: deploy
+  only:
+    - tags
+  script:
+    - twine upload dist/*
 
 trigger website rebuild:
   stage: finalize
