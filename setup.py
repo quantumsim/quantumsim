@@ -18,6 +18,7 @@ version, cmdclass = get_version_and_cmdclass('qs2')
 
 setup(
     name='qs2',
+    url='https://quantumsim.gitlab.io/',
     version=version,
     cmdclass=cmdclass,
     description=(
