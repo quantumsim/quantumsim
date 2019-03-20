@@ -5,14 +5,18 @@
 
 import pytest
 import numpy as np
+import warnings
 from pytest import approx
 
 from qs2.algebra.tools import random_density_matrix
-from qs2.operations import PTMOperation, Chain, optimize
+from qs2.operations import PTMOperation, Chain, compile
 from qs2 import bases
-from qs2.models import qubits as lib2
-from qs2.models import transmons as lib3
 from qs2.states import State
+
+with warnings.catch_warnings():
+    warnings.simplefilter('ignore')
+    from qs2.models import qubits as lib2
+    from qs2.models import transmons as lib3
 
 
 @pytest.fixture(params=['numpy'])
