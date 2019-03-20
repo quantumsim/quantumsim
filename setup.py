@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='quantumsim',
+    url='https://quantumsim.gitlab.io/',
     version='0.2.0',
     description=(
         'Simulation of quantum circuits under somewhat realistic condititons'
@@ -20,7 +21,6 @@ setup(
     install_requires=[
         "pytools",
         "numpy>=1.12",
-        "pytest",
         "matplotlib",
         "parsimonious",
     ],
