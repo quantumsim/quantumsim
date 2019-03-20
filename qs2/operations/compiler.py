@@ -5,7 +5,7 @@ import numpy as np
 from .operation import Chain, PTMOperation
 
 
-def optimize(op, bases_in=None, bases_out=None):
+def compile(op, bases_in=None, bases_out=None):
     if not isinstance(op, Chain):
         op = Chain([op])
     compiler = ChainCompiler(op, optimize=True)
