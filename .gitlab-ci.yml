@@ -16,10 +16,19 @@ build html documentation:
     - doc/build/html
     expire_in: 1 hour
 
+build distribution packages:
+  stage: build
+  script:
+    - python3 setup.py check --strict
+    - python3 setup.py sdist bdist_wheel
+  artifacts:
+    paths:
+      - dist
+
 run tests:
   stage: test
   script:
-  - python3 setup.py install
+  - pip install dist/qs2-*-py3-none-any.whl
   - py.test --cov=qs2 --cov-report=xml
   artifacts:
     paths:
@@ -53,10 +62,15 @@ upload documentation to docs repo:
   - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
   - git push --force docs_deploy_origin ${CI_COMMIT_REF_NAME}
 
-trigger codecov.io analysis:
+# We will upload a new release to PyPI if tag vX.X.X is pushed
+upload new release to PyPI:
   stage: deploy
+  only:
+    - /\Av\d+\.\d+\.\d+\z/
+  except:
+    - branches
   script:
-    - codecov
+    - twine upload dist/*
 
 trigger website rebuild:
   stage: finalize

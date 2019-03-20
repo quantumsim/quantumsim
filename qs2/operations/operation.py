@@ -178,7 +178,8 @@ class PTMOperation(Operation):
                 raise ValueError(
                     'All bases must have the same Hilbert dimensionality.')
         self._validate_bases(bases_out=self.bases_out)
-        shape = tuple(b.dim_pauli for b in chain(self.bases_out, self.bases_in))
+        shape = tuple(b.dim_pauli for b in
+                      chain(self.bases_out, self.bases_in))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
