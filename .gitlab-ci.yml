@@ -60,11 +60,6 @@ upload documentation to docs repo:
   - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
   - git push --force docs_deploy_origin master
 
-trigger codecov.io analysis:
-  stage: deploy
-  script:
-  - codecov
-
 upload new release to PyPI:
   stage: deploy
   only:
