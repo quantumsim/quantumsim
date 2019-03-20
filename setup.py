@@ -5,11 +5,11 @@ from setuptools import setup, find_packages
 
 setup(
     name='quantumsim',
-    version='0.1',
+    version='0.2.0',
     description=(
         'Simulation of quantum circuits under somewhat realistic condititons'
     ),
-    author='Brian Tarasinski et al',
+    author='Brian Tarasinski',
     author_email='brianzi@physik.fu-berlin.de',
     packages=find_packages('.'),
     ext_package='quantumsim',
@@ -22,6 +22,11 @@ setup(
         "numpy>=1.12",
         "pytest",
         "matplotlib",
-        "parsimonious"
-    ]
+        "parsimonious",
+    ],
+    extras_require={
+        'cuda': [
+            'pycuda',
+        ],
+    },
 )
