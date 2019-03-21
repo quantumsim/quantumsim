@@ -5,7 +5,7 @@ import pytools
 from .state import StateBase
 
 
-class State(StateBase):
+class StateNumpy(StateBase):
     def __init__(self, bases, pv=None, *, force=False):
         """A density matrix describing several subsystems with variable number
         of dimensions.

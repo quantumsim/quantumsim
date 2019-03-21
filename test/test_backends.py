@@ -17,10 +17,13 @@ from scipy.stats import unitary_group
 from quantumsim.algebra import kraus_to_ptm, ptm_convert_basis
 
 
-@pytest.fixture(params=['numpy', 'cuda'])
+@pytest.fixture(params=[
+    ('quantumsim.states.numpy', 'StateNumpy'),
+    ('quantumsim.states.cuda', 'StateCuda'),
+])
 def state_cls(request):
-    mod = pytest.importorskip('quantumsim.states.' + request.param)
-    return mod.State
+    mod = pytest.importorskip(request.param[0])
+    return getattr(mod, request.param[1])
 
 
 @pytest.fixture(params=[[2]*9, [3, 2, 2]])

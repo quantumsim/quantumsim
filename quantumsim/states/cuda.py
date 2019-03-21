@@ -57,7 +57,7 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
 )
 
 
-class State(StateBase):
+class StateCuda(StateBase):
     _gpuarray_cache = {}
 
     def __init__(self, bases, pv=None, *, force=False):

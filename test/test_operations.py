@@ -6,16 +6,11 @@
 import pytest
 import numpy as np
 
-from quantumsim.algebra.tools import random_density_matrix
 from quantumsim import bases, Operation
+from quantumsim.algebra.tools import random_density_matrix
+from quantumsim.states import StateNumpy as State
 from quantumsim.models import qubits as lib2
 from quantumsim.models import transmons as lib3
-
-
-@pytest.fixture(params=['numpy'])
-def dm_class(request):
-    mod = pytest.importorskip('quantumsim.states.' + request.param)
-    return mod.State
 
 
 class TestOperations:
@@ -146,11 +141,11 @@ class TestOperations:
         assert circuit4q.operations[1].indices == (0,)
         assert circuit4q.operations[2].indices == (2, 0)
 
-    def test_chain_apply(self, dm_class):
+    def test_chain_apply(self):
         b = (bases.general(2),) * 3
         dm = random_density_matrix(8, seed=93)
-        state1 = dm_class.from_dm(dm, b)
-        state2 = dm_class.from_dm(dm, b)
+        state1 = State.from_dm(dm, b)
+        state2 = State.from_dm(dm, b)
 
         # Some random gate sequence
         op_indices = [(lib2.rotate_x(np.pi/2), (0,)),

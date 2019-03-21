@@ -141,7 +141,7 @@ This basis can be constructed in Quantumsim with
 :func:`quantumsim.bases.general` and is used as a default basis in Quantumsim.
 
 StateBase representation
---------------------
+------------------------
 
 Suppose we have a system of :math:`N` qubits.
 Let us fix a separate basis :math:`\left\{ \hat{P}^{(n)} \right\}` for each

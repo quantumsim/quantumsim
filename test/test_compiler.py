@@ -8,21 +8,17 @@ import numpy as np
 import warnings
 from pytest import approx
 
+from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
 # noinspection PyProtectedMember
 from quantumsim.operations.operation import _PTMOperation
-from quantumsim import bases, Operation, State
+from quantumsim.states import StateNumpy as State
+
 
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
     from quantumsim.models import qubits as lib2
     from quantumsim.models import transmons as lib3
-
-
-@pytest.fixture(params=['numpy'])
-def dm_class(request):
-    mod = pytest.importorskip('quantumsim.states.' + request.param)
-    return mod.State
 
 
 class TestCompiler:
@@ -127,7 +123,7 @@ class TestCompiler:
         assert op_cl.shape == (1, 4, 1, 4)
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
-    def test_chain_compile_single_qubit(self, dm_class, d, lib):
+    def test_chain_compile_single_qubit(self, d, lib):
         b = bases.general(d)
         dm = random_density_matrix(d, seed=487)
 
@@ -137,13 +133,13 @@ class TestCompiler:
         rx_angle = lib.rotate_x(angle)
         rx_2angle = lib.rotate_x(2*angle)
         chain0 = Operation.from_sequence(rx_angle.at(0), rx_angle.at(0))
-        state0 = dm_class.from_dm(dm, bases_full)
+        state0 = State.from_dm(dm, bases_full)
         chain0(state0, 0)
         assert chain0.num_qubits == 1
         assert len(chain0.operations) == 2
 
         chain0_c = chain0.compile(bases_full, bases_full)
-        state1 = dm_class.from_dm(dm, bases_full)
+        state1 = State.from_dm(dm, bases_full)
         chain0_c(state1, 0)
         assert chain0_c.num_qubits == 1
         assert isinstance(chain0_c, _PTMOperation)
@@ -168,7 +164,7 @@ class TestCompiler:
         assert chain_2pi_c2.bases_out == subbases
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
-    def test_chain_merge_next(self, dm_class, d, lib):
+    def test_chain_merge_next(self, d, lib):
         b = bases.general(d)
 
         dm = random_density_matrix(d**2, seed=574)
@@ -184,8 +180,8 @@ class TestCompiler:
         assert len(chain.operations) == 2
         assert isinstance(chain_c, _PTMOperation)
 
-        state1 = dm_class.from_dm(dm, bases_full)
-        state2 = dm_class.from_dm(dm, bases_full)
+        state1 = State.from_dm(dm, bases_full)
+        state2 = State.from_dm(dm, bases_full)
         chain(state1, 0, 1)
         chain_c(state2, 0, 1)
 
@@ -266,7 +262,7 @@ class TestCompiler:
         for label in '2', 'X20', 'Y20', 'X21', 'Y21':
             assert label in anc_basis.labels
 
-    def test_zz_parity_compilation(self, dm_class):
+    def test_zz_parity_compilation(self):
         b_full = bases.general(3)
         b0 = b_full.subbasis([0])
         b01 = b_full.subbasis([0, 1])
@@ -300,8 +296,8 @@ class TestCompiler:
         assert op2.bases_out[1] == bases_out[2]
 
         dm = random_density_matrix(3**3, seed=85)
-        state1 = dm_class.from_dm(dm, (b01, b01, b0))
-        state2 = dm_class.from_dm(dm, (b01, b01, b0))
+        state1 = State.from_dm(dm, (b01, b01, b0))
+        state2 = State.from_dm(dm, (b01, b01, b0))
 
         zz(state1, 0, 1, 2)
         zzc(state2, 0, 1, 2)

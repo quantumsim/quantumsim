@@ -1,38 +1,23 @@
 :mod:`quantumsim.operations` -- quantum operations
 ==================================================
 
-.. module:: quantumsim.operations
-
-Basic classes
--------------
+Public interface
+----------------
 
 .. autosummary::
    :toctree: generated/
 
-   Operation
-   TracePreservingOperation
-   Initialization
-   Measurement
-   CombinedOperation
+   quantumsim.Operation
 
-Operation algebra
------------------
+Internal operation types
+------------------------
+
+.. currentmodule:: quantumsim.operations.operation
 
 .. autosummary::
    :toctree: generated/
 
-   join
-
-Operation library
------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   rotate_euler
-   rotate_x
-   rotate_y
-   rotate_z
-   hadamard
-   cphase
+   _PTMOperation
+   _KrausOperation
+   _Chain
 

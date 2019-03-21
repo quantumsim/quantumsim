@@ -1,9 +1,9 @@
-from .numpy import State as StateNumpy
+from .numpy import StateNumpy
 
 __all__ = ['Default', 'StateNumpy']
 
 try:
-    from .cuda import State as StateCuda
+    from .cuda import StateCuda
     __all__.append('StateCuda')
     Default = StateCuda
 except ImportError:

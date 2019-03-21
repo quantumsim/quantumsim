@@ -7,16 +7,16 @@ import numpy as np
 
 
 class PauliBasis:
-    """Defines a Pauli basis [1]_ . TODO.
+    """Defines a Pauli basis.
+
+    A good introduction to the topic is [1]_.
+    TODO
 
     References
     ----------
     .. [1] A "Pauli basis" is an orthonormal basis (w.r.t
         :math:`\\langle A, B \\rangle = \\text{Tr}(A \\cdot B^\\dagger)`)
         for a space of Hermitian matrices.
-    "a tensor B of shape (dim_pauli, dim_hilbert, dim_hilbert)"
-    "read as a vector of matrices"
-    "must satisfy Tr(B[i] @ B[j]) = delta(i, j)"
     """
 
     def __init__(self, vectors, labels, superbasis=None):

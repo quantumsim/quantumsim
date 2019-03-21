@@ -11,9 +11,7 @@ class Operation(metaclass=abc.ABCMeta):
     """A metaclass for all quantum operations.
 
     Every operation has to implement call method, that takes a
-    :class:`quantumsim.state.StateBase` object and modifies it inline. This method may
-    return nothing or a result of a measurement, if the operation is a
-    measurement.
+    :class:`quantumsim.state.StateBase` object and modifies it inline.
     """
 
     @property
@@ -140,6 +138,7 @@ class Operation(metaclass=abc.ABCMeta):
         """
         Constructs an operation from a sequence of operations, that are
         applied in the given order.
+
         Parameters
         ----------
         op0, ..., opN: Operation, _IndexedOperation or list
@@ -147,6 +146,7 @@ class Operation(metaclass=abc.ABCMeta):
             all operations match in qubit dimensionality or in order of qubits
             to be applied to, they must be indexed
             (see :func:`Operation.at` method).
+
         Returns
         -------
         quantumsim.operations.operation._Chain
