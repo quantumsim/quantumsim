@@ -1,6 +1,6 @@
 import abc
 import pytools
-from qs2.algebra.algebra import dm_to_pv, pv_to_dm
+from quantumsim.algebra.algebra import dm_to_pv, pv_to_dm
 
 
 class StateBase(metaclass=abc.ABCMeta):
@@ -13,7 +13,7 @@ class StateBase(metaclass=abc.ABCMeta):
 
     Parameters
     ----------
-    bases : list of qs2.bases.PauliBasis
+    bases : list of quantumsim.bases.PauliBasis
         A descrption of the basis for the subsystems.
     pv : array or None
         Pauli vector, that represents the density matrix in the selected

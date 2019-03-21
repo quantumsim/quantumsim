@@ -61,7 +61,7 @@ unit matrix and three Pauli matrices, normalized by :math:`\sqrt{d}`, where
 We will refer to this basis as IXYZ basis. It can be generalized to the
 arbitrary number of dimensions, if we replace Pauli matrices with generalized
 Gell-Mann matrices [3]_. This basis can be constructed in Quantumsim with
-:func:`qs2.bases.gell_mann`.
+:func:`quantumsim.bases.gell_mann`.
 
 Another useful choice is formed by the following set of matrices:
 
@@ -137,8 +137,8 @@ and then :math:`d^2-d` of :math:`\hat{\sigma}_x`- and
     \end{pmatrix},
     \right\}.
 
-This basis can be constructed in Quantumsim with :func:`qs2.bases.general`
-and is used as a default basis in Quantumsim.
+This basis can be constructed in Quantumsim with
+:func:`quantumsim.bases.general` and is used as a default basis in Quantumsim.
 
 StateBase representation
 --------------------

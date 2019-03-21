@@ -6,15 +6,15 @@
 import pytest
 import numpy as np
 
-from qs2.algebra.tools import random_density_matrix
-from qs2 import bases, Operation
-from qs2.models import qubits as lib2
-from qs2.models import transmons as lib3
+from quantumsim.algebra.tools import random_density_matrix
+from quantumsim import bases, Operation
+from quantumsim.models import qubits as lib2
+from quantumsim.models import transmons as lib3
 
 
 @pytest.fixture(params=['numpy'])
 def dm_class(request):
-    mod = pytest.importorskip('qs2.states.' + request.param)
+    mod = pytest.importorskip('quantumsim.states.' + request.param)
     return mod.State
 
 

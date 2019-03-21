@@ -1,7 +1,7 @@
 :mod:`quantumsim.operations` -- quantum operations
 ==================================================
 
-.. module:: qs2.operations
+.. module:: quantumsim.operations
 
 Basic classes
 -------------

@@ -14,10 +14,10 @@ def get_version_and_cmdclass(package_path):
     return module.__version__, module.cmdclass
 
 
-version, cmdclass = get_version_and_cmdclass('qs2')
+version, cmdclass = get_version_and_cmdclass('quantumsim')
 
 setup(
-    name='qs2',
+    name='quantumsim',
     url='https://quantumsim.gitlab.io/',
     version=version,
     cmdclass=cmdclass,
@@ -27,7 +27,7 @@ setup(
     author='Quantumsim Authors',
     author_email='brianzi@physik.fu-berlin.de',
     packages=find_packages('.'),
-    ext_package='qs2',
+    ext_package='quantumsim',
     package_data={
         # all Cuda and json files we can find
         '': ['*.cu', '*.json'],

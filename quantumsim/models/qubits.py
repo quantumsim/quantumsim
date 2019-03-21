@@ -1,6 +1,6 @@
 import numpy as np
 from functools import lru_cache
-from qs2 import bases, Operation
+from quantumsim import bases, Operation
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 

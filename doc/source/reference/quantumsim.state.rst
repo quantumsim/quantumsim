@@ -1,7 +1,7 @@
 :mod:`quantumsim.state` -- representation of a state
 ====================================================
 
-.. module:: qs2.state
+.. module:: quantumsim.state
 
 .. autosummary::
    :toctree: generated/

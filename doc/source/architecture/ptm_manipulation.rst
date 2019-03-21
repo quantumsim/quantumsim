@@ -1,9 +1,9 @@
 Pauli Transfer Matrix Manipulation
 ==================================
 
-.. currentmodule:: qs2.operation
+.. currentmodule:: quantumsim.operation
 
-:class:`qs2.operation.Transformation` instances can be created using two
+:class:`quantumsim.operation.Transformation` instances can be created using two
 methods: :func:`Transformation.from_kraus` and :func:`Transformation.from_ptm`.
 In order to get a transfer matrix, that will actually be used in
 computations, :func:`Transformation.ptm` is used. It takes either Kraus, or

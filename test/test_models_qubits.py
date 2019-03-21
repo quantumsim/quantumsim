@@ -5,8 +5,8 @@
 
 import numpy as np
 
-from qs2 import bases, State
-from qs2.models import qubits as lib
+from quantumsim import bases, State
+from quantumsim.models import qubits as lib
 
 
 class TestLibrary:

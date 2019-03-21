@@ -11,7 +11,7 @@ class Operation(metaclass=abc.ABCMeta):
     """A metaclass for all quantum operations.
 
     Every operation has to implement call method, that takes a
-    :class:`qs2.state.StateBase` object and modifies it inline. This method may
+    :class:`quantumsim.state.StateBase` object and modifies it inline. This method may
     return nothing or a result of a measurement, if the operation is a
     measurement.
     """
@@ -41,7 +41,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        state : qs2.State
+        state : quantumsim.State
             A state of a qubit
         q0, ..., qN : int
             Indices of a qubit in a state
@@ -55,16 +55,16 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        bases_in : list of qs2.bases.PauliBasis or None
+        bases_in : list of quantumsim.bases.PauliBasis or None
             Input bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
-        bases_out : list of qs2.bases.PauliBasis or None
+        bases_out : list of quantumsim.bases.PauliBasis or None
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
 
         Returns
         -------
-        qs2.operations.Operation
+        quantumsim.operations.Operation
             Optimized representation of self.
         """
         pass
@@ -79,9 +79,9 @@ class Operation(metaclass=abc.ABCMeta):
         ----------
         ptm: array_like
             Pauli transfer matrix in a form of Numpy array
-        bases_in: tuple of qs2.bases.PauliBasis
+        bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
-        bases_out: tuple of qs2.bases.PauliBasis
+        bases_out: tuple of quantumsim.bases.PauliBasis
             Output bases of qubits. If None, assumed to be the same as input
             bases.
 
@@ -122,12 +122,12 @@ class Operation(metaclass=abc.ABCMeta):
         ----------
         lindblad_ops: array or list of arrays
             2D Numpy array or list of them.
-        basis: qs2.bases.PauliBasis
+        basis: quantumsim.bases.PauliBasis
             A basis for the resulting operation.
 
         Returns
         -------
-        qs2.operations.operation._PTMOperation
+        quantumsim.operations.operation._PTMOperation
         """
         if basis is None:
             raise ValueError('`basis` must not be None')
@@ -149,7 +149,7 @@ class Operation(metaclass=abc.ABCMeta):
             (see :func:`Operation.at` method).
         Returns
         -------
-        qs2.operations.operation._Chain
+        quantumsim.operations.operation._Chain
             Resulting operation
         """
         return _Chain(operations)
@@ -168,17 +168,17 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        bases_in: None or list of qs2.bases.PauliBasis
+        bases_in: None or list of quantumsim.bases.PauliBasis
             Input bases.
-        bases_out: None or list of qs2.bases.PauliBasis
+        bases_out: None or list of quantumsim.bases.PauliBasis
             Output bases.
         compiler_cls: none or class
             Class of a compiler. If None, Quantumsim decides.
 
         Returns
         -------
-        qs2.operations.operation._Chain or
-        qs2.operations.operation._PTMOperation
+        quantumsim.operations.operation._Chain or
+        quantumsim.operations.operation._PTMOperation
         """
         if isinstance(self, _Chain):
             op = self
@@ -307,7 +307,7 @@ class _PTMOperation(Operation):
 
         Parameters
         ----------
-        state : qs2.State
+        state : quantumsim.State
         q0, ..., qN : indices of qubits to act on
         """
         if len(qubit_indices) != self.num_qubits:
@@ -388,7 +388,7 @@ class _KrausOperation(Operation):
 
         Parameters
         ----------
-        state : qs2.State
+        state : quantumsim.State
         q0, ..., qN : indices of qubits to act on
         """
         if len(qubit_indices) != self.num_qubits:

@@ -9,17 +9,17 @@ where necessary. Result sanity validation are done in test_state.py and
 test_operations.py
 """
 import pytest
-import qs2.bases
+import quantumsim.bases
 import numpy as np
 
 from pytest import approx
 from scipy.stats import unitary_group
-from qs2.algebra import kraus_to_ptm, ptm_convert_basis
+from quantumsim.algebra import kraus_to_ptm, ptm_convert_basis
 
 
 @pytest.fixture(params=['numpy', 'cuda'])
 def state_cls(request):
-    mod = pytest.importorskip('qs2.states.' + request.param)
+    mod = pytest.importorskip('quantumsim.states.' + request.param)
     return mod.State
 
 
@@ -29,18 +29,18 @@ def dm_dims(request):
 
 
 # FIXME: Gell-Mann should also be tested, when it is supported
-# @pytest.fixture(params=[qs2.bases.general, qs2.bases.gell_mann])
-@pytest.fixture(params=[qs2.bases.general])
+# @pytest.fixture(params=[quantumsim.bases.general, quantumsim.bases.gell_mann])
+@pytest.fixture(params=[quantumsim.bases.general])
 def dm_basis(request):
     return request.param
 
 
 def _basis_general_reshuffled():
-    b0 = qs2.bases.general(2)
+    b0 = quantumsim.bases.general(2)
     order = (0, 2, 1, 3)
     vectors = np.array([b0.vectors[i] for i in order])
     labels = [b0.labels[i] for i in order]
-    return qs2.bases.PauliBasis(vectors, labels)
+    return quantumsim.bases.PauliBasis(vectors, labels)
 
 
 basis_general_reshuffled = _basis_general_reshuffled()
@@ -69,7 +69,7 @@ class TestBackends:
     def test_create(self, state_cls, dm_dims):
         target_shape = [dim**2 for dim in dm_dims]
         data = np.random.random_sample(target_shape)
-        bases = [qs2.bases.general(dim) for dim in dm_dims]
+        bases = [quantumsim.bases.general(dim) for dim in dm_dims]
         for expansion in (None, data):
             dm = state_cls(bases, expansion)
             assert dm.n_qubits == len(dm_dims)
@@ -95,14 +95,14 @@ class TestBackends:
 
         # 16 qubits is too much
         with pytest.raises(ValueError):
-            state_cls(bases=[qs2.bases.general(2)]*16)
+            state_cls(bases=[quantumsim.bases.general(2)] * 16)
 
     @pytest.mark.parametrize(
         'bases', [
-            (qs2.bases.general(2), qs2.bases.general(2), qs2.bases.general(2)),
-            (qs2.bases.general(2).subbasis([0, 1, 2]),
-             qs2.bases.general(2).subbasis([0, 1]),
-             qs2.bases.general(2))
+            (quantumsim.bases.general(2), quantumsim.bases.general(2), quantumsim.bases.general(2)),
+            (quantumsim.bases.general(2).subbasis([0, 1, 2]),
+             quantumsim.bases.general(2).subbasis([0, 1]),
+             quantumsim.bases.general(2))
         ])
     def test_create_from_dm_general(self, state_cls, bases):
         dm = np.zeros((8, 8), dtype=complex)
@@ -152,7 +152,7 @@ class TestBackends:
         assert state0.meas_prob(0) != approx(state1.meas_prob(0))
 
         ptm = kraus_to_ptm(unitary.reshape(1, 2, 2), b, b)
-        b_gm = (qs2.bases.gell_mann(2),)
+        b_gm = (quantumsim.bases.gell_mann(2),)
         ptm2 = ptm_convert_basis(ptm, b, b, b_gm, b_gm)
         assert np.allclose(ptm2[0, 1:], 0)
         assert ptm2[0, 0] == approx(1)
@@ -218,12 +218,12 @@ class TestBackends:
 
     @pytest.mark.parametrize(
         'bases', [
-            (qs2.bases.general(2), qs2.bases.general(2), qs2.bases.general(2)),
+            (quantumsim.bases.general(2), quantumsim.bases.general(2), quantumsim.bases.general(2)),
             (basis_general_reshuffled, basis_general_reshuffled,
              basis_general_reshuffled),
-            (qs2.bases.general(2),
-             qs2.bases.general(2).subbasis([0, 1]),
-             qs2.bases.general(2).subbasis([0, 1, 2]))
+            (quantumsim.bases.general(2),
+             quantumsim.bases.general(2).subbasis([0, 1]),
+             quantumsim.bases.general(2).subbasis([0, 1, 2]))
         ])
     def test_diagonal_meas_prob(self, state_cls, bases):
         diag = np.array([0.25, 0, 0.75, 0, 0, 0, 0, 0])
@@ -264,13 +264,13 @@ class TestBackends:
 
     @pytest.mark.parametrize(
         'bases', [
-            (qs2.bases.general(2), qs2.bases.general(2), qs2.bases.general(2)),
+            (quantumsim.bases.general(2), quantumsim.bases.general(2), quantumsim.bases.general(2)),
             (basis_general_reshuffled, basis_general_reshuffled,
              basis_general_reshuffled),
             (
-                    qs2.bases.general(2).subbasis([0, 1]),
-                    qs2.bases.general(2).subbasis([0, 1, 2]),
-                    qs2.bases.general(2).subbasis([0, 1]),
+                    quantumsim.bases.general(2).subbasis([0, 1]),
+                    quantumsim.bases.general(2).subbasis([0, 1, 2]),
+                    quantumsim.bases.general(2).subbasis([0, 1]),
             )
         ])
     def test_diagonal_indicated(self, state_cls, bases):

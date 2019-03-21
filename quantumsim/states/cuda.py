@@ -65,7 +65,7 @@ class State(StateBase):
 
         Parameters
         ----------
-        bases : list of qs2.bases.PauliBasis
+        bases : list of quantumsim.bases.PauliBasis
             Dimensions of qubits in the system.
 
         pv : array or None.
@@ -226,7 +226,7 @@ class State(StateBase):
             Qubit index
         ptm: array-like
             A PTM in the basis of a qubit.
-        basis_out: qs2.bases.PauliBasis or None
+        basis_out: quantumsim.bases.PauliBasis or None
             If provided, will convert qubit basis to specified
             after the PTM application.
         """

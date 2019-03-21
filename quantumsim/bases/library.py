@@ -61,7 +61,7 @@ def gell_mann(dim_hilbert):
     Gell-Mann matrices are Hermitian and traceless, except the first,
     which is the identity [1]_ [2]_.
 
-    `qs2.basis.gell_mann(2)` is the same as `qs2.basis.twolevel_ixyz`.
+    `quantumsim.basis.gell_mann(2)` is the same as `quantumsim.basis.twolevel_ixyz`.
 
     References
     ----------

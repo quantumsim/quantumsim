@@ -11,7 +11,7 @@ class Node:
 
         Parameters
         ----------
-        op : qs2.operations.Operation
+        op : quantumsim.operations.Operation
         qubits : tuple of int
         """
         self.op = op
@@ -178,11 +178,11 @@ class ChainCompiler:
 
         Parameters
         ----------
-        op : qs2.operations.Operation
+        op : quantumsim.operations.Operation
 
         Returns
         -------
-        opt_basis_in, opt_basis_out: tuple of qs2.bases.PauliBasis
+        opt_basis_in, opt_basis_out: tuple of quantumsim.bases.PauliBasis
             Subbases of input bases, that will contribute to computation.
         """
         d_in = np.prod([b.dim_pauli for b in op.bases_in])

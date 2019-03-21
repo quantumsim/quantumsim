@@ -28,8 +28,8 @@ build distribution packages:
 run tests:
   stage: test
   script:
-  - pip install dist/qs2-*-py3-none-any.whl
-  - py.test --cov=qs2 --cov-report=xml
+  - pip install dist/quantumsim-*-py3-none-any.whl
+  - py.test --cov=quantumsim --cov-report=xml
   artifacts:
     paths:
     - coverage.xml

@@ -1,7 +1,7 @@
 :mod:`quantumsim.bases` -- computational basis specification
 ============================================================
 
-.. module:: qs2.bases
+.. module:: quantumsim.bases
 
 .. autosummary::
    :toctree: generated/

@@ -12,7 +12,7 @@ class State(StateBase):
 
         Parameters
         ----------
-        bases : list of qs2.bases.PauliBasis
+        bases : list of quantumsim.bases.PauliBasis
             Dimensions of qubits in the system.
 
         pv : array or None.
