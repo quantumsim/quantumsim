@@ -60,10 +60,14 @@ upload documentation to docs repo:
   - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
   - git push --force docs_deploy_origin master
 
+# We will upload a new release to PyPI in the case:
+# - tag vX.X.X is pushed
 upload new release to PyPI:
   stage: deploy
   only:
-    - tags
+    - /\Av\d+\.\d+\.\d+\z/
+  except:
+    - branches
   script:
     - twine upload dist/*
 
