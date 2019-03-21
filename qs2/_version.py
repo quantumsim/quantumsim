@@ -145,6 +145,7 @@ def get_version_from_git_archive(version_info):
         # variables not expanded during 'git archive'
         return None
 
+    # noinspection PyPep8Naming
     VTAG = 'tag: v'
     refs = set(r.strip() for r in refnames.split(","))
     version_tags = set(r[len(VTAG):] for r in refs if r.startswith(VTAG))

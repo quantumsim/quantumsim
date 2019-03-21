@@ -11,8 +11,11 @@ import warnings
 
 # noinspection PyUnresolvedReferences
 import pycuda.autoinit
+# noinspection PyUnresolvedReferences
 import pycuda.driver as drv
+# noinspection PyUnresolvedReferences
 import pycuda.gpuarray as ga
+# noinspection PyUnresolvedReferences
 import pycuda.reduction
 # noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
@@ -62,7 +65,7 @@ class State(StateBase):
 
         Parameters
         ----------
-        bases : tuple of qs2.bases.PauliBasis
+        bases : list of qs2.bases.PauliBasis
             Dimensions of qubits in the system.
 
         pv : array or None.
@@ -214,6 +217,7 @@ class State(StateBase):
         self._data, self._work_data = self._work_data, self._data
 
     def _apply_single_qubit_ptm(self, qubit, ptm):
+        # noinspection PyUnresolvedReferences
         """Apply a one-qubit Pauli transfer matrix to qubit bit.
 
         Parameters
@@ -223,8 +227,8 @@ class State(StateBase):
         ptm: array-like
             A PTM in the basis of a qubit.
         basis_out: qs2.bases.PauliBasis or None
-            If provided, will convert qubit basis to specified after the PTM
-            application.
+            If provided, will convert qubit basis to specified
+            after the PTM application.
         """
         new_shape = list(self._data.shape)
         self._validate_qubit(qubit, 'bit')
@@ -308,7 +312,7 @@ class State(StateBase):
                 raise ValueError(
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {}."
-                        .format(target_array.size, diag_size))
+                    .format(target_array.size, diag_size))
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -389,7 +393,7 @@ class State(StateBase):
             it = iter(out)
             return [next(it) if qbi is not None else 0.
                     for qbi in self.bases[qubit]
-                        .computational_basis_indices.values()]
+                    .computational_basis_indices.values()]
 
     def renormalize(self):
         """Renormalize to trace one."""

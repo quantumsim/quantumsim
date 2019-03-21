@@ -2,7 +2,7 @@ from collections import deque
 from itertools import repeat
 import numpy as np
 
-from .operation import Chain, PTMOperation
+from .operation import _Chain, _PTMOperation
 
 
 class Node:
@@ -47,7 +47,7 @@ class Node:
         idx = self.qubits + [q + offset for q in self.qubits]
         new_ptm = np.einsum(self.op.ptm, idx, sorted(idx))
         self.qubits = sorted(self.qubits)
-        self.op = PTMOperation(
+        self.op = _PTMOperation(
             new_ptm, self.bases_in_tuple, self.bases_out_tuple)
 
 
@@ -96,7 +96,7 @@ class CircuitGraph:
 
     def to_operation(self):
         if len(self.nodes) > 1:
-            return Chain([node.to_indexed_operation() for node in self.nodes])
+            return _Chain([node.to_indexed_operation() for node in self.nodes])
         elif len(self.nodes) == 1:
             return self.nodes[0].op
         else:
@@ -110,7 +110,7 @@ class ChainCompiler:
     """
     Parameters
     ----------
-    chain : Chain
+    chain : _Chain
         A chain to compile
     optimize : bool
         Whether to throw away inactive degrees of freedom or not.
@@ -257,7 +257,7 @@ class ChainCompiler:
         for qubit, node_prev in node.prev.items():
             other.prev[qubit] = node_prev
             other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
-            other.op = PTMOperation(
+            other.op = _PTMOperation(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_prev is None:
                 graph.starts[qubit] = other
@@ -306,7 +306,7 @@ class ChainCompiler:
             other.next[qubit] = node_next
             assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
             other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
-            other.op = PTMOperation(
+            other.op = _PTMOperation(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_next is None:
                 graph.ends[qubit] = other

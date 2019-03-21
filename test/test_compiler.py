@@ -9,7 +9,7 @@ import warnings
 from pytest import approx
 
 from qs2.algebra.tools import random_density_matrix
-from qs2.operations.operation import PTMOperation
+from qs2.operations.operation import _PTMOperation
 from qs2 import bases, Operation, State
 
 with warnings.catch_warnings():
@@ -145,7 +145,7 @@ class TestCompiler:
         state1 = dm_class.from_dm(dm, bases_full)
         chain0_c(state1, 0)
         assert chain0_c.num_qubits == 1
-        assert isinstance(chain0_c, PTMOperation)
+        assert isinstance(chain0_c, _PTMOperation)
         op_angle = chain0_c
         op_2angle = rx_2angle.compile(bases_full, bases_full)
         assert op_angle.shape == op_2angle.shape
@@ -157,12 +157,12 @@ class TestCompiler:
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Operation.from_sequence(rx_pi.at(0), rx_pi.at(0))
         chain_2pi_c1 = chain_2pi.compile(subbases, bases_full)
-        assert isinstance(chain_2pi_c1, PTMOperation)
+        assert isinstance(chain_2pi_c1, _PTMOperation)
         assert chain_2pi_c1.bases_in == subbases
         assert chain_2pi_c1.bases_out == subbases
 
         chain_2pi_c2 = chain_2pi.compile(bases_full, subbases)
-        assert isinstance(chain_2pi_c2, PTMOperation)
+        assert isinstance(chain_2pi_c2, _PTMOperation)
         assert chain_2pi_c2.bases_in == subbases
         assert chain_2pi_c2.bases_out == subbases
 
@@ -181,7 +181,7 @@ class TestCompiler:
         bases_full = (b, b)
         chain_c = chain.compile(bases_full, bases_full)
         assert len(chain.operations) == 2
-        assert isinstance(chain_c, PTMOperation)
+        assert isinstance(chain_c, _PTMOperation)
 
         state1 = dm_class.from_dm(dm, bases_full)
         state2 = dm_class.from_dm(dm, bases_full)
@@ -209,7 +209,7 @@ class TestCompiler:
         bases_full = (b, b)
         chain_c = chain.compile(bases_full, bases_full)
         assert len(chain.operations) == 2
-        assert isinstance(chain_c, PTMOperation)
+        assert isinstance(chain_c, _PTMOperation)
 
         state1 = State.from_dm(dm, bases_full)
         state2 = State.from_dm(dm, bases_full)

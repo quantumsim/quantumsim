@@ -90,7 +90,7 @@ class Operation(metaclass=abc.ABCMeta):
         Transformation
             Resulting operation
         """
-        return PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
+        return _PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
 
     @staticmethod
     def from_kraus(kraus, dim_hilbert):
@@ -110,7 +110,7 @@ class Operation(metaclass=abc.ABCMeta):
         Transformation
             Resulting operation
         """
-        return KrausOperation(kraus, dim_hilbert)
+        return _KrausOperation(kraus, dim_hilbert)
 
     @staticmethod
     def from_lindblad_form(lindblad_ops, basis):
@@ -127,13 +127,13 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        qs2.operations.operation.PTMOperation
+        qs2.operations.operation._PTMOperation
         """
         if basis is None:
             raise ValueError('`basis` must not be None')
         plm = lindblad_plm(lindblad_ops, basis, basis)
         ptm = scipy.linalg.matfuncs.expm(plm)
-        return PTMOperation(ptm, (basis,))
+        return _PTMOperation(ptm, (basis,))
 
     @staticmethod
     def from_sequence(*operations):
@@ -149,16 +149,41 @@ class Operation(metaclass=abc.ABCMeta):
             (see :func:`Operation.at` method).
         Returns
         -------
-        qs2.operations.operation.Chain
+        qs2.operations.operation._Chain
             Resulting operation
         """
-        return Chain(operations)
+        return _Chain(operations)
 
     def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
-        if isinstance(self, Chain):
+        """Returns equivalent circuit, optimized for given input and/or
+        output bases.
+
+        `bases_in` should match the basis of a state, to which operation is
+        applied. If the state bases are not subbases of an operation,
+        or operation itself is a compiled operation with a reduced basis,
+        and `bases_in` or `bases_out` are not the subbases of those,
+        for which operation is compiled for, applying an operation will
+        silently produce wrong result. We advice to use this function only
+        on operations, that were not yet compiled.
+
+        Parameters
+        ----------
+        bases_in: None or list of qs2.bases.PauliBasis
+            Input bases.
+        bases_out: None or list of qs2.bases.PauliBasis
+            Output bases.
+        compiler_cls: none or class
+            Class of a compiler. If None, Quantumsim decides.
+
+        Returns
+        -------
+        qs2.operations.operation._Chain or
+        qs2.operations.operation._PTMOperation
+        """
+        if isinstance(self, _Chain):
             op = self
         else:
-            op = Chain([self])
+            op = _Chain([self])
         compiler_cls = compiler_cls or self._default_compiler_cls
         compiler = compiler_cls(op, optimize=True)
         return compiler.compile(bases_in, bases_out)
@@ -200,7 +225,7 @@ class Operation(metaclass=abc.ABCMeta):
 _IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
 
 
-class PTMOperation(Operation):
+class _PTMOperation(Operation):
     """Generic transformation of a state.
 
     Any transformation, that should be a completely positive map, can be
@@ -274,7 +299,7 @@ class PTMOperation(Operation):
             new_ptm = ptm_convert_basis(self.ptm,
                                         self.bases_in, self.bases_out,
                                         b_in, b_out)
-            new_op = PTMOperation(new_ptm, b_in, b_out)
+            new_op = _PTMOperation(new_ptm, b_in, b_out)
         return new_op
 
     def __call__(self, state, *qubit_indices):
@@ -301,7 +326,7 @@ class PTMOperation(Operation):
             state.bases[q] = b
 
 
-class KrausOperation(Operation):
+class _KrausOperation(Operation):
     """Construct completely positive map, based on a set of Kraus matrices.
 
     TODO: elaborate on Kraus matrices format.
@@ -388,11 +413,11 @@ class KrausOperation(Operation):
         else:
             self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
-        op = PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
+        op = _PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
         return op
 
 
-class Chain(Operation):
+class _Chain(Operation):
     """
     A chain of operations, that are applied sequentially.
     """
@@ -455,7 +480,7 @@ class Chain(Operation):
         joined_ops = []
         for op_indices in operations:
             # Flatten the operations chain
-            if isinstance(op_indices.operation, Chain):
+            if isinstance(op_indices.operation, _Chain):
                 for sub_op, sub_indices in op_indices.operation.operations:
                     _, indices = op_indices
                     new_indices = tuple((indices[i] for i in sub_indices))
@@ -465,7 +490,7 @@ class Chain(Operation):
 
         self.operations = joined_ops
         for op in self.operations:
-            if isinstance(op.operation, Chain):
+            if isinstance(op.operation, _Chain):
                 raise RuntimeError('Chain must not contain chains; this is '
                                    'probably a bug.')
 
