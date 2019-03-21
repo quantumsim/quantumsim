@@ -19,11 +19,11 @@ build html documentation:
 build distribution packages:
   stage: build
   script:
-    - python3 setup.py check --strict
-    - python3 setup.py sdist bdist_wheel
+  - python3 setup.py check --strict
+  - python3 setup.py sdist bdist_wheel
   artifacts:
     paths:
-      - dist
+    - dist
 
 run tests:
   stage: test
@@ -44,9 +44,8 @@ upload documentation to docs repo:
   stage: deploy
   only:
   - master@quantumsim/quantumsim
-  - qs2/master@quantumsim/quantumsim
+  - /\Av\d+\.\d+\.\d+\z/
   before_script:
-  # kaniko issue https://github.com/GoogleContainerTools/kaniko/issues/457
   - mkdir -p /etc/ssh
   - ssh-keyscan -t rsa gitlab.com >> /etc/ssh/ssh_known_hosts
   script:
@@ -66,17 +65,17 @@ upload documentation to docs repo:
 upload new release to PyPI:
   stage: deploy
   only:
-    - /\Av\d+\.\d+\.\d+\z/
+  - /\Av\d+\.\d+\.\d+\z/
   except:
-    - branches
+  - branches
   script:
-    - twine upload dist/*
+  - twine upload dist/*
 
 trigger website rebuild:
   stage: finalize
   only:
   - master@quantumsim/quantumsim
-  - qs2/master@quantumsim/quantumsim
+  - /\Av\d+\.\d+\.\d+\z/
   script:
   - curl --request post --form token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}
     --form ref=master
