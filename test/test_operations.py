@@ -7,8 +7,7 @@ import pytest
 import numpy as np
 
 from qs2.algebra.tools import random_density_matrix
-from qs2.operations import Operation, Chain
-from qs2 import bases
+from qs2 import bases, Operation
 from qs2.models import qubits as lib2
 from qs2.models import transmons as lib3
 
@@ -39,7 +38,7 @@ class TestOperations:
                                  [p_damp, 0, 0, 1-p_damp]])
         assert np.allclose(damp_ptm, expected_mat)
 
-        with pytest.raises(ValueError, match=r'.* should be a tuple, .*'):
+        with pytest.raises(ValueError, match=r'.* should be a list, .*'):
             damp_op.set_bases(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
@@ -106,41 +105,42 @@ class TestOperations:
         op3 = lib2.cnot()
         op_qutrit = lib3.rotate_x()
 
-        circuit = Chain(op1.at(0), op2.at(0))
+        circuit = Operation.from_sequence(op1.at(0), op2.at(0))
         assert circuit.num_qubits == 1
         assert len(circuit.operations) == 2
 
-        circuit = Chain(op1.at(1), op2.at(0))
+        circuit = Operation.from_sequence(op1.at(1), op2.at(0))
         assert circuit.num_qubits == 2
         assert len(circuit.operations) == 2
 
         with pytest.raises(ValueError, match=".* must form an ordered set .*"):
-            Chain(op1.at(2), op2.at(0))
+            Operation.from_sequence(op1.at(2), op2.at(0))
 
         with pytest.raises(ValueError, match=".* must form an ordered set .*"):
-            Chain(op1.at(1), op2.at(2))
+            Operation.from_sequence(op1.at(1), op2.at(2))
 
         with pytest.raises(ValueError, match="Hilbert dimensionality of op.*"):
-            Chain(op1.at(0), op_qutrit.at(0))
+            Operation.from_sequence(op1.at(0), op_qutrit.at(0))
 
-        circuit3q = Chain(op1.at(0), op2.at(1), op3.at(0, 1),
+        circuit3q = Operation.from_sequence(op1.at(0), op2.at(1), op3.at(0, 1),
                           op1.at(1), op2.at(0), op3.at(0, 2))
         assert circuit3q.num_qubits == 3
         assert len(circuit3q.operations) == 6
 
         with pytest.raises(ValueError, match="Number of indices is not .*"):
-            Chain(op1.at(0), op3.at(0))
+            Operation.from_sequence(op1.at(0), op3.at(0))
 
         with pytest.raises(ValueError, match="Number of indices is not .*"):
             circuit3q.at(0, 1)
 
-        circuit4q = Chain(op3.at(0, 2), circuit3q.at(1, 2, 3))
+        circuit4q = Operation.from_sequence(op3.at(0, 2), circuit3q.at(1, 2, 3))
         assert len(circuit4q.operations) == 7
         assert circuit4q.operations[0].indices == (0, 2)
         for o1, o2 in zip(circuit4q.operations[1:], circuit3q.operations):
             assert np.all(np.array(o1.indices) == np.array(o2.indices) + 1)
 
-        circuit4q = Chain(circuit3q.at(2, 0, 3), op3.at(0, 1), op2.at(1))
+        circuit4q = Operation.from_sequence(
+            circuit3q.at(2, 0, 3), op3.at(0, 1), op2.at(1))
         assert len(circuit4q.operations) == 8
         assert circuit4q.operations[0].indices == (2,)
         assert circuit4q.operations[1].indices == (0,)
@@ -162,7 +162,8 @@ class TestOperations:
         for op, indices in op_indices:
             op(state1, *indices),
 
-        circuit = Chain(*(op.at(*ix) for op, ix in op_indices))
+        circuit = Operation.from_sequence(
+            *(op.at(*ix) for op, ix in op_indices))
         circuit(state2, 0, 1, 2)
 
         assert np.all(state1.to_pv() == state2.to_pv())

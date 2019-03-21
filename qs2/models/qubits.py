@@ -1,7 +1,6 @@
 import numpy as np
 from functools import lru_cache
-from qs2.operations.operation import PTMOperation, KrausOperation, Chain
-from qs2 import bases
+from qs2 import bases, Operation
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
@@ -31,7 +30,7 @@ def rotate_euler(phi, theta, lamda):
     matrix = np.array([
         [cos_theta, -1j * exp_lambda * sin_theta],
         [-1j * exp_phi * sin_theta, exp_phi * exp_lambda * cos_theta]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -45,12 +44,12 @@ def rotate_x(angle=np.pi):
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     sin, cos = np.sin(angle / 2), np.cos(angle / 2)
     matrix = np.array([[cos, -1j*sin], [-1j*sin, cos]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -64,12 +63,12 @@ def rotate_y(angle=np.pi):
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     sin, cos = np.sin(angle / 2), np.cos(angle / 2)
     matrix = np.array([[cos, -sin], [sin, cos]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -83,17 +82,17 @@ def rotate_z(angle=np.pi):
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     exp = np.exp(-1j * angle / 2)
     matrix = np.diag([exp, exp.conj()])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 def phase_shift(angle=np.pi):
     matrix = np.diag([1, np.exp(1j * angle)])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 def hadamard():
@@ -101,11 +100,11 @@ def hadamard():
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     matrix = np.sqrt(0.5)*np.array([[1, 1], [1, -1]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -119,11 +118,11 @@ def cphase(angle=np.pi):
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     matrix = np.diag([1, 1, 1, np.exp(1j * angle)])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -137,7 +136,7 @@ def iswap(angle=np.pi/2):
 
     Returns
     -------
-    KrausOperation
+    Operation.from_kraus
         An operation, that corresponds to the rotation.
     """
     sin, cos = np.sin(angle), np.cos(angle)
@@ -145,7 +144,7 @@ def iswap(angle=np.pi/2):
                        [0, cos, 1j*sin, 0],
                        [0, 1j*sin, cos, 0],
                        [0, 0, 0, 1]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -154,7 +153,7 @@ def cnot():
                        [0, 1, 0, 0],
                        [0, 0, 0, 1],
                        [0, 0, 1, 0]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=32)
@@ -167,7 +166,7 @@ def controlled_unitary(unitary):
     off_diag_block_1 = np.zeros((dim_hilbert, 2))
     matrix = np.array([[control_block, off_diag_block_0],
                        [off_diag_block_1, unitary]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 def controlled_rotation(angle=np.pi, axis='z'):
@@ -190,7 +189,7 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
     if total_rate is not None:
         kraus = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
                           [[0, np.sqrt(total_rate)], [0, 0]]])
-        return KrausOperation(kraus, 2)
+        return Operation.from_kraus(kraus, 2)
     else:
         if None in (exc_rate, damp_rate):
             raise ValueError(
@@ -202,7 +201,7 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
             [0, np.sqrt((1 - comb_rate)), 0, 0],
             [0, 0, np.sqrt((1 - comb_rate)), 0],
             [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
-        return PTMOperation(ptm, (bases.gell_mann(2),))
+        return Operation.from_ptm(ptm, (bases.gell_mann(2),))
 
 
 @lru_cache(maxsize=32)
@@ -211,7 +210,7 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
     if total_rate is not None:
         kraus = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
                           [[0, 0], [0, np.sqrt(total_rate)]]])
-        return KrausOperation(kraus, 2)
+        return Operation.from_kraus(kraus, 2)
     else:
         if None in (x_deph_rate, y_deph_rate, z_deph_rate):
             raise ValueError(
@@ -219,21 +218,21 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
                 "the three axis must be provided")
         ptm = np.diag(
             [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
-        return PTMOperation(ptm, (bases.gell_mann(2),))
+        return Operation.from_ptm(ptm, (bases.gell_mann(2),))
 
 
 @lru_cache(maxsize=64)
 def amp_phase_damping(damp_rate, deph_rate):
     amp_damp = amp_damping(damp_rate)
     phase_damp = phase_damping(deph_rate)
-    return Chain(amp_damp.at(0), phase_damp.at(0))
+    return Operation.from_sequence(amp_damp.at(0), phase_damp.at(0))
 
 
 @lru_cache(maxsize=16)
 def bit_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["X"]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=16)
@@ -241,14 +240,14 @@ def phase_flipping(flip_rate):
     # This is actually equivalent to the phase damping
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["Z"]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=16)
 def bit_phase_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["Y"]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)
 
 
 @lru_cache(maxsize=16)
@@ -259,4 +258,4 @@ def depolarization(rate):
                        sqrt * _PAULI["X"],
                        sqrt * _PAULI["Y"],
                        sqrt * _PAULI["Z"]])
-    return KrausOperation(matrix, 2)
+    return Operation.from_kraus(matrix, 2)

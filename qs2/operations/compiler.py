@@ -5,13 +5,6 @@ import numpy as np
 from .operation import Chain, PTMOperation
 
 
-def compile(op, bases_in=None, bases_out=None):
-    if not isinstance(op, Chain):
-        op = Chain([op])
-    compiler = ChainCompiler(op, optimize=True)
-    return compiler.compile(bases_in, bases_out)
-
-
 class Node:
     def __init__(self, op, qubits):
         """
@@ -103,8 +96,7 @@ class CircuitGraph:
 
     def to_operation(self):
         if len(self.nodes) > 1:
-            return Chain(*(node.to_indexed_operation()
-                           for node in self.nodes))
+            return Chain([node.to_indexed_operation() for node in self.nodes])
         elif len(self.nodes) == 1:
             return self.nodes[0].op
         else:

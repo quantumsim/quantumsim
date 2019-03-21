@@ -1,11 +1,15 @@
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from ._version import __version__
-from .states import State
+from . import states
+from .operations.operation import Operation
+
+State = states.Default
 
 __all__ = [
     'bases',
-    'operations',
-    'State'
+    'states',
+    'State',
+    'Operation',
 ]
 
 

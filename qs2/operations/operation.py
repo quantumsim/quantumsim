@@ -1,10 +1,10 @@
 import abc
+import numpy as np
+import scipy.linalg.matfuncs
 from collections import namedtuple
 from itertools import chain
 
-import numpy as np
-import scipy.linalg.matfuncs
-from qs2.algebra.algebra import kraus_to_ptm, ptm_convert_basis, lindblad_plm
+from ..algebra.algebra import kraus_to_ptm, ptm_convert_basis, lindblad_plm
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -15,6 +15,11 @@ class Operation(metaclass=abc.ABCMeta):
     return nothing or a result of a measurement, if the operation is a
     measurement.
     """
+
+    @property
+    def _default_compiler_cls(self):
+        from .compiler import ChainCompiler
+        return ChainCompiler
 
     @property
     @abc.abstractmethod
@@ -53,7 +58,7 @@ class Operation(metaclass=abc.ABCMeta):
         bases_in : list of qs2.bases.PauliBasis or None
             Input bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
-        bases_out : list of qs2.bases.PauliBasis
+        bases_out : list of qs2.bases.PauliBasis or None
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
 
@@ -65,7 +70,7 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @staticmethod
-    def from_ptm(ptm, bases_in, bases_out):
+    def from_ptm(ptm, bases_in, bases_out=None):
         """Construct completely positive map, based on Pauli transfer matrix.
 
         TODO: elaborate on PTM format.
@@ -107,6 +112,57 @@ class Operation(metaclass=abc.ABCMeta):
         """
         return KrausOperation(kraus, dim_hilbert)
 
+    @staticmethod
+    def from_lindblad_form(lindblad_ops, basis):
+        """Construct and operation from a list of Lindblad operators.
+
+        TODO: elaborate on Lindblad operators format
+
+        Parameters
+        ----------
+        lindblad_ops: array or list of arrays
+            2D Numpy array or list of them.
+        basis: qs2.bases.PauliBasis
+            A basis for the resulting operation.
+
+        Returns
+        -------
+        qs2.operations.operation.PTMOperation
+        """
+        if basis is None:
+            raise ValueError('`basis` must not be None')
+        plm = lindblad_plm(lindblad_ops, basis, basis)
+        ptm = scipy.linalg.matfuncs.expm(plm)
+        return PTMOperation(ptm, (basis,))
+
+    @staticmethod
+    def from_sequence(*operations):
+        """
+        Constructs an operation from a sequence of operations, that are
+        applied in the given order.
+        Parameters
+        ----------
+        op0, ..., opN: Operation, _IndexedOperation or list
+            Operations to concatenate, or a single list of operations. If not
+            all operations match in qubit dimensionality or in order of qubits
+            to be applied to, they must be indexed
+            (see :func:`Operation.at` method).
+        Returns
+        -------
+        qs2.operations.operation.Chain
+            Resulting operation
+        """
+        return Chain(operations)
+
+    def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
+        if isinstance(self, Chain):
+            op = self
+        else:
+            op = Chain([self])
+        compiler_cls = compiler_cls or self._default_compiler_cls
+        compiler = compiler_cls(op, optimize=True)
+        return compiler.compile(bases_in, bases_out)
+
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
         indices of qubits it acts on. Used during processes' concatenation
@@ -129,9 +185,9 @@ class Operation(metaclass=abc.ABCMeta):
 
     def _validate_bases(self, **kwargs):
         for name, bases in kwargs.items():
-            if not isinstance(bases, tuple):
+            if not hasattr(bases, '__iter__'):
                 raise ValueError(
-                    "`{n}` should be a tuple, got {t}."
+                    "`{n}` should be a list, got {t}."
                     .format(n=name, t=type(bases)))
             for b in bases:
                 if self.dim_hilbert != b.dim_hilbert:
@@ -187,14 +243,6 @@ class PTMOperation(Operation):
                 '- expected shape from provided `bases`: {}\n'
                 '- `ptm` shape: {}'.format(shape, ptm.shape))
 
-    @classmethod
-    def from_lindblad_repr(cls, ops, basis):
-        if basis is None:
-            raise ValueError('`basis` must not be None')
-        plm = lindblad_plm(ops, basis, basis)
-        ptm = scipy.linalg.matfuncs.expm(plm)
-        return cls(ptm, (basis,))
-
     @property
     def dim_hilbert(self):
         return self._dim_hilbert
@@ -239,13 +287,13 @@ class PTMOperation(Operation):
         """
         if len(qubit_indices) != self.num_qubits:
             raise ValueError('This is a {}-qubit operation, but number of '
-                             'qubits provdied is {}'
+                             'qubits provided is {}'
                              .format(self.num_qubits, len(qubit_indices)))
         op = self
         for q, b in zip(qubit_indices, self.bases_in):
             if state.bases[q] != b:
                 op = self.set_bases(
-                    bases_in=tuple(state.bases[q] for q in qubit_indices))
+                    bases_in=[state.bases[q] for q in qubit_indices])
                 break
 
         state.apply_ptm(op.ptm, *qubit_indices)
@@ -320,9 +368,9 @@ class KrausOperation(Operation):
         """
         if len(qubit_indices) != self.num_qubits:
             raise ValueError('This is a {}-qubit operation, but number of '
-                             'qubits provdied is {}'
+                             'qubits provided is {}'
                              .format(self.num_qubits, len(qubit_indices)))
-        bases_in = tuple(state.bases[i] for i in qubit_indices)
+        bases_in = [state.bases[i] for i in qubit_indices]
         op = self.set_bases(bases_in=bases_in)
         state.apply_ptm(op.ptm, *qubit_indices)
         for q, b in zip(qubit_indices, op.bases_out):
@@ -347,18 +395,8 @@ class KrausOperation(Operation):
 class Chain(Operation):
     """
     A chain of operations, that are applied sequentially.
-
-    Parameters
-    ----------
-    op0, ..., opN: Operation, _IndexedOperation or list
-        Operations to concatenate, or a single list of operations. If not all
-        operations match in qubit dimensionality or in order of qubits
-        to be applied to, they must be indexed
-        (see :func:`Operation.at` method).
     """
-    def __init__(self, *operations):
-        if len(operations) == 1 and hasattr(operations[0], '__getitem__'):
-            operations = operations[0]
+    def __init__(self, operations):
         op0 = operations[0]
         if isinstance(op0, Operation):
             for i, op in enumerate(operations[1:], 1):
@@ -452,7 +490,5 @@ class Chain(Operation):
         return results if len(results) > 0 else None
 
     def set_bases(self, bases_in=None, bases_out=None):
-        # To avoid circular import
-        from .compiler import ChainCompiler
-        compiler = ChainCompiler(self, optimize=False)
+        compiler = self._default_compiler_cls(self, optimize=False)
         return compiler.compile(bases_in, bases_out)
