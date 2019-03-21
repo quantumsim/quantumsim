@@ -69,9 +69,9 @@ class TestLibrary:
         rotate360 = lib.rotate_z(2*np.pi)
 
         rotate90(dm, 0)
-        assert np.allclose(dm.expansion(), [1, 0, 0, 0])
+        assert np.allclose(dm.to_pv(), [1, 0, 0, 0])
         rotate180(dm, 0)
-        assert np.allclose(dm.expansion(), [1, 0, 0, 0])
+        assert np.allclose(dm.to_pv(), [1, 0, 0, 0])
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, sqrt2, 0])
@@ -79,19 +79,19 @@ class TestLibrary:
                             had_expansion)
 
         rotate180(superpos_dm, 0)
-        assert np.allclose(superpos_dm.expansion(),
+        assert np.allclose(superpos_dm.to_pv(),
                            [0.5, 0.5, -sqrt2, 0])
 
         rotate90(superpos_dm, 0)
-        assert np.allclose(superpos_dm.expansion(),
+        assert np.allclose(superpos_dm.to_pv(),
                            [0.5, 0.5, 0, -sqrt2])
 
         rotate180(superpos_dm, 0)
-        assert np.allclose(superpos_dm.expansion(),
+        assert np.allclose(superpos_dm.to_pv(),
                            [0.5, 0.5, 0, sqrt2])
 
         rotate360(superpos_dm, 0)
-        assert np.allclose(superpos_dm.expansion(),
+        assert np.allclose(superpos_dm.to_pv(),
                            [0.5, 0.5, 0, sqrt2])
 
     def test_rotate_euler(self):

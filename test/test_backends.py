@@ -63,7 +63,7 @@ def random_unitary_matrix(dim, seed):
 class TestBackends:
     def test_create_trivial(self, state_cls):
         dm = state_cls([])
-        assert dm.expansion() == approx(1)
+        assert dm.to_pv() == approx(1)
         assert dm.diagonal() == approx(1)
 
     def test_create(self, state_cls, dm_dims):
@@ -77,7 +77,7 @@ class TestBackends:
             assert dm.dim_pauli == approx(target_shape)
             assert dm.size == np.product(np.array(dm_dims)**2)
             if expansion is not None:
-                np.testing.assert_almost_equal(dm.expansion(), expansion)
+                np.testing.assert_almost_equal(dm.to_pv(), expansion)
             del dm
 
         # wrong data dimensionality
@@ -111,7 +111,7 @@ class TestBackends:
         dm[0, 1] = 0.5 - 0.33j  # |000><001|
         dm[1, 0] = 0.5 + 0.33j  # |001><000|
         s = state_cls.from_dm(dm, bases)
-        pv = s.expansion()
+        pv = s.to_pv()
         assert pv.shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
@@ -126,12 +126,12 @@ class TestBackends:
         dm = random_density_matrix(8, 34)
         bases = (dm_basis(2),) * 3
         s = state_cls.from_dm(dm, bases)
-        assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
+        assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert s.bases[2] == bases[2]
 
-        pv = s.expansion()
+        pv = s.to_pv()
         dm2 = np.einsum('ijk,iad,jbe,kcf->abcdef',
                         pv, bases[0].vectors, bases[1].vectors,
                         bases[2].vectors, optimize=True).reshape(8, 8)
@@ -158,7 +158,7 @@ class TestBackends:
         assert ptm2[0, 0] == approx(1)
 
         state0.apply_ptm(ptm, 0)
-        assert state0.expansion() == approx(state1.expansion())
+        assert state0.to_pv() == approx(state1.to_pv())
 
     @pytest.mark.parametrize('qubit', [0, 1, 2])
     def test_apply_1q_random_ptm(self, state_cls, dm_basis, qubit):
@@ -186,7 +186,7 @@ class TestBackends:
 
         ptm = kraus_to_ptm(unitary.reshape(1, 2, 2), b, b)
         state0.apply_ptm(ptm, qubit)
-        assert state0.expansion() == approx(state1.expansion())
+        assert state0.to_pv() == approx(state1.to_pv())
 
     @pytest.mark.parametrize('qubits', [
         (0, 1), (0, 2), (1, 2), (1, 0), (2, 0), (2, 1)
@@ -214,7 +214,7 @@ class TestBackends:
 
         ptm = kraus_to_ptm(op.reshape(1, 4, 4), b * 2, b * 2)
         state0.apply_ptm(ptm, *qubits)
-        assert state0.expansion() == approx(state1.expansion())
+        assert state0.to_pv() == approx(state1.to_pv())
 
     @pytest.mark.parametrize(
         'bases', [
@@ -229,7 +229,7 @@ class TestBackends:
         diag = np.array([0.25, 0, 0.75, 0, 0, 0, 0, 0])
         dm = np.diag(diag)
         s = state_cls.from_dm(dm, bases)
-        assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
+        assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
@@ -241,7 +241,7 @@ class TestBackends:
         diag = np.array([0.25, 0.5, 0, 0, 0, 0, 0, 0])
         dm = np.diag(diag)
         s = state_cls.from_dm(dm, bases)
-        assert s.expansion().shape == tuple(b.dim_pauli for b in bases)
+        assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
@@ -286,53 +286,3 @@ class TestBackends:
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
 
-    def test_add_qubit(self, state_cls, dm_basis):
-        dm = state_cls([])
-        bases = []
-        expected_dim_pauli = []
-        assert dm.n_qubits == 0
-        assert dm.dim_pauli == approx(expected_dim_pauli)
-
-        for dim in (2, 2, 3):
-            basis = dm_basis(dim)
-            bases.append(basis)
-            expected_dim_pauli.insert(0, dim**2)
-            dm.add_qubit(basis, 0)
-            assert dm.n_qubits == len(bases)
-            assert dm.dim_pauli == approx(expected_dim_pauli)
-            assert dm.expansion().shape == approx(expected_dim_pauli)
-
-    def test_project(self, state_cls, dm_basis):
-        # matrix in |0, 0, 0> state
-        dim_hilbert = [2, 2, 3]
-        dm = state_cls([dm_basis(d) for d in dim_hilbert])
-        assert dm.trace() == 1
-        assert dm.dim_pauli == approx([4, 4, 9])
-        dm.project(0, 0)
-        data = dm.expansion().copy()
-        assert dm.dim_pauli == approx([1, 4, 9])
-        assert dm.trace() == 1
-        dm.project(0, 0)  # should do nothing
-        assert dm.expansion() == approx(data)
-        assert dm.dim_pauli == approx([1, 4, 9])
-        with pytest.raises(RuntimeError):
-            dm.project(0, 1)
-
-        # matrix in 0.8 |0, 0, 0> + 0.2 |1, 1, 0> state
-        dim_hilbert = [3, 2, 2]
-        bases = [dm_basis(d) for d in dim_hilbert]
-        data = np.zeros([b.dim_pauli for b in bases], dtype=float)
-        data[0, 0, 0] = 0.8
-        data[1, 1, 0] = 0.2
-        dm = state_cls(bases, data)
-        assert dm.trace() == approx(1)
-        assert dm.dim_pauli == approx([9, 4, 4])
-        dm.project(0, 0)
-        assert dm.trace() == approx(0.8)
-        assert dm.dim_pauli == approx([1, 4, 4])
-        dm.project(2, 0)
-        assert dm.trace() == approx(0.8)
-        assert dm.dim_pauli == approx([1, 4, 1])
-        dm.project(1, 1)
-        assert dm.trace() == approx(0.)
-        assert dm.dim_pauli == approx([1, 1, 1])

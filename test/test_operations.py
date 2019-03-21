@@ -165,4 +165,4 @@ class TestOperations:
         circuit = Chain(*(op.at(*ix) for op, ix in op_indices))
         circuit(state2, 0, 1, 2)
 
-        assert np.all(state1.expansion() == state2.expansion())
+        assert np.all(state1.to_pv() == state2.to_pv())

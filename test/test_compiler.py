@@ -153,7 +153,7 @@ class TestCompiler:
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm == approx(op_2angle.ptm)
-        assert state1.expansion() == approx(state0.expansion())
+        assert state1.to_pv() == approx(state0.to_pv())
 
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Chain(rx_pi.at(0), rx_pi.at(0))

@@ -37,18 +37,23 @@ class StateBase(metaclass=abc.ABCMeta):
                 'pass `force=True` argument to the constructor.')
 
     @classmethod
+    def from_pv(cls, pv, bases, *, force=False):
+        return cls(bases, pv, force=force)
+
+    @abc.abstractmethod
+    def to_pv(self):
+        """Get data in a form of Numpy array"""
+        pass
+
+    @classmethod
     def from_dm(cls, dm, bases, *, force=False):
         if not hasattr(bases, '__iter__'):
             n_qubits = len(dm) // bases.dim_hilbert
             bases = [bases] * n_qubits
         return cls(bases, dm_to_pv(dm, bases), force=force)
 
-    @classmethod
-    def from_pv(cls, pv, bases, *, force=False):
-        return cls(bases, pv, force=force)
-
     def to_dm(self):
-        return pv_to_dm(self.expansion(), self.bases)
+        return pv_to_dm(self.to_pv(), self.bases)
 
     @property
     def n_qubits(self):
@@ -65,11 +70,6 @@ class StateBase(metaclass=abc.ABCMeta):
     @property
     def dim_pauli(self):
         return tuple([pb.dim_pauli for pb in self.bases])
-
-    @abc.abstractmethod
-    def expansion(self):
-        """Get data in a form of Numpy array"""
-        pass
 
     @abc.abstractmethod
     def apply_ptm(self, operation, *qubits):
@@ -89,32 +89,6 @@ class StateBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def meas_prob(self, qubit):
-        pass
-
-    @abc.abstractmethod
-    def add_qubit(self, basis, classical_state):
-        """Add a qubit to the density matrix and initialize it in a
-        computational basis state.
-
-        Parameters
-        ----------
-        basis: qs2.bases.PauliBasis
-            Initial basis for a qubit
-        classical_state: int
-            Computational basis state of the qubit
-        """
-        pass
-
-    @abc.abstractmethod
-    def project(self, qubit, state):
-        """Project a qubit to a state.
-
-        Raises
-        ------
-        RuntimeError
-            If the state, which is going to be projected onto, has zero
-            probability.
-        """
         pass
 
     @abc.abstractmethod

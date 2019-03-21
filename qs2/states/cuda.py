@@ -116,54 +116,8 @@ class State(StateBase):
         self._work_data = ga.empty_like(self._data)
         self._work_data.gpudata.size = self._work_data.nbytes
 
-    def expansion(self):
+    def to_pv(self):
         return self._data.get()
-
-    def _cached_gpuarray(self, array):
-        """
-        Given a numpy array,
-        calculate the python hash of its bytes;
-
-        If it is not found in the cache, upload to gpu
-        and store in cache, otherwise return cached allocation.
-        """
-
-        array = np.ascontiguousarray(array)
-        key = hash(array.tobytes())
-        try:
-            array_gpu = self._gpuarray_cache[key]
-        except KeyError:
-            array_gpu = ga.to_gpu(array)
-            self._gpuarray_cache[key] = array_gpu
-
-        # for testing: read_back_and_check!
-
-        return array_gpu
-
-    def _check_cache(self):
-        for k, v in self._gpuarray_cache.items():
-            a = v.get().tobytes()
-            assert hash(a) == k
-
-    def trace(self):
-        # TODO: there is a smarter way of doing this with pauli-dirac basis
-        return np.sum(self.diagonal())
-
-    def renormalize(self):
-        """Renormalize to trace one."""
-        tr = self.trace()
-        if tr > 1e-8:
-            self._data *= np.float(1 / tr)
-        else:
-            warnings.warn(
-                "Density matrix trace is 0; likely your further computation "
-                "will fail. Have you projected DM on a state with zero weight?")
-
-    def copy(self):
-        """Return a deep copy of this Density."""
-        data_cp = self._data.copy()
-        cp = self.__class__(self.bases, data=data_cp)
-        return cp
 
     def apply_ptm(self, ptm, *qubits):
         if len(qubits) == 1:
@@ -173,78 +127,6 @@ class State(StateBase):
         else:
             raise NotImplementedError('Applying {}-qubit PTM is not '
                                       'implemented in the active backend.')
-
-    def diagonal(self, *, get_data=True, target_array=None, flatten=True):
-        """Obtain the diagonal of the density matrix.
-
-        Parameters
-        ----------
-        target_array : None or pycuda.gpuarray.array
-            An already-allocated GPU array to which the data will be copied.
-            If `None`, make a new GPU array.
-        get_data : boolean
-            Whether the data should be copied from the GPU.
-        flatten : boolean
-            TODO docstring
-        """
-        diag_bases = [pb.computational_subbasis() for pb in self.bases]
-        diag_shape = [db.dim_pauli for db in diag_bases]
-        diag_size = pytools.product(diag_shape)
-
-        if target_array is None:
-            if self._work_data.gpudata.size < diag_size * 8:
-                self._work_data.gpudata.free()
-                self._work_data = ga.empty(diag_shape, np.float64)
-                self._work_data.gpudata.size = self._work_data.nbytes
-            target_array = self._work_data
-        else:
-            if target_array.size < diag_size:
-                raise ValueError(
-                    "Size of `target_gpu_array` is too small ({}).\n"
-                    "Should be at least {}."
-                    .format(target_array.size, diag_size))
-
-        idx = [[pb.computational_basis_indices[i]
-                for i in range(pb.dim_hilbert)
-                if pb.computational_basis_indices[i] is not None]
-               for pb in self.bases]
-
-        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
-        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
-
-        xshape = np.array(self._data.shape, np.uint32)
-        yshape = np.array(diag_shape, np.uint32)
-
-        xshape_gpu = self._cached_gpuarray(xshape)
-        yshape_gpu = self._cached_gpuarray(yshape)
-
-        idx_i_gpu = self._cached_gpuarray(idx_i)
-        idx_j_gpu = self._cached_gpuarray(idx_j)
-
-        block = (2 ** 8, 1, 1)
-        grid = (max(1, (diag_size - 1) // 2 ** 8 + 1), 1, 1)
-
-        if len(yshape) == 0:
-            # brain-dead case, but should be handled according to exp.
-            target_array.set(self._data.get())
-        else:
-            _multitake.prepared_call(
-                grid, block, self._data.gpudata, target_array.gpudata,
-                idx_i_gpu.gpudata, idx_j_gpu.gpudata,
-                xshape_gpu.gpudata, yshape_gpu.gpudata,
-                np.uint32(len(yshape))
-            )
-
-        if get_data:
-            if flatten:
-                return target_array.get().ravel()[:diag_size]
-            else:
-                return (target_array.get().ravel()[:diag_size]
-                        .reshape(diag_shape))
-        else:
-            return ga.GPUArray(shape=diag_shape,
-                               gpudata=target_array.gpudata,
-                               dtype=np.float64)
 
     def _apply_two_qubit_ptm(self, qubit0, qubit1, ptm):
         """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
@@ -331,7 +213,7 @@ class State(StateBase):
 
         self._data, self._work_data = self._work_data, self._data
 
-    def _apply_single_qubit_ptm(self, qubit, ptm, basis_out=None):
+    def _apply_single_qubit_ptm(self, qubit, ptm):
         """Apply a one-qubit Pauli transfer matrix to qubit bit.
 
         Parameters
@@ -398,72 +280,85 @@ class State(StateBase):
 
         self._data, self._work_data = self._work_data, self._data
 
-        if basis_out is not None:
-            self.bases[qubit] = basis_out
+    def diagonal(self, *, get_data=True, target_array=None, flatten=True):
+        """Obtain the diagonal of the density matrix.
 
-    def add_qubit(self, basis, classical_state):
-        """Add a qubit with `basis` and with state state."""
+        Parameters
+        ----------
+        target_array : None or pycuda.gpuarray.array
+            An already-allocated GPU array to which the data will be copied.
+            If `None`, make a new GPU array.
+        get_data : boolean
+            Whether the data should be copied from the GPU.
+        flatten : boolean
+            TODO docstring
+        """
+        diag_bases = [pb.computational_subbasis() for pb in self.bases]
+        diag_shape = [db.dim_pauli for db in diag_bases]
+        diag_size = pytools.product(diag_shape)
 
-        # TODO: express in terms off `apply_ptm`
-
-        # figure out the projection matrix
-        ptm = np.zeros(basis.dim_pauli)
-        ptm[basis.computational_basis_indices[classical_state]] = 1
-
-        # make sure work_data is large enough, reshape it
-        # TODO hacky as fuck: we put the allocated size
-        # into the allocation object by hand
-
-        new_shape = tuple([basis.dim_pauli] + list(self._data.shape))
-        new_size = pytools.product(new_shape)
-        new_size_bytes = new_size * 8
-
-        if self._work_data.gpudata.size < new_size_bytes:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
+        if target_array is None:
+            if self._work_data.gpudata.size < diag_size * 8:
+                self._work_data.gpudata.free()
+                self._work_data = ga.empty(diag_shape, np.float64)
+                self._work_data.gpudata.size = self._work_data.nbytes
+            target_array = self._work_data
         else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(
-                shape=new_shape,
-                dtype=np.float64,
-                gpudata=self._work_data.gpudata,
+            if target_array.size < diag_size:
+                raise ValueError(
+                    "Size of `target_gpu_array` is too small ({}).\n"
+                    "Should be at least {}."
+                        .format(target_array.size, diag_size))
+
+        idx = [[pb.computational_basis_indices[i]
+                for i in range(pb.dim_hilbert)
+                if pb.computational_basis_indices[i] is not None]
+               for pb in self.bases]
+
+        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
+
+        xshape = np.array(self._data.shape, np.uint32)
+        yshape = np.array(diag_shape, np.uint32)
+
+        xshape_gpu = self._cached_gpuarray(xshape)
+        yshape_gpu = self._cached_gpuarray(yshape)
+
+        idx_i_gpu = self._cached_gpuarray(idx_i)
+        idx_j_gpu = self._cached_gpuarray(idx_j)
+
+        block = (2 ** 8, 1, 1)
+        grid = (max(1, (diag_size - 1) // 2 ** 8 + 1), 1, 1)
+
+        if len(yshape) == 0:
+            # brain-dead case, but should be handled according to exp.
+            target_array.set(self._data.get())
+        else:
+            _multitake.prepared_call(
+                grid, block, self._data.gpudata, target_array.gpudata,
+                idx_i_gpu.gpudata, idx_j_gpu.gpudata,
+                xshape_gpu.gpudata, yshape_gpu.gpudata,
+                np.uint32(len(yshape))
             )
 
-        # perform projection
-        ptm_gpu = self._cached_gpuarray(ptm)
+        if get_data:
+            if flatten:
+                return target_array.get().ravel()[:diag_size]
+            else:
+                return (target_array.get().ravel()[:diag_size]
+                        .reshape(diag_shape))
+        else:
+            return ga.GPUArray(shape=diag_shape,
+                               gpudata=target_array.gpudata,
+                               dtype=np.float64)
 
-        dim_bit = basis.dim_pauli
-        dint = min(64, new_size_bytes // 8 // dim_bit)
-        block = (1, dim_bit, dint)
-        blocksize = dim_bit * dint
-        grid_size = max(1, (new_size_bytes // 8 - 1) // blocksize + 1)
-        grid = (grid_size, 1, 1)
-
-        dim_z = self._data.size  # 1
-        dim_y = 1
-        dim_rho = new_size  # self.data.size
-
-        _two_qubit_general_ptm.prepared_call(
-            grid,
-            block,
-            self._data.gpudata,
-            self._work_data.gpudata,
-            ptm_gpu.gpudata,
-            1, 1,
-            dim_z,
-            dim_y,
-            dim_rho,
-            shared_size=8 * (ptm.size + blocksize)
-        )
-
-        self._data, self._work_data = self._work_data, self._data
-        self.bases.insert(0, basis)
+    def trace(self):
+        # TODO: there is a smarter way of doing this with pauli-dirac basis
+        return np.sum(self.diagonal())
 
     def partial_trace(self, *qubits):
-        raise NotImplementedError
+        raise NotImplementedError("Currently this method is implemented only "
+                                  "in Numpy backend.")
 
     def meas_prob(self, qubit):
         """ Return the diagonal of the reduced density matrix of a qubit.
@@ -494,82 +389,46 @@ class State(StateBase):
             it = iter(out)
             return [next(it) if qbi is not None else 0.
                     for qbi in self.bases[qubit]
-                                   .computational_basis_indices.values()]
+                        .computational_basis_indices.values()]
 
-    # noinspection PyMethodOverriding
-    def project(self, qubit, state, *, lazy_alloc=True):
-        """Remove a qubit from the density matrix by projecting
-        on a computational basis state.
-
-        bit: int
-            Which bit to project.
-        state: int
-            Which state in the Hilbert space to project on
-        lazy_alloc: boolean
-            If True, do not allocate a smaller space for the new matrix,
-            instead leave it at the same size as now, in anticipation of a
-            future increase in size.
-        """
-        self._validate_qubit(qubit, 'bit')
-        target_qubit_state_index = self.bases[qubit] \
-            .computational_basis_indices[state]
-        if target_qubit_state_index is None:
-            raise RuntimeError(
-                'Projected state is not in the computational basis indices; '
-                'this is not supported.'
-            )
-
-        new_shape = list(self._data.shape)
-        new_shape[qubit] = 1
-
-        new_size_bytes = self._data.nbytes // self.bases[qubit].dim_pauli
-
-        # TODO hack: put the allocated size into the allocation by hand
-        if self._work_data.gpudata.size < new_size_bytes or not lazy_alloc:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
+    def renormalize(self):
+        """Renormalize to trace one."""
+        tr = self.trace()
+        if tr > 1e-8:
+            self._data *= np.float(1 / tr)
         else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(shape=new_shape, dtype=np.float64,
-                                          gpudata=self._work_data.gpudata)
+            warnings.warn(
+                "Density matrix trace is 0; likely your further computation "
+                "will fail. Have you projected DM on a state with zero weight?")
 
-        idx = []
-        # TODO: can be built more efficiently
-        for i, pb in enumerate(self.bases):
-            if i == qubit:
-                idx.append([target_qubit_state_index])
-            else:
-                idx.append(list(range(pb.dim_pauli)))
+    def copy(self):
+        """Return a deep copy of this Density."""
+        data_cp = self._data.copy()
+        cp = self.__class__(self.bases, data=data_cp)
+        return cp
 
-        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
-        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
+    def _cached_gpuarray(self, array):
+        """
+        Given a numpy array,
+        calculate the python hash of its bytes;
 
-        xshape = np.array(self._data.shape, np.uint32)
-        yshape = np.array(new_shape, np.uint32)
+        If it is not found in the cache, upload to gpu
+        and store in cache, otherwise return cached allocation.
+        """
 
-        xshape_gpu = self._cached_gpuarray(xshape)
-        yshape_gpu = self._cached_gpuarray(yshape)
+        array = np.ascontiguousarray(array)
+        key = hash(array.tobytes())
+        try:
+            array_gpu = self._gpuarray_cache[key]
+        except KeyError:
+            array_gpu = ga.to_gpu(array)
+            self._gpuarray_cache[key] = array_gpu
 
-        idx_i_gpu = self._cached_gpuarray(idx_i)
-        idx_j_gpu = self._cached_gpuarray(idx_j)
+        # for testing: read_back_and_check!
 
-        block = (2 ** 8, 1, 1)
-        grid = (max(1, (self._work_data.size - 1) // 2 ** 8 + 1), 1, 1)
+        return array_gpu
 
-        _multitake.prepared_call(
-            grid,
-            block,
-            self._data.gpudata,
-            self._work_data.gpudata,
-            idx_i_gpu.gpudata, idx_j_gpu.gpudata,
-            xshape_gpu.gpudata, yshape_gpu.gpudata,
-            np.uint32(len(xshape))
-        )
-
-        self._data, self._work_data = self._work_data, self._data
-
-        subbase_idx = [self.bases[qubit].computational_basis_indices[state]]
-        self.bases[qubit] = self.bases[qubit].subbasis(subbase_idx)
+    def _check_cache(self):
+        for k, v in self._gpuarray_cache.items():
+            a = v.get().tobytes()
+            assert hash(a) == k

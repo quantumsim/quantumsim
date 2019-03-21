@@ -44,38 +44,8 @@ class State(StateBase):
                 "`pv` should be Numpy array or None, got type `{}`"
                 .format(type(pv)))
 
-    def expansion(self):
+    def to_pv(self):
         return self._data
-
-    def renormalize(self):
-        tr = self.trace()
-        if tr > 1e-8:
-            self._data *= self.trace() ** -1
-        else:
-            warnings.warn(
-                "Density matrix trace is 0; likely your further computation "
-                "will fail. Have you projected DM on a state with zero weight?")
-
-    def copy(self):
-        cp = self.__class__(self.dim_hilbert)
-        cp._data = self._data.copy()
-        return cp
-
-    def diagonal(self, *, get_data=True):
-        no_trace_tensors = [basis.computational_basis_vectors
-                            for basis in self.bases]
-
-        trace_argument = []
-        n_qubits = self.n_qubits
-        for i, ntt in enumerate(no_trace_tensors):
-            trace_argument.append(ntt)
-            trace_argument.append([i + n_qubits, i])
-
-        indices = list(range(n_qubits))
-        out_indices = list(range(n_qubits, 2 * n_qubits))
-        complex_dm_dimension = pytools.product(self.dim_hilbert)
-        return np.einsum(self._data, indices, *trace_argument, out_indices,
-                         optimize=True).real.reshape(complex_dm_dimension)
 
     def apply_ptm(self, ptm, *qubits):
         if len(ptm.shape) != 2 * len(qubits):
@@ -93,12 +63,25 @@ class State(StateBase):
             self._data, dm_in_idx, ptm, ptm_out_idx + ptm_in_idx, dm_out_idx,
             optimize=True)
 
-    def add_qubit(self, basis, classical_state):
-        self._data = np.einsum(
-            basis.computational_basis_vectors[classical_state], [0],
-            self._data, list(range(1, self.n_qubits + 1)),
-            optimize=True)
-        self.bases.insert(0, basis)
+    def diagonal(self, *, get_data=True):
+        no_trace_tensors = [basis.computational_basis_vectors
+                            for basis in self.bases]
+
+        trace_argument = []
+        n_qubits = self.n_qubits
+        for i, ntt in enumerate(no_trace_tensors):
+            trace_argument.append(ntt)
+            trace_argument.append([i + n_qubits, i])
+
+        indices = list(range(n_qubits))
+        out_indices = list(range(n_qubits, 2 * n_qubits))
+        complex_dm_dimension = pytools.product(self.dim_hilbert)
+        return np.einsum(self._data, indices, *trace_argument, out_indices,
+                         optimize=True).real.reshape(complex_dm_dimension)
+
+    def trace(self):
+        # TODO: can be made more effective
+        return np.sum(self.diagonal())
 
     def partial_trace(self, *qubits):
         for q in qubits:
@@ -123,21 +106,17 @@ class State(StateBase):
         except Exception:
             raise
 
-    def trace(self):
-        # TODO: can be made more effective
-        return np.sum(self.diagonal())
+    def renormalize(self):
+        tr = self.trace()
+        if tr > 1e-8:
+            self._data *= self.trace() ** -1
+        else:
+            warnings.warn(
+                "Density matrix trace is 0; likely your further computation "
+                "will fail. Have you projected DM on a state with zero weight?")
 
-    def project(self, qubit, state):
-        self._validate_qubit(qubit, 'bit')
-        target_qubit_state_index = self.bases[qubit] \
-            .computational_basis_indices[state]
-        if target_qubit_state_index is None:
-            raise RuntimeError(
-                'Projected state is not in the computational basis indices; '
-                'this is not supported.'
-            )
+    def copy(self):
+        cp = self.__class__(self.dim_hilbert)
+        cp._data = self._data.copy()
+        return cp
 
-        idx = [tuple(range(dp)) for dp in self.dim_pauli]
-        idx[qubit] = (target_qubit_state_index,)
-        self._data = self._data[np.ix_(*idx)]
-        self.bases[qubit] = self.bases[qubit].subbasis([state])
