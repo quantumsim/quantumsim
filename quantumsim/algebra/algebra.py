@@ -44,7 +44,8 @@ def ptm_convert_basis(ptm, bi_old, bo_old, bi_new, bo_new):
 def dm_to_pv(dm, bases):
     n_qubits = len(bases)
     d = bases[0].dim_hilbert
-    einsum_args = [dm.reshape((d,) * (2 * n_qubits)), list(range(2 * n_qubits))]
+    einsum_args = [dm.reshape((d,) * (2 * n_qubits)),
+                   list(range(2 * n_qubits))]
     for i, b in enumerate(bases):
         einsum_args.append(b.vectors),
         einsum_args.append([2 * n_qubits + i, i + n_qubits, i])
@@ -61,23 +62,88 @@ def pv_to_dm(pv, bases):
     return np.einsum(*einsum_args, optimize=True).reshape((dim ** nq,) * 2)
 
 
-# TODO Check naming.
-def lindblad_plm(lindblad_ops, basis_in, basis_out):
-    if len(lindblad_ops.shape) == 2:
-        op = lindblad_ops
-        result = np.einsum("xab, bc, ycd, ad -> xy",
-                           basis_out.vectors, op,
-                           basis_in.vectors, op.conj(),
-                           optimize=True)
-        result -= 0.5 * np.einsum("xab, cb, cd, yda -> xy",
-                                  basis_out.vectors, op.conj(),
-                                  op, basis_in.vectors,
-                                  optimize=True)
-        result -= 0.5 * np.einsum("xab, ybc, dc, da -> xy",
-                                  basis_out.vectors, basis_in.vectors,
-                                  op.conj(), op, optimize=True)
-        return result
-    else:
-        results = [lindblad_plm(lop, basis_in, basis_out)
-                   for lop in lindblad_ops]
-        return np.sum(results, axis=0)
+def plm_lindbladian_part(lindblad_op, basis_in, basis_out):
+    """
+    Compute the Lindbladian part of a Pauli Lioville matrix for a single
+    Lindblad operator.
+
+    The resulting matrix is:
+
+    .. math::
+
+        \\mathcal{L}^\\text{(L)}_{ij} =
+        \\hat{P}^\\text{(o)}_i \\hat{L} \\hat{P}^\\text{(i)}_j \\hat{L} -
+        0.5 \\hat{P}^\\text{(o)}_i \\left\\{ \\hat{L}^\\dagger \\hat{L},
+        \\hat{P}^\\text{(i)}_j \\right\\}.
+
+    See [1]_ for more information.
+
+    Parameters
+    ----------
+    lindblad_op : array
+        Lindblad jump operator, in units :math:`\\hbar = 1`.
+    basis_in : quantumsim.bases.PauliBasis
+        Input basis for the resulting PLM.
+    basis_out : quantumsim.bases.PauliBasis
+        Output basis for the resulting PLM.
+
+    Returns
+    -------
+    array
+
+    References
+    ----------
+    .. [1] https://quantumsim.gitlab.io/
+    """
+    out = np.einsum("xab, bc, ycd, ad -> xy",
+                    basis_out.vectors, lindblad_op,
+                    basis_in.vectors, lindblad_op.conj(),
+                    optimize=True)
+    out -= 0.5*np.einsum("xab, cb, cd, yda -> xy",
+                         basis_out.vectors, lindblad_op.conj(),
+                         lindblad_op, basis_in.vectors,
+                         optimize=True)
+    out -= 0.5*np.einsum("xab, ybc, dc, da -> xy",
+                         basis_out.vectors, basis_in.vectors,
+                         lindblad_op.conj(), lindblad_op,
+                         optimize=True)
+    return out
+
+
+def plm_hamiltonian_part(hamiltonian, basis_in, basis_out):
+    """
+    Compute the Hamiltonian part of a Pauli Liouville matrix.
+
+    The resulting matrix is:
+
+    .. math::
+
+        \\mathcal{L}^\\text{(H)}_{ij} = -i \\text{tr} \\hat{P}_i \\left[
+        \\hat{H}, \\hat{P}_j\\right].
+
+    See [1]_ for more information.
+
+    Parameters
+    ----------
+    hamiltonian : array
+        Hamiltonian in Lindblad equation, in units :math:`\\hbar = 1`.
+    basis_in : quantumsim.bases.PauliBasis
+        Input basis for the resulting PLM.
+    basis_out : quantumsim.bases.PauliBasis
+        Output basis for the resulting PLM.
+
+    Returns
+    -------
+    array
+
+    References
+    ----------
+    .. [1] https://quantumsim.gitlab.io/
+    """
+    out = np.einsum("xab, yca, bc -> xy",
+                    basis_out.vectors, basis_in.vectors, hamiltonian,
+                    optimize=True)
+    out -= np.einsum("xab, ybc, ca -> xy",
+                     basis_out.vectors, basis_in.vectors, hamiltonian,
+                     optimize=True)
+    return -1j * out

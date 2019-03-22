@@ -192,4 +192,4 @@ epub_exclude_files = ['search.html']
 autosummary_generate = True
 
 autoclass_content = "both"
-autodoc_default_flags = ['show-inheritance']
+autodoc_default_options = {'show-inheritance': True}
