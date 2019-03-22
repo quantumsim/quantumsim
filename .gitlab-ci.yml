@@ -77,6 +77,5 @@ trigger website rebuild:
   - master@quantumsim/quantumsim
   - /\Av\d+\.\d+\.\d+\z/
   script:
-  - curl --request post --form token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}
-    --form ref=master
+  - curl -X POST -F "token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}" -F ref=master
     ${QUANTUMSIM_GITLAB_URL}/api/v4/projects/${QUANTUMSIM_WEBSITE_PROJECTID}/trigger/pipeline
