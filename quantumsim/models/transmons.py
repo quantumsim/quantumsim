@@ -147,16 +147,27 @@ def cnot():
 
 
 @lru_cache(maxsize=64)
-def amp_phase_damping(duration, t1, t2):
+def amp_phase_damping(duration, t1, t2, anharmonicity=0.):
     t_phi = 1./(1./t2 - 0.5/t1)
-    op_t1 = np.sqrt(duration / t1) * np.array([
+    op_t1 = t1**-0.5 * np.array([
         [0, 1, 0],
         [0, 0, np.sqrt(2)],
         [0, 0, 0]
     ])
-    op_t2 = np.sqrt(2 * duration / t_phi) * np.array([
+    op_t2 = (2. / t_phi)**0.5 * np.array([
         [0, 0, 0],
         [0, 1, 0],
         [0, 0, 2]
     ])
-    return Operation.from_lindblad_form([op_t1, op_t2], bases.general(3))
+    if not np.allclose(anharmonicity, 0.):
+        ham = np.array([
+            [0., 0., 0.],
+            [0., 0., 0.],
+            [0., 0., anharmonicity],
+        ])
+    else:
+        ham = None
+    return Operation.from_lindblad_form(
+        duration, bases.general(3),
+        hamiltonian=ham,
+        lindblad_ops=[op_t1, op_t2])
