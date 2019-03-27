@@ -384,7 +384,7 @@ class StateCuda(StateBase):
             pt = sum_along_axis(diag, stride, dim, offset)
             res.append(pt)
 
-        out = [np.asscalar(p.get()) for p in res]
+        out = [p.get().item() for p in res]
         if len(out) == self.dim_hilbert:
             return out
         else:
