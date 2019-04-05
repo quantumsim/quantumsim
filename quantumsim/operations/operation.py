@@ -172,6 +172,61 @@ class Operation(metaclass=abc.ABCMeta):
         quantumsim.operations.operation._Chain
             Resulting operation
         """
+        if not (isinstance(operations[0], _IndexedOperation) or
+                isinstance(operations[0], Operation)):
+            if hasattr(operations[0], '__iter__'):
+                operations = operations[0]
+            else:
+                raise ValueError(
+                    "Wrong type of operation number 0: {}"
+                    .format(type(operations[0])))
+
+        op0 = operations[0]
+        if isinstance(op0, Operation):
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Provide index for operation number 0 (see "
+                        "`Operation.at()` method).")
+                if not isinstance(op, Operation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.dim_hilbert != op.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.dim_hilbert, i, op.dim_hilbert))
+                if op0.num_qubits != op.num_qubits:
+                    raise ValueError(
+                        "Number of qubits in operation 0 ({}) does not match "
+                        "with a number of qubits in operation {} ({}). "
+                        "Provide indices explicitly (see `Operation.at()` "
+                        "method).".format(op0.num_qubits, i, op.num_qubits))
+        else:
+            # op0 is certainly _IndexedOperation, we checked
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, Operation):
+                    raise ValueError(
+                        "Provide index for operation number {} (see "
+                        "`Operation.at()` method).".format(i))
+                if not isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.operation.dim_hilbert != op.operation.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.operation.dim_hilbert, i,
+                                op.operation.dim_hilbert))
+
+        if isinstance(operations[0], Operation):
+            indices = tuple(range(operations[0].num_qubits))
+            operations = [op.at(*indices) for op in operations]
+
         return _Chain(operations)
 
     def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
@@ -203,7 +258,7 @@ class Operation(metaclass=abc.ABCMeta):
         if isinstance(self, _Chain):
             op = self
         else:
-            op = _Chain([self])
+            op = Operation.from_sequence(self)
         compiler_cls = compiler_cls or self._default_compiler_cls
         compiler = compiler_cls(op, optimize=True)
         return compiler.compile(bases_in, bases_out)
@@ -445,54 +500,6 @@ class _Chain(Operation):
     """
 
     def __init__(self, operations):
-        op0 = operations[0]
-        if isinstance(op0, Operation):
-            for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, _IndexedOperation):
-                    raise ValueError(
-                        "Provide index for operation number 0 (see "
-                        "`Operation.at()` method).")
-                if not isinstance(op, Operation):
-                    raise ValueError(
-                        "Wrong type of operation number {}: {}"
-                        .format(i, type(op)))
-                if op0.dim_hilbert != op.dim_hilbert:
-                    raise ValueError(
-                        "Hilbert dimensionality of operation number 0 ({}) "
-                        "does not match with Hilbert dimensionality of "
-                        "operation number {} ({})"
-                        .format(op0.dim_hilbert, i, op.dim_hilbert))
-                if op0.num_qubits != op.num_qubits:
-                    raise ValueError(
-                        "Number of qubits in operation 0 ({}) does not match "
-                        "with a number of qubits in operation {} ({}). "
-                        "Provide indices explicitly (see `Operation.at()` "
-                        "method).".format(op0.num_qubits, i, op.num_qubits))
-        elif isinstance(op0, _IndexedOperation):
-            for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, Operation):
-                    raise ValueError(
-                        "Provide index for operation number {} (see "
-                        "`Operation.at()` method).".format(i))
-                if not isinstance(op, _IndexedOperation):
-                    raise ValueError(
-                        "Wrong type of operation number {}: {}"
-                        .format(i, type(op)))
-                if op0.operation.dim_hilbert != op.operation.dim_hilbert:
-                    raise ValueError(
-                        "Hilbert dimensionality of operation number 0 ({}) "
-                        "does not match with Hilbert dimensionality of "
-                        "operation number {} ({})"
-                        .format(op0.operation.dim_hilbert, i,
-                                op.operation.dim_hilbert))
-        else:
-            raise ValueError(
-                "Wrong type of operation number 0: {}".format(type(op0)))
-
-        if isinstance(operations[0], Operation):
-            indices = tuple(range(operations[0].num_qubits))
-            operations = [op.at(*indices) for op in operations]
-
         self._dim_hilbert = operations[0].operation.dim_hilbert
         all_indices = np.unique(
             list(chain(*(op.indices for op in operations))))
