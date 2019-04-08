@@ -18,13 +18,12 @@ import warnings
 # Tolerances for various routines below.
 
 # Tolerance for equality when checking > or <'
-ABS_TOL=1e-8  # Same as numpy default
-REL_TOL=1e-5  # Same as numpy default
+ABS_TOL = 1e-8  # Same as numpy default
+REL_TOL = 1e-5  # Same as numpy default
 # Tolerance for scipy optimize routines
-OPT_TOL=1e-6
+OPT_TOL = 1e-6
 # Tolerance on T1, T2 (i.e. the min T1, T2 allowed)
-TIME_TOL=1e-10
-
+TIME_TOL = 1e-10
 
 
 def _format_angle(angle):
@@ -37,6 +36,7 @@ def _format_angle(angle):
         return r"%s\pi/%d" % ("" if divisor > 0 else "-", abs(divisor))
     else:
         return r"%g" % angle
+
 
 class Qubit:
 
