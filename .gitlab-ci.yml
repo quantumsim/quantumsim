@@ -4,7 +4,6 @@ stages:
 - build
 - test
 - deploy
-- finalize
 
 build html documentation:
   stage: build
@@ -61,6 +60,9 @@ upload documentation to docs repo:
   - git add .
   - git commit --allow-empty -m "deploy docs for ${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
   - git push --force docs_deploy_origin ${CI_COMMIT_REF_NAME}
+  # Trigger quantumsim.gitlab.io rebuild
+  - curl -X POST -F "token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}" -F ref=master
+    ${QUANTUMSIM_GITLAB_URL}/api/v4/projects/${QUANTUMSIM_WEBSITE_PROJECTID}/trigger/pipeline
 
 # We will upload a new release to PyPI if tag vX.X.X is pushed
 upload new release to PyPI:
@@ -71,12 +73,3 @@ upload new release to PyPI:
   - branches
   script:
   - twine upload dist/*
-
-trigger website rebuild:
-  stage: finalize
-  only:
-  - master@quantumsim/quantumsim
-  - /\Av\d+\.\d+\.\d+\z/
-  script:
-  - curl -X POST -F "token=${QUANTUMSIM_WEBSITE_TRIGGER_TOKEN}" -F ref=master
-    ${QUANTUMSIM_GITLAB_URL}/api/v4/projects/${QUANTUMSIM_WEBSITE_PROJECTID}/trigger/pipeline
