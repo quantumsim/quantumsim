@@ -4,7 +4,8 @@ import scipy.linalg.matfuncs
 from collections import namedtuple
 from itertools import chain
 
-from ..algebra.algebra import kraus_to_ptm, ptm_convert_basis, lindblad_plm
+from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
+                               plm_lindbladian_part, plm_hamiltonian_part)
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -111,27 +112,46 @@ class Operation(metaclass=abc.ABCMeta):
         return _KrausOperation(kraus, dim_hilbert)
 
     @staticmethod
-    def from_lindblad_form(lindblad_ops, basis):
+    def from_lindblad_form(time, basis, *, hamiltonian=None, lindblad_ops=None):
         """Construct and operation from a list of Lindblad operators.
 
         TODO: elaborate on Lindblad operators format
 
         Parameters
         ----------
-        lindblad_ops: array or list of arrays
-            2D Numpy array or list of them.
+        time : float
+            Duration of an evolution, driven by Lindblad equation,
+            in arbitrary units.
         basis: quantumsim.bases.PauliBasis
             A basis for the resulting operation.
+        hamiltonian: array or None
+            Hamiltonian for a Lindblad equation. In units :math:`\\hbar = 1`.
+            If `None`, assumed to be zero.
+        lindblad_ops: array or list of arrays
+            Lindblad jump operators. In units :math:`\\hbar = 1`.
+            If `None`, assumed to be zero.
 
         Returns
         -------
         quantumsim.operations.operation._PTMOperation
         """
-        if basis is None:
-            raise ValueError('`basis` must not be None')
-        plm = lindblad_plm(lindblad_ops, basis, basis)
-        ptm = scipy.linalg.matfuncs.expm(plm)
-        return _PTMOperation(ptm, (basis,))
+        summands = []
+        if hamiltonian is not None:
+            summands.append(plm_hamiltonian_part(hamiltonian, basis, basis))
+        if lindblad_ops is not None:
+            if isinstance(lindblad_ops, np.ndarray) and \
+                    len(lindblad_ops.shape) == 2:
+                lindblad_ops = (lindblad_ops,)
+            for op in lindblad_ops:
+                summands.append(plm_lindbladian_part(op, basis, basis))
+        if len(summands) == 0:
+            raise ValueError("Either `hamiltonian` or `lindblad_ops` must be "
+                             "provided.")
+        ptm = scipy.linalg.matfuncs.expm(np.sum(summands, axis=0) * time)
+        if not np.allclose(ptm.imag, 0):
+            raise ValueError('Resulting PTM is not real-valued, check the '
+                             'sanity of `hamiltonian` and `lindblad_ops`.')
+        return _PTMOperation(ptm.real, (basis,))
 
     @staticmethod
     def from_sequence(*operations):
@@ -152,6 +172,61 @@ class Operation(metaclass=abc.ABCMeta):
         quantumsim.operations.operation._Chain
             Resulting operation
         """
+        if not (isinstance(operations[0], _IndexedOperation) or
+                isinstance(operations[0], Operation)):
+            if hasattr(operations[0], '__iter__'):
+                operations = operations[0]
+            else:
+                raise ValueError(
+                    "Wrong type of operation number 0: {}"
+                    .format(type(operations[0])))
+
+        op0 = operations[0]
+        if isinstance(op0, Operation):
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Provide index for operation number 0 (see "
+                        "`Operation.at()` method).")
+                if not isinstance(op, Operation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.dim_hilbert != op.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.dim_hilbert, i, op.dim_hilbert))
+                if op0.num_qubits != op.num_qubits:
+                    raise ValueError(
+                        "Number of qubits in operation 0 ({}) does not match "
+                        "with a number of qubits in operation {} ({}). "
+                        "Provide indices explicitly (see `Operation.at()` "
+                        "method).".format(op0.num_qubits, i, op.num_qubits))
+        else:
+            # op0 is certainly _IndexedOperation, we checked
+            for i, op in enumerate(operations[1:], 1):
+                if isinstance(op, Operation):
+                    raise ValueError(
+                        "Provide index for operation number {} (see "
+                        "`Operation.at()` method).".format(i))
+                if not isinstance(op, _IndexedOperation):
+                    raise ValueError(
+                        "Wrong type of operation number {}: {}"
+                        .format(i, type(op)))
+                if op0.operation.dim_hilbert != op.operation.dim_hilbert:
+                    raise ValueError(
+                        "Hilbert dimensionality of operation number 0 ({}) "
+                        "does not match with Hilbert dimensionality of "
+                        "operation number {} ({})"
+                        .format(op0.operation.dim_hilbert, i,
+                                op.operation.dim_hilbert))
+
+        if isinstance(operations[0], Operation):
+            indices = tuple(range(operations[0].num_qubits))
+            operations = [op.at(*indices) for op in operations]
+
         return _Chain(operations)
 
     def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
@@ -183,7 +258,7 @@ class Operation(metaclass=abc.ABCMeta):
         if isinstance(self, _Chain):
             op = self
         else:
-            op = _Chain([self])
+            op = Operation.from_sequence(self)
         compiler_cls = compiler_cls or self._default_compiler_cls
         compiler = compiler_cls(op, optimize=True)
         return compiler.compile(bases_in, bases_out)
@@ -242,6 +317,7 @@ class _PTMOperation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
+
     def __init__(self, ptm, bases_in, bases_out=None):
         if bases_in is None:
             raise ValueError('`bases_in` must not be None')
@@ -318,7 +394,7 @@ class _PTMOperation(Operation):
         for q, b in zip(qubit_indices, self.bases_in):
             if state.bases[q] != b:
                 op = self.set_bases(
-                    bases_in=[state.bases[q] for q in qubit_indices])
+                    bases_in=tuple([state.bases[q] for q in qubit_indices]))
                 break
 
         state.apply_ptm(op.ptm, *qubit_indices)
@@ -343,6 +419,7 @@ class _KrausOperation(Operation):
     Transformation
         Resulting operation
     """
+
     def __init__(self, kraus, dim_hilbert=2):
         self._dim_hilbert = dim_hilbert
 
@@ -421,57 +498,11 @@ class _Chain(Operation):
     """
     A chain of operations, that are applied sequentially.
     """
+
     def __init__(self, operations):
-        op0 = operations[0]
-        if isinstance(op0, Operation):
-            for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, _IndexedOperation):
-                    raise ValueError(
-                        "Provide index for operation number 0 (see "
-                        "`Operation.at()` method).")
-                if not isinstance(op, Operation):
-                    raise ValueError(
-                        "Wrong type of operation number {}: {}"
-                        .format(i, type(op)))
-                if op0.dim_hilbert != op.dim_hilbert:
-                    raise ValueError(
-                        "Hilbert dimensionality of operation number 0 ({}) "
-                        "does not match with Hilbert dimensionality of "
-                        "operation number {} ({})"
-                        .format(op0.dim_hilbert, i, op.dim_hilbert))
-                if op0.num_qubits != op.num_qubits:
-                    raise ValueError(
-                        "Number of qubits in operation 0 ({}) does not match "
-                        "with a number of qubits in operation {} ({}). "
-                        "Provide indices explicitly (see `Operation.at()` "
-                        "method).".format(op0.num_qubits, i, op.num_qubits))
-        elif isinstance(op0, _IndexedOperation):
-            for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, Operation):
-                    raise ValueError(
-                        "Provide index for operation number {} (see "
-                        "`Operation.at()` method).".format(i))
-                if not isinstance(op, _IndexedOperation):
-                    raise ValueError(
-                        "Wrong type of operation number {}: {}"
-                        .format(i, type(op)))
-                if op0.operation.dim_hilbert != op.operation.dim_hilbert:
-                    raise ValueError(
-                        "Hilbert dimensionality of operation number 0 ({}) "
-                        "does not match with Hilbert dimensionality of "
-                        "operation number {} ({})"
-                        .format(op0.operation.dim_hilbert, i,
-                                op.operation.dim_hilbert))
-        else:
-            raise ValueError(
-                "Wrong type of operation number 0: {}".format(type(op0)))
-
-        if isinstance(operations[0], Operation):
-            indices = tuple(range(operations[0].num_qubits))
-            operations = [op.at(*indices) for op in operations]
-
         self._dim_hilbert = operations[0].operation.dim_hilbert
-        all_indices = np.unique(list(chain(*(op.indices for op in operations))))
+        all_indices = np.unique(
+            list(chain(*(op.indices for op in operations))))
         if all_indices[0] != 0 or all_indices[-1] != len(all_indices) - 1:
             raise ValueError('Indices of operations must form an ordered set '
                              'from 0 to N-1')

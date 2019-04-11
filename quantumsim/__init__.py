@@ -1,6 +1,6 @@
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from ._version import __version__
-from . import states
+from . import states, bases
 from .operations.operation import Operation
 
 State = states.Default
