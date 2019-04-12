@@ -15,6 +15,16 @@ import functools
 import copy
 import warnings
 
+# Tolerances for various routines below.
+
+# Tolerance for equality when checking > or <'
+ABS_TOL = 1e-8  # Same as numpy default
+REL_TOL = 1e-5  # Same as numpy default
+# Tolerance for scipy optimize routines
+OPT_TOL = 1e-6
+# Tolerance on T1, T2 (i.e. the min T1, T2 allowed)
+TIME_TOL = 1e-10
+
 
 class Qubit:
 
@@ -36,7 +46,11 @@ class Qubit:
         return self.name
 
     def make_idling_gate(self, start_time, end_time):
-        assert start_time < end_time
+        if end_time - start_time < -ABS_TOL:
+            raise ValueError('Start time must be less than end time.')
+        if np.abs(end_time - start_time) < ABS_TOL:
+            return None
+
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
@@ -103,9 +117,11 @@ class VariableDecoherenceQubit(Qubit):
 
 class Gate:
 
-    def __init__(self, time, conditional_bit=None):
+    def __init__(self, time, conditional_bit=None, time_start=None, time_end=None):
         """A Gate acting at time `time`. If conditional_bit is set, only act
         when that bit is a classical 1. """
+        if time_start and time_end and time_start >= time_end:
+            raise ValueError('Start time must be less than end time.')
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -114,6 +130,12 @@ class Gate:
         self.conditional_bit = conditional_bit
         if self.conditional_bit:
             self.involved_qubits.append(self.conditional_bit)
+        if time_start is None:
+            time_start = time
+        if time_end is None:
+            time_end = time
+        self.time_start = time_start
+        self.time_end = time_end
 
     def plot_gate(self, ax, coords):
         x = self.time
@@ -415,6 +437,37 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
                 x, y + 0.3), textcoords='data', ha='center')
 
 
+class FluxPulse(Gate):
+
+    def __init__(self, bit, time, int_time=None, **kwargs):
+        """A CPhase gate acting at time `time` between bit0 and bit1 (it is
+        symmetric).
+
+        Other arguments: conditional_bit
+        """
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
+        else:
+            super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.method_name = "flux_pulse"
+        self.method_params = {}
+        self.label = r"$%g\,\mathrm{ns}$" % int_time
+
+    def plot_gate(self, ax, coords):
+        x = self.time
+        y = coords[self.involved_qubits[0]]
+
+        ax.scatter((x,), (y,), color='k', marker='x')
+
+        ax.annotate(
+            self.label, (x, y), xytext=(
+                x, y + 0.3), textcoords='data', ha='center')
+
+
 class DepolarizingNoise(SinglePTMGate, IdlingGate):
 
     def __init__(self, bit, time, duration, t1, **kwargs):
@@ -510,13 +563,19 @@ class TwoPTMGate(Gate):
 
 class CPhase(Gate):
 
-    def __init__(self, bit0, bit1, time, **kwargs):
+    def __init__(self, bit0, bit1, time, int_time=None, **kwargs):
         """A CPhase gate acting at time `time` between bit0 and bit1 (it is
         symmetric).
 
         Other arguments: conditional_bit
         """
-        super().__init__(time, **kwargs)
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
+        else:
+            super().__init__(time, **kwargs)
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
         self.method_name = "cphase"
@@ -533,7 +592,40 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+class LSwap(Gate):
 
+    def __init__(self, bit0, bit1, time, int_time=None, **kwargs):
+        """A LSwap gate acting at time `time` between bit0 and bit1 (it is
+        symmetric).
+
+        Other arguments: conditional_bit
+        """
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
+        else:
+            super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit0)
+        self.involved_qubits.append(bit1)
+        self.method_name = "lswap"
+        self.method_params = {}
+
+    def plot_gate(self, ax, coords):
+        bit0 = self.involved_qubits[-2]
+        bit1 = self.involved_qubits[-1]
+        ax.scatter((self.time,),
+                   (coords[bit1],), color='k')
+        ax.scatter((self.time,),
+                   (coords[bit0],), color='k', marker='$\oslash$', s=200)
+
+        xdata = (self.time, self.time)
+        ydata = (coords[bit0], coords[bit1])
+        line = mp.lines.Line2D(xdata, ydata, color='k')
+        ax.add_line(line)
+        
+        
 class CNOT(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
@@ -1199,9 +1291,9 @@ class Circuit:
             return
 
         if tmin is None:
-            tmin = all_gates[0].time
+            tmin = all_gates[0].time_start
         if tmax is None:
-            tmax = all_gates[-1].time
+            tmax = all_gates[-1].time_end
 
         if not isinstance(tmin, dict):
             tmin = {qb.name: tmin for qb in self.qubits}
@@ -1216,7 +1308,7 @@ class Circuit:
         for b in qubits_to_do:
             gts = [
                 gate for gate in all_gates if gate.involves_qubit(
-                    str(b)) and tmin[b.name] <= gate.time <= tmax[b.name]]
+                    str(b)) and tmin[b.name] <= gate.time_start <= tmax[b.name]]
 
             if not gts:
                 gate = b.make_idling_gate(tmin[b.name], tmax[b.name])
@@ -1224,19 +1316,19 @@ class Circuit:
                     gate.autogenerated = True
                     self.add_gate(gate)
             else:
-                if (gts[0].time - tmin[b.name] > 1e-6 and not (
+                if (gts[0].time_start - tmin[b.name] > 1e-6 and not (
                         hasattr(gts[0], 'autogenerated') and
                         gts[0].autogenerated
                 )):
-                    gate = b.make_idling_gate(tmin[b.name], gts[0].time)
+                    gate = b.make_idling_gate(tmin[b.name], gts[0].time_start)
                     if gate is not None:
                         gate.autogenerated = True
                         self.add_gate(gate)
-                if (tmax[b.name] - gts[-1].time > 1e-6 and not (
-                            hasattr(gts[-1], 'autogenerated') and
-                            gts[-1].autogenerated
+                if (tmax[b.name] - gts[-1].time_end > 1e-6 and not (
+                    hasattr(gts[-1], 'autogenerated') and
+                    gts[-1].autogenerated
                 )):
-                    gate = b.make_idling_gate(gts[-1].time, tmax[b.name])
+                    gate = b.make_idling_gate(gts[-1].time_end, tmax[b.name])
                     if gate is not None:
                         gate.autogenerated = True
                         self.add_gate(gate)
@@ -1249,7 +1341,7 @@ class Circuit:
                         # calls of this function, skip
                         pass
                     else:
-                        gate = b.make_idling_gate(g1.time, g2.time)
+                        gate = b.make_idling_gate(g1.time_end, g2.time_start)
                         if gate is not None:
                             gate.autogenerated = True
                             self.add_gate(gate)

@@ -5,6 +5,8 @@
 
 import numpy as np
 import collections
+from itertools import chain
+from functools import reduce
 
 # The transformation matrix between the two bases. Its essentially a Hadamard,
 # so its its own inverse.
@@ -565,10 +567,15 @@ class PTM:
 
 
 class ExplicitBasisPTM(PTM):
-    def __init__(self, ptm, basis):
-        self._check_basis_ptm_consistency(ptm, basis)
+    def __init__(self, ptm, basis_in, basis_out=None):
+        if basis_out is None:
+            basis_out = basis_in
+
+        self._check_basis_ptm_consistency(ptm, basis_in)
+        self._check_basis_ptm_consistency(ptm, basis_out)
         self.ptm = ptm
-        self.basis = basis
+        self._basis_in = basis_in
+        self._basis_out = basis_out
 
     def get_matrix(self, basis_in, basis_out=None):
         if basis_out is None:
@@ -576,9 +583,9 @@ class ExplicitBasisPTM(PTM):
 
         result = np.einsum("xab, yba, yz, zcd, wdc -> xw",
                            basis_out.basisvectors,
-                           self.basis.basisvectors,
+                           self._basis_out.basisvectors,
                            self.ptm,
-                           self.basis.basisvectors,
+                           self._basis_in.basisvectors,
                            basis_in.basisvectors, optimize=True).real
 
         return result
@@ -784,11 +791,19 @@ class AdjunctionPLM(PTM):
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        result = np.einsum("xab, bc, yca -> xy", st_out, self.op, st_in,
-                           optimize=True)
+        #result = np.einsum("xab, bc, yca -> xy", st_out, self.op, st_in,
+        #                   optimize=True)
+        
+        out = np.einsum("xab, yca, bc -> xy",
+                    st_out, st_in, self.op,
+                    optimize=True)
+        out -= np.einsum("xab, ybc, ca -> xy",
+                         st_out, st_in, self.op,
+                         optimize=True)
+        return -1j * out
 
         # taking the real part implements the two parts of the commutator
-        return result.imag
+        #return result.imag
 
 
 class LindbladPLM(PTM):
@@ -815,6 +830,8 @@ class LindbladPLM(PTM):
 
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
+        
+        '''
 
         result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
                            self.op.conj(), optimize=True)
@@ -826,6 +843,19 @@ class LindbladPLM(PTM):
                                   self.op.conj(), self.op, optimize=True)
 
         return result.real
+        '''
+        out = np.einsum("xab, bc, ycd, ad -> xy",
+                        st_out, self.op,
+                        st_in, self.op.conj(),
+                        optimize=True)
+        out -= 0.5*np.einsum("xab, cb, cd, yda -> xy",
+                         st_out, self.op.conj(),
+                         self.op, st_in,
+                         optimize=True)
+        out -= 0.5*np.einsum("xab, ybc, dc, da -> xy",
+                         st_out, st_in,
+                         self.op.conj(), self.op, optimize=True)
+        return out
 
 
 class RotateXPTM(ConjunctionPTM):
@@ -925,12 +955,12 @@ class TwoPTMProduct(TwoPTM):
                     [complete_basis[bits[0]], complete_basis[bits[1]]])
                 if tuple(bits) == (0, 1):
                     result = np.einsum(
-                            pmat, [0, 1, 10, 11],
-                            result, [10, 11, 2, 3], optimize=True)
+                        pmat, [0, 1, 10, 11],
+                        result, [10, 11, 2, 3], optimize=True)
                 elif tuple(bits) == (1, 0):
                     result = np.einsum(
-                            pmat, [1, 0, 11, 10],
-                            result, [10, 11, 2, 3], optimize=True)
+                        pmat, [1, 0, 11, 10],
+                        result, [10, 11, 2, 3], optimize=True)
                 else:
                     raise ValueError()
             else:
@@ -1008,8 +1038,61 @@ class CPhaseRotationPTM(TwoKrausPTM):
 
 
 class TwoPTMExplicit(TwoPTM):
-    def __init__(self, ptm, basis0, basis1):
-        pass
+    def __init__(self, ptm, bases_in, bases_out=None):
+        assert len(bases_in) == 2
+        if bases_out is None:
+            bases_out = bases_in
+        else:
+            assert len(bases_out) == 2
+
+        self._dim_hilbert = bases_in[0].dim_hilbert
+        self._bases_in = bases_in
+        self._bases_out = bases_out
+
+        for b in chain(bases_in, bases_out):
+            if b.dim_hilbert != self._dim_hilbert:
+                raise ValueError(
+                    'All bases must have the same Hilbert dimensionality.')
+        self._validate_bases(bases_out=bases_out)
+
+        assert ptm.shape == tuple(
+            b.dim_pauli for b in chain(bases_out, bases_in))
+
+        self._ptm = ptm
+
+    @staticmethod
+    def _combine_bases_vectors(bases):
+        return reduce(np.kron, [b.basisvectors for b in bases])
+
+    def _validate_bases(self, **kwargs):
+        for name, bases in kwargs.items():
+            if not isinstance(bases, tuple):
+                raise ValueError(
+                    "`{n}` should be a tuple, got {t}."
+                    .format(n=name, t=type(bases)))
+            for b in bases:
+                if self._dim_hilbert != b.dim_hilbert:
+                    raise ValueError(
+                        "Expected bases with Hilbert dimensionality {}, "
+                        "but {} has elements with Hilbert dimensionality {}."
+                        .format(self._dim_hilbert, name, b.dim_hilbert))
+
+    def get_matrix(self, bases_in, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+
+        if (bases_in == self._bases_in and bases_out == self._bases_out):
+            return self._ptm
+
+        shape = tuple(b.dim_pauli for b in chain(bases_out, bases_in))
+        return np.einsum("xij, yji, yz, zkl, wlk -> xw",
+                         self._combine_bases_vectors(bases_out),
+                         self._combine_bases_vectors(self._bases_out),
+                         self._ptm.reshape(
+                             self._dim_hilbert**4, self._dim_hilbert**4),
+                         self._combine_bases_vectors(self._bases_in),
+                         self._combine_bases_vectors(bases_in),
+                         optimize=True).real.reshape(shape)
 
 
 class CompilerBlock:

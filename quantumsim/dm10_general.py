@@ -147,12 +147,7 @@ class DensityGeneral:
     def to_array(self):
         """Return the entries of the density matrix as a dense numpy ndarray.
         """
-        dimensions = [2]*self.no_qubits
-
-        host_dm = dm_general_np.DensityGeneralNP(
-            dimensions, data=self.data.get()).to_array()
-
-        return host_dm
+        return self.data.get()
 
     def get_diag(self, target_gpu_array=None, get_data=True, flatten=True):
         """Obtain the diagonal of the density matrix.
