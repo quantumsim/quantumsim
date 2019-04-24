@@ -176,11 +176,11 @@ class Gate:
 
 class SinglePTMGate(Gate):
 
-    def __init__(self, bit, time, ptm, **kwargs):
+    def __init__(self, bit, time, ptm, time_start=None, time_end=None, **kwargs):
         """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit
         `bit` at point `time`.
         """
-        super().__init__(time, **kwargs)
+        super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
         self.involved_qubits.append(bit)
 
         self.label = "G"
@@ -199,6 +199,7 @@ class RotateY(SinglePTMGate):
             angle,
             dephasing_angle=None,
             dephasing_axis=None,
+            int_time=None,
             **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
@@ -216,7 +217,15 @@ class RotateY(SinglePTMGate):
         self.dephasing_axis = dephasing_axis
         self.dephasing_angle = dephasing_angle
 
-        super().__init__(bit, time, p, **kwargs)
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(bit, time, p, time_start=time_start,
+                             time_end=time_end, **kwargs)
+        else:
+            super().__init__(bit, time, p, **kwargs)
+
         self.set_labels(angle)
 
     def set_labels(self, angle):
