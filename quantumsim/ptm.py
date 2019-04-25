@@ -576,6 +576,8 @@ class ExplicitBasisPTM(PTM):
         self.ptm = ptm
         self._basis_in = basis_in
         self._basis_out = basis_out
+        assert basis_in.dim_hilbert == basis_out.dim_hilbert
+        self.dim_hilbert = basis_in.dim_hilbert
 
     def get_matrix(self, basis_in, basis_out=None):
         if basis_out is None:
