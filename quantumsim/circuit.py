@@ -47,7 +47,9 @@ class Qubit:
 
     def make_idling_gate(self, start_time, end_time):
         if end_time - start_time < -ABS_TOL:
-            raise ValueError('Start time must be less than end time.')
+            raise ValueError('Start time must be less than end time. Qubit '
+                             'name: {}, start_time={}, end_time={}.'
+                             .format(self.name, start_time, end_time))
         if np.abs(end_time - start_time) < ABS_TOL:
             return None
 
