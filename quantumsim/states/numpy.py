@@ -116,7 +116,5 @@ class StateNumpy(StateBase):
                 "will fail. Have you projected DM on a state with zero weight?")
 
     def copy(self):
-        cp = self.__class__(self.dim_hilbert)
-        cp._data = self._data.copy()
-        return cp
+        return self.from_pv(self.to_pv().copy(), self.bases)
 
