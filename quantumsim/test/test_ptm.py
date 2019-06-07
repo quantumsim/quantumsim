@@ -538,41 +538,13 @@ class TestTwoPTM:
 
         assert mat_direct == approx(mat_indirect)
 
-def test_embed():
-    b3 = ptm.GeneralBasis(3)
-
-    angle = 1
-    p = ptm.RotateXPTM(angle)
-    # natural embedding
-    p3 = p.embed_hilbert(3)
-    assert p3.op.shape == (3, 3)
-
-    m3 = p3.get_matrix(b3)
-    assert m3.shape == (9, 9)
-
-    # custom embedding, rotate in 0-2 space
-    p3 = p.embed_hilbert(3, [0, 2])
-    assert p3.op.shape == (3, 3)
-
-    m3 = p3.get_matrix(b3)
-    assert m3.shape == (9, 9)
-
-    # check vs rotation by hand
-
-    x_02 = np.zeros((3, 3))
-    x_02[0, 2] = 1
-    x_02[2, 0] = 1
-    u_rot_02 = expm(-.5j * angle * x_02)
-
-    m3_check = ptm.ConjunctionPTM(u_rot_02).get_matrix(b3)
-
-    assert m3_check == approx(m3)
 
 def test_gellmann_pauli():
     pauli = ptm.PauliBasis_ixyz()
     gm = ptm.GellMannBasis(2)
 
     assert pauli.basisvectors == approx(gm.basisvectors)
+
 
 def test_gell_mann_normalized():
     for i in range(1, 5):

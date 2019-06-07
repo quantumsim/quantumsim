@@ -15,18 +15,51 @@ import functools
 import copy
 import warnings
 
+# Tolerances for various routines below.
+
+# Tolerance for equality when checking > or <'
+ABS_TOL=1e-8  # Same as numpy default
+REL_TOL=1e-5  # Same as numpy default
+# Tolerance for scipy optimize routines
+OPT_TOL=1e-6
+# Tolerance on T1, T2 (i.e. the min T1, T2 allowed)
+TIME_TOL=1e-10
+
+
+
+def _format_angle(angle):
+    multiple_of_pi = angle / np.pi
+    if np.allclose(multiple_of_pi, 1):
+        return r"\pi"
+    elif not np.allclose(angle, 0) and np.allclose(
+            np.round(1. / multiple_of_pi, 0), 1. / multiple_of_pi):
+        divisor = 1 / multiple_of_pi
+        return r"%s\pi/%d" % ("" if divisor > 0 else "-", abs(divisor))
+    else:
+        return r"%g" % angle
+
 
 class Qubit:
+    """A Qubit with a name and amplitude damping time t1 and phase damping
+    time t2.
+
+    Parameters
+    ----------
+    name : string
+        Qubit label.
+    t1 : float, optional
+        :math:`T_1` time, defined as measured in a free decay experiment.
+    t2 : float, optional
+        :math:`T_1` time, defined as measured in a Ramsey/Hahn echo experiment.
+
+    Raises
+    ------
+    AssertionError
+        If :math:`T_2 > 2 T_1` (by definition of :math:`T_2`, we require
+        :math:`T_2 \\le 2 T_1`).
+    """
 
     def __init__(self, name, t1=np.inf, t2=np.inf):
-        """A Qubit with a name and amplitude damping time t1 and phase damping
-        time t2,
-
-        t1 is defined as measured in a free decay experiment,
-        t2 is defined as measured in a ramsey/hahn echo experiment
-
-        Note especially that you must have t2 <= 2*t1
-        """
         self.name = name
         assert t2 <= 2 * t1
         self.t1 = max(t1, 1e-10)
@@ -36,7 +69,32 @@ class Qubit:
         return self.name
 
     def make_idling_gate(self, start_time, end_time):
-        assert start_time < end_time
+        """Generates a gate that decays this qubit for a period of time
+        from start_time to end_time. Currently T1 and T2 decay.
+
+        Parameters
+        ----------
+        start_time : float
+            Time when gate begins.
+        end_time : float
+            Time when gate ends.
+
+        Returns
+        -------
+        idling_gate : AmpPhDamp
+            Idling gate performing :math:`T_1` and :math:`T_2` decay for
+            required period of time.
+
+        Raises
+        ------
+        ValueError
+            If `end_time <= start_time`. We require strictly that gates are
+            given different times for ordering purposes.
+        """
+        if end_time - start_time < -ABS_TOL:
+            raise ValueError('Start time must be less than end time.')
+        if np.abs(end_time - start_time) < ABS_TOL:
+            return None
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
@@ -47,35 +105,79 @@ class Qubit:
 
 
 class ClassicalBit(Qubit):
-    # noinspection PyMissingConstructor
+    """A ClassicalBit is similar to a qubit, but has no T1 or T2
+    and cannot be put into a density matrix.
+
+    Parameters
+    ----------
+    name: str
+        A label for qubit.
+    """
     def __init__(self, name):
         self.name = name
 
     def make_idling_gate(self, start_time, end_time):
+        """Extends function of same name for qubit, replacing it with
+        returning nothing.
+
+        Parameters
+        ----------
+        start_time : float
+            Time when gate begins
+        end_time : float
+            Time when gate ends
+        """
         pass
 
 
 class VariableDecoherenceQubit(Qubit):
+    """A Qubit with a name and variable :math:`T_1` and :math:`T_2`.
 
+    :math:`T_1` is defined as measured in a free decay experiment,
+    :math:`T_2` is defined as measured in a ramsey/hahn echo experiment.
+
+    Note especially that you must have :math:`T_2 \\le 2 T_1`.
+
+    Parameters
+    ----------
+    base_t1 : float
+        :math:`T_1` when time is not inside any interval.
+    base_t2 : float
+        :math:`T_2` when time is not inside any interval.
+    t1s, t2s : list of tuples
+        A list of intervals `[(start_time, end_time, t1/t2), ...]`.
+    """
     def __init__(self, name, base_t1, base_t2, t1s, t2s):
-        """A Qubit with a name and variable t1 and t2.
-
-        t1s and t2s are  given as a list of intervals
-        [(start_time, end_time, t1/t2)]
-        base_t1 and base_t2 are used when time is not inside any of those
-        intervals.
-
-        t1 is defined as measured in a free decay experiment,
-        t2 is defined as measured in a ramsey/hahn echo experiment
-
-        Note especially that you must have t2 <= 2*t1
-        """
         self.t1s = t1s
         self.t2s = t2s
         super().__init__(name, base_t1, base_t2)
 
     def make_idling_gate(self, start_time, end_time):
-        assert start_time < end_time
+        """Generates a gate that decays this qubit for a period of time
+        from `start_time` to `end_time`. Currently :math:`T_1` and :math:`T_2`
+        decay.
+
+        Parameters
+        ----------
+        start_time : float
+            Time when gate begins
+        end_time : float
+            Time when gate ends
+
+        Returns
+        -------
+        idling_gate : AmpPhDamp
+            Idling gate performing :math:`T_1` and :math:`T_2` decay for
+            required period of time.
+
+        Raises
+        ------
+        ValueError
+            If `end_time <= start_time`. We require strictly
+            that gates are given different times for ordering purposes.
+        """
+        if start_time >= end_time:
+            raise ValueError('Start time must be less than end time.')
         time = (start_time + end_time) / 2
         duration = end_time - start_time
 
@@ -91,7 +193,7 @@ class VariableDecoherenceQubit(Qubit):
         for s, e, t2 in self.t2s:
             s = max(s, start_time)
             e = min(e, end_time)
-            if (s < e):
+            if s < e:
                 deph_rate += (e - s) / t2 / duration
 
         return AmpPhDamp(
@@ -103,10 +205,37 @@ class VariableDecoherenceQubit(Qubit):
 
 
 class Gate:
-    """A Gate acting at time `time`. If conditional_bit is set, only act
-    when that bit is a classical 1. """
+    """Gates are the quantumsim primitives that act on qubits.
+    A gate's primary purpose is to contain a ptm or two_ptm, and
+    information about where and when the gate acts.
 
-    def __init__(self, time, conditional_bit=None):
+    Parameters
+    ----------
+    time : float
+        Time when the gate occurs. Used for ordering the gate. Also, most gates
+        act as infinitesimal (i.e. the gate acts at a single point in time but
+        is sandwiched between resting gates on either side), in which case
+        time_start and time_end are not set and will be set equal to time.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+
+    Raises
+    ------
+    ValueError
+        If `time_start <= time_end`. We require strictly
+        that gates are given different times for ordering purposes.
+    """
+    def __init__(self,
+                 time,
+                 time_start=None,
+                 time_end=None,
+                 conditional_bit=None):
+        if time_start and time_end and time_start >= time_end:
+            raise ValueError('Start time must be less than end time.')
         self.is_measurement = False
         self.time = time
         self.label = r"$G"
@@ -115,8 +244,62 @@ class Gate:
         self.conditional_bit = conditional_bit
         if self.conditional_bit:
             self.involved_qubits.append(self.conditional_bit)
+        if time_start is None:
+            time_start = time
+        if time_end is None:
+            time_end = time
+        self.time_start = time_start
+        self.time_end = time_end
+
+    def set_time(self, time, time_start=None, time_end=None):
+        """Sets a new time for the gate safely (i.e. making sure
+        that it has the same duration as before).
+
+        Parameters
+        ----------
+        time : float
+            New time for gate.
+        time_start : float or None, optional
+            New start time for gate. If `None`, is adjusted to maintain
+            `dt_start = time - time_start`.
+        time_end : float or None, optional
+            New end time for gate. If None, is adjusted to maintain
+            `dt_end = time_end - time`.
+        """
+        if time_start is None:
+            time_start = self.time_start - self.time + time
+        if time_end is None:
+            time_end = self.time_end - self.time + time
+        self.time_start = time_start
+        self.time_end = time_end
+        self.time = time
+
+    def increment_time(self, dt):
+        """Increments the time on the gate safely (i.e. shifting
+        the `start_time` and `end_time`).
+
+        Parameters
+        ----------
+        dt : float
+            Amount to increment gate by.
+        """
+        self.time += dt
+        self.time_start += dt
+        self.time_end += dt
 
     def plot_gate(self, ax, coords):
+        """
+        Function to plot the gate on a matplotlib axis as part of
+        a circuit plot.
+
+        Parameters
+        ----------
+        ax : mpl.axes.Axes
+            The axes to plot the gate on.
+        coords : dict
+            Keys are qubit labels, values are the :math:`y`-values of the
+            qubits being plotted.
+        """
         x = self.time
         y = coords[self.involved_qubits[-1]]
         ax.text(
@@ -132,6 +315,18 @@ class Gate:
             ax.plot((x, x), (y, y2), ".--", color='k')
 
     def annotate_gate(self, ax, coords):
+        """
+        Function to add a gate annotation if one exists to a circuit
+        plot.
+
+        Parameters
+        ----------
+        ax : mpl.axes.Axes
+            The axes to plot the gate on.
+        coords : dict
+            Keys are qubit labels, values are the :math:`y`-values of the
+            qubits being plotted.
+        """
         if self.annotation:
             x = self.time
             y = coords[self.involved_qubits[0]]
@@ -139,9 +334,33 @@ class Gate:
                 0, -15), textcoords='offset points', ha='center')
 
     def involves_qubit(self, bit):
+        """
+        Checks if a given qubit is involved in this gate.
+
+        Parameters
+        ----------
+        bit : str
+            Qubit label.
+
+        Returns
+        -------
+        bool
+            Whether this qubit is involved in this gate.
+        """
         return bit in self.involved_qubits
 
     def apply_to(self, sdm):
+        """
+        Applies this gate to a density matrix.
+        To be specific, this adds the gate to the queue of
+        gates to be applied to the density matrix, which
+        then chooses to execute them as required.
+
+        Parameters
+        ----------
+        sdm : quantumsim.sparsedm.SparseDM
+            The density matrix to apply the gate to.
+        """
         if self.conditional_bit is not None:
             sdm.ensure_classical(self.conditional_bit)
             if sdm.classical[self.conditional_bit] == 1:
@@ -154,14 +373,31 @@ class Gate:
 
 
 class SinglePTMGate(Gate):
+    """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit
+    `bit` at point `time`.
+
+    Parameters
+    ----------
+    bit : str
+        Qubit label
+    time : float
+        Time when the gate occurs. Used for ordering the gate. Also, most gates
+        act as infinitesimal (i.e. the gate acts at a single point in time but
+        is sandwiched between resting gates on either side), in which case
+        time_start and time_end are not set and will be set equal to time.
+    ptm : np.ndarray
+        Pauli Transfer Matrix in :math:`0xy1` basis.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
 
     def __init__(self, bit, time, ptm, **kwargs):
-        """A gate applying a Pauli Transfer Matrix `ptm` to a single qubit
-        `bit` at point `time`.
-        """
         super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
-
         self.label = "G"
         self.ptm = ptm
 
@@ -169,73 +405,56 @@ class SinglePTMGate(Gate):
         sdm.apply_ptm(*self.involved_qubits, ptm=self.ptm)
 
 
-class RotateY(SinglePTMGate):
-
-    def __init__(
-            self,
-            bit,
-            time,
-            angle,
-            dephasing_angle=None,
-            dephasing_axis=None,
-            **kwargs):
-        """ A rotation around the y-axis on the bloch sphere by `angle`.
-        """
-        p = ptm.rotate_y_ptm(angle)
-        if dephasing_angle:
-            p = np.dot(
-                p,
-                ptm.dephasing_ptm(
-                    dephasing_angle,
-                    0,
-                    dephasing_angle))
-        if dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(0, dephasing_axis, 0))
-
-        self.dephasing_axis = dephasing_axis
-        self.dephasing_angle = dephasing_angle
-
-        super().__init__(bit, time, p, **kwargs)
-        self.set_labels(angle)
-
-    def set_labels(self, angle):
-        self.angle = angle
-        multiple_of_pi = angle / np.pi
-        if np.allclose(multiple_of_pi, 1):
-            self.label = r"$R_y(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(
-                np.round(1. / multiple_of_pi, 0), 1. / multiple_of_pi):
-            divisor = 1 / multiple_of_pi
-            self.label = r"$R_y(%s\pi/%d)$" % ("" if divisor >
-                                               0 else "-", abs(divisor))
-        else:
-            self.label = r"$R_y(%g)$" % angle
-
-    def adjust(self, angle):
-        p = ptm.rotate_y_ptm(angle)
-        if self.dephasing_angle:
-            p = np.dot(
-                p,
-                ptm.dephasing_ptm(
-                    self.dephasing_angle,
-                    0,
-                    self.dephasing_angle))
-        if self.dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
-        self.ptm = p
-        self.set_labels(angle)
-
-
 class Hadamard(SinglePTMGate):
+    """A Hadamard gate on qubit `bit` acting at a point in time `time`
+
+    Parameters
+    ----------
+    bit : str
+        Qubit label
+    time : float
+        Time when the gate occurs. Used for ordering the gate. Also, most gates
+        act as infinitesimal (i.e. the gate acts at a single point in time but
+        is sandwiched between resting gates on either side), in which case
+        time_start and time_end are not set and will be set equal to time.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
 
     def __init__(self, bit, time, **kwargs):
-        """A Hadamard gate on qubit `bit` acting at a point in time `time`
-        """
         super().__init__(bit, time, ptm.hadamard_ptm(), **kwargs)
         self.label = r"$H$"
 
 
 class RotateX(SinglePTMGate):
+    """ A rotation around the x-axis on the bloch sphere by `angle`.
+
+    Parameters
+    ----------
+    bit: str
+        A name of the involved qubit
+    time: float
+        Time of a gate in circuit.
+    angle: float
+        The rotation angle.
+    dephasing_angle: float
+        Dephasing amplitude, that corresponds to shrinking the Bloch
+        sphere perpendicular to the rotation axis.
+    dephasing_axis: float
+        Dephasing axis, that corresponds to shrinking the Bloch
+        sphere along the rotation axis.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
+
 
     def __init__(
             self,
@@ -245,42 +464,80 @@ class RotateX(SinglePTMGate):
             dephasing_angle=None,
             dephasing_axis=None,
             **kwargs):
-        """ A rotation around the x-axis on the bloch sphere by `angle`.
-        """
+        super().__init__(bit, time, None, **kwargs)
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+        self.adjust(angle)
 
+    def set_labels(self, angle):
+        self.angle = angle
+        self.label = r"$R_x({})$".format(_format_angle(angle))
+
+    def adjust(self, angle):
         p = ptm.rotate_x_ptm(angle)
-        if dephasing_angle:
+        if self.dephasing_angle:
             p = np.dot(
                 p,
                 ptm.dephasing_ptm(
                     0,
-                    dephasing_angle,
-                    dephasing_angle))
-        if dephasing_axis:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing_axis, 0, 0))
-
-        self.dephasing_axis = dephasing_axis
-        self.dephasing_angle = dephasing_angle
-
-        super().__init__(bit, time, p, **kwargs)
-
+                    self.dephasing_angle,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(self.dephasing_axis, 0, 0))
+        self.ptm = p
         self.set_labels(angle)
 
-    def set_labels(self, angle):
 
+class RotateY(SinglePTMGate):
+    """ A rotation around the y-axis on the bloch sphere by `angle`.
+
+    Parameters
+    ----------
+    bit: str
+        A name of the involved qubit
+    time: float
+        Time of a gate in circuit.
+    angle: float
+        The rotation angle.
+    dephasing_angle: float
+        Dephasing amplitude, that corresponds to shrinking the Bloch
+        sphere perpendicular to the rotation axis.
+    dephasing_axis: float
+        Dephasing axis, that corresponds to shrinking the Bloch
+        sphere along the rotation axis.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
+    def __init__(
+            self,
+            bit,
+            time,
+            angle,
+            dephasing_angle=None,
+            dephasing_axis=None,
+            **kwargs):
+        super().__init__(bit, time, None, **kwargs)
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+        self.adjust(angle)
+
+    def set_labels(self, angle):
         self.angle = angle
-        multiple_of_pi = angle / np.pi
-        if np.allclose(multiple_of_pi, 1):
-            self.label = r"$R_x(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(
-                np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
-            divisor = 1 / multiple_of_pi
-            self.label = r"$R_x(\pi/%d)$" % divisor
-        else:
-            self.label = r"$R_x(%g)$" % angle
+        self.label = r"$R_y({})$".format(_format_angle(angle))
 
     def adjust(self, angle):
-        p = ptm.rotate_x_ptm(angle)
+        """Set new rotation angle to the gate.
+
+        Parameters
+        ----------
+        angle: float
+            The rotation angle.
+        """
+        p = ptm.rotate_y_ptm(angle)
         if self.dephasing_angle:
             p = np.dot(
                 p,
@@ -294,34 +551,120 @@ class RotateX(SinglePTMGate):
         self.set_labels(angle)
 
 
+class RotateXY(SinglePTMGate):
+    """ A rotation by :math:`\\theta` around the axis in xOy plane, specified
+    by the angle :math:`\\phi`. If :math:`\\phi = 0`, this corresponds to
+    :class:`RotateX`, and if :math:`\\phi = \\pi/2` -- to :class:`RotateY`.
+
+    In terms of Euler rotations, this rotation is expressed as:
+
+    .. math::
+
+       R_\\text{xy}(\\phi, \\theta) = R_\\text{E}(\\phi, \\theta, -\\phi).
+
+    Parameters
+    ----------
+    bit: str
+        A name of the involved qubit
+    time: float
+        Time of a gate in circuit.
+    phi: float
+        An angle, that specified the rotation axis.
+    theta: float
+        The rotation angle.
+    dephasing_angle: float
+        Dephasing amplitude, that corresponds to shrinking the Bloch
+        sphere perpendicular to the rotation axis.
+    dephasing_axis: float
+        Dephasing amplitude, that corresponds to shrinking the Bloch
+        sphere along the rotation axis.
+    """
+    def __init__(
+            self,
+            bit,
+            time,
+            phi,
+            theta,
+            dephasing_angle=None,
+            dephasing_axis=None,
+            **kwargs):
+        super().__init__(bit, time, None, **kwargs)
+        self.dephasing_axis = dephasing_axis
+        self.dephasing_angle = dephasing_angle
+        self.adjust(phi, theta)
+
+    def set_labels(self, phi, theta):
+        self.phi = phi
+        self.theta = theta
+        self.label = r"$R_{{xy}}({}, {})$".format(_format_angle(phi),
+                                                  _format_angle(theta))
+
+    def adjust(self, phi, theta):
+        """Set new rotation angles to the gate.
+
+        Parameters
+        ----------
+        phi: float
+            An angle, that specified the rotation axis.
+        theta: float
+            The rotation angle.
+        """
+        p = ptm.rotate_euler_ptm(phi, theta, -phi)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle*np.abs(np.sin(phi)),
+                    self.dephasing_angle*np.abs(np.cos(phi)),
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(
+                self.dephasing_axis*np.abs(np.cos(phi)),
+                self.dephasing_axis*np.abs(np.sin(phi)),
+                0))
+        self.ptm = p
+        self.set_labels(phi, theta)
+
+
 class RotateZ(SinglePTMGate):
+    """ A rotation around the z-axis on the bloch sphere by `angle`.
+
+    Parameters
+    ----------
+    bit: str
+        A name of the involved qubit
+    time: float
+        Time of a gate in circuit.
+    angle: float
+        The rotation angle.
+    dephasing: float
+        Dephasing amplitude, that corresponds to shrinking the Bloch
+        sphere perpendicular to the rotation axis.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
 
     def __init__(self, bit, time, angle, dephasing=None, **kwargs):
-        """ A rotation around the z-axis on the bloch sphere by `angle`.
-        """
-        p = ptm.rotate_z_ptm(angle)
-        if dephasing:
-            p = np.dot(p, ptm.dephasing_ptm(dephasing, dephasing, 0))
-
+        super().__init__(bit, time, None, **kwargs)
         self.dephasing = dephasing
-
-        super().__init__(bit, time, p, **kwargs)
-        self.set_labels(angle)
+        self.adjust(angle)
 
     def set_labels(self, angle):
-
         self.angle = angle
-        multiple_of_pi = angle / np.pi
-        if np.allclose(multiple_of_pi, 1):
-            self.label = r"$R_z(\pi)$"
-        elif not np.allclose(angle, 0) and np.allclose(
-                np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
-            divisor = 1 / multiple_of_pi
-            self.label = r"$R_z(\pi/%d)$" % divisor
-        else:
-            self.label = r"$R_z(%g)$" % angle
+        self.label = r"$R_z({})$".format(_format_angle(angle))
 
     def adjust(self, angle):
+        """Set new rotation angle to the gate.
+
+        Parameters
+        ----------
+        angle: float
+            The rotation angle.
+        """
         p = ptm.rotate_z_ptm(angle)
         if self.dephasing:
             p = np.dot(p, ptm.dephasing_ptm(self.dephasing, self.dephasing, 0))
@@ -331,35 +674,46 @@ class RotateZ(SinglePTMGate):
 
 
 class RotateEuler(SinglePTMGate):
+    """ A single qubit rotation described by three Euler angles
+    :math:`(\\theta, \\phi, \\lambda)
 
-    def __init__(self, bit, time, theta, phi, lamda, **kwargs):
-        """ A single qubit rotation described by three Euler angles
-        (theta, phi, lambda)
-         U = R_Z(phi).R_X(theta).R_Z(lamda)
-        """
-        unitary = np.array(
-            [[np.cos(theta / 2),
-                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
-             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
-              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
-             ])
+    .. math::
 
-        p = ptm.single_kraus_to_ptm(unitary)
+        U = R_Z(\\phi) \\cdot R_X(\\theta) \\cdot R_Z(\\lambda)
 
-        super().__init__(bit, time, p, **kwargs)
+    This gate does not supply any error model.
 
-        self.label = r"$R(\theta, \phi, \lambda)$"
+    Parameters
+    ----------
+    bit: str
+        A name of the involved qubit
+    time: float
+        Time of a gate in circuit.
+    phi: float
+        :math:`\\phi` angle of an Euler rotation.
+    theta: float
+        :math:`\\theta` angle of an Euler rotation.
+    lamda: float
+        :math:`\\lambda` angle of an Euler rotation.
+    time_start : float or None, optional
+        Indicates when the gate interaction starts. If `None`, defaults to time.
+    time_end : float or None, optional
+        Indicates when the gate interaction ends. If None, defaults to time.
+    conditional_bit : str or None, optional
+        A conditional bit for this gate.
+    """
+    def __init__(self, bit, time, phi, theta, lamda, **kwargs):
+        super().__init__(bit, time, None, **kwargs)
+        self.adjust(phi, theta, lamda)
 
-    def adjust(self, theta, phi, lamda):
-        unitary = np.array(
-            [[np.cos(theta / 2),
-                -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
-             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
-              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
-             ])
-
-        p = ptm.single_kraus_to_ptm(unitary)
-        self.ptm = p
+    def adjust(self, phi, theta, lamda):
+        self.phi = phi
+        self.theta = theta
+        self.lamda = lamda
+        self.ptm = ptm.rotate_euler_ptm(phi, theta, lamda)
+        self.label = r"$R({}, {}, {})$".format(_format_angle(phi),
+                                               _format_angle(theta),
+                                               _format_angle(lamda))
 
 
 class IdlingGate:
@@ -372,7 +726,7 @@ class AmpPhDamp(SinglePTMGate, IdlingGate):
         """A amplitude-and-phase damping gate (rest gate) acting at point
         `time` for duration `duration` with amplitude damping time t1 and phase
         damping t2 (t1 as measured in free decay experiments, t2 as measured in
-        ramsey or echo experiments).
+        Ramsey or echo experiments).
 
         Note that the gate acts at only one point in time, but acts as if the
         damping was active for the time `duration`.
@@ -486,10 +840,19 @@ class ButterflyGate(SinglePTMGate, IdlingGate):
 
 class TwoPTMGate(Gate):
 
-    def __init__(self, bit0, bit1, two_ptm, time, **kwargs):
+    def __init__(self,
+                 bit0, bit1,
+                 two_ptm, time,
+                 time_start=None,
+                 time_end=None,
+                 **kwargs):
         """A Two qubit gate.
         """
-        super().__init__(time, **kwargs)
+        super().__init__(time,
+                         time_start,
+                         time_end,
+                         **kwargs)
+
         self.two_ptm = two_ptm
         self.involved_qubits.append(bit0)
         self.involved_qubits.append(bit1)
@@ -1372,12 +1735,12 @@ class Circuit:
                 va='center')
 
     def make_full_PTM(self, qubit_order, i_really_want_to_do_this=False):
-        '''
+        """
         Generates the PTM of the entire circuit, assuming no measurements.
         Warning - this is a very badly scaling process, and is currently
         only performed on a CPU.
         Assumes that the circuit has been ordered!
-        '''
+        """
         num_qubits = len(self.qubits)
         if qubit_order is not None:
             qubits = qubit_order
@@ -1513,19 +1876,22 @@ def uniform_noisy_sampler(readout_error, rng=None, *, state=None, seed=None):
 
 
 class BiasedSampler:
-    '''A sampler that returns a uniform choice but with probabilities weighted
-    as p_twiddle=p^alpha/Z, with Z a normalisation constant. Also allows for
-    readout error to be input when the sampling is called.
+    """A sampler that returns a uniform choice but with probabilities weighted
+    as :math:`p_\\text{twiddle}=p^\\alpha/Z`, with Z a normalisation constant.
+    Also allows for readout error to be input when the sampling is called.
 
     All the class does is to store the product of all p_twiddles for
     renormalisation purposes
-    '''
 
+    Parameters
+    ----------
+    readout_error : float
+        Probability of the state update and classical output disagreeing.
+    alpha : float
+        Number between 0 and 1 for renormalisation purposes.
+    """
     def __init__(self, readout_error, alpha, rng=None,
                  *, state=None, seed=None):
-        '''
-        @alpha: number between 0 and 1 for renormalisation purposes.
-        '''
         if state:
             warnings.warn('`state` keyword argument is deprecated,'
                           ' please use `rng`', DeprecationWarning)
@@ -1546,11 +1912,6 @@ class BiasedSampler:
         pass
 
     def send(self, ps):
-        '''
-        @readout_error: probability of the state update and classical output
-        disagreeing
-        '''
-
         if ps is None:
             return None
 

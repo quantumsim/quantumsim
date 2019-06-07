@@ -224,6 +224,14 @@ def rotate_x_ptm(angle, general_basis=False):
     return RotateXPTM(angle).get_matrix(pb)
 
 
+def rotate_euler_ptm(phi, theta, lamda, general_basis=False):
+    if general_basis:
+        pb = GeneralBasis(2)
+    else:
+        pb = PauliBasis_0xy1()
+    return RotateEulerPTM(phi, theta, lamda).get_matrix(pb)
+
+
 def rotate_y_ptm(angle, general_basis=False):
     """Return a 4x4 Pauli transfer matrix in 0xy1 basis,
     representing perfect unitary rotation around the y-axis by angle.
@@ -725,10 +733,6 @@ class ConjunctionPTM(PTM):
 
         return result.real
 
-    def embed_hilbert(self, new_dim_hilbert, mp=None):
-        if mp is None:
-            mp = range(min(self.dim_hilbert, new_dim_hilbert))
-
         proj = np.zeros((self.dim_hilbert, new_dim_hilbert))
         for i, j in enumerate(mp):
             proj[i, j] = 1
@@ -844,6 +848,17 @@ class RotateZPTM(ConjunctionPTM):
     def __init__(self, angle):
         z = np.exp(-.5j * angle)
         super().__init__([[z, 0], [0, z.conj()]])
+
+
+class RotateEulerPTM(ConjunctionPTM):
+    def __init__(self, phi, theta, lamda):
+        unitary = np.array(
+            [[np.cos(theta / 2),
+              -1j * np.exp(1j * lamda) * np.sin(theta / 2)],
+             [-1j * np.exp(1j * phi) * np.sin(theta / 2),
+              np.exp(1j * (lamda + phi)) * np.cos(theta / 2)]
+             ])
+        super().__init__(unitary)
 
 
 class AmplitudePhaseDampingPTM(ProductPTM):
