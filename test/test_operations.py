@@ -141,6 +141,12 @@ class TestOperations:
         assert circuit4q.operations[1].indices == (0,)
         assert circuit4q.operations[2].indices == (2, 0)
 
+        Operation.from_sequence(
+            circuit3q.at(0, 1, 2),
+            Operation.from_sequence(op1, op2).at(1)
+        )
+
+
     def test_chain_apply(self):
         b = (bases.general(2),) * 3
         dm = random_density_matrix(8, seed=93)

@@ -112,24 +112,22 @@ def hadamard():
 
 
 default_cphase_params = dict(
-    phase_22=0,
-    leakage_mobility_phase=0,
-    leakage=0,
-    leakage_phase=-np.pi/2,
-    leakage_mobility=0,
     leakage_rate=0.,
+    leakage_phase=-np.pi/2,
+    leakage_mobility_rate=0.,
+    leakage_mobility_phase=0.,
+    phase_22=0.,
     q0_t1=np.inf,
     q0_t2=np.inf,
     q1_t1=np.inf,
     q1_t2=np.inf,
     q1_t2_int=None,
-    q0_anharmonicity=0,
-    q1_anharmonicity=0,
+    q0_anharmonicity=0.,
+    q1_anharmonicity=0.,
     rise_time=2,
     int_time=28,
     phase_corr_time=12,
-    phase_corr_error=0,
-    leakage_mobility_rate=0,
+    phase_corr_error=0.,
     quasistatic_flux=0.,
     sensitivity=0.,
     phase_diff_02_12=np.pi,
@@ -155,7 +153,8 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
     Returns
     -------
     Operation
-        Resulting CPhase operation
+        Resulting CPhase operation. First qubit is static (low-frequency)
+        qubit,
     """
     def p(name):
         return kwargs.get(name, default_cphase_params[name])
@@ -163,9 +162,6 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
     for param in kwargs.keys():
         if param not in default_cphase_params.keys():
             raise ValueError('Unknown model parameter: {}'.format(param))
-
-    if integrate_idling and model != 'NetZero':
-        raise ValueError('Unknown error model: {}'.format(model))
 
     int_point_time = p('int_time') - (4 * p('rise_time'))
     if np.isfinite(p('q1_t2')) and np.isfinite(p('q1_t2_int')):
@@ -191,17 +187,15 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
             phase_01=phase_corr_error + qstatic_deviation,
             phase_11=rot_angle,
             phase_02=rot_angle,
-            phase_12=p(
-                'phase_diff_02_12') - rot_angle,
+            phase_12=p('phase_diff_02_12') - rot_angle,
             phase_20=0,
-            phase_21=p(
-                'phase_diff_20_21'),
+            phase_21=p('phase_diff_20_21'),
             phase_22=p('phase_22')
         ))
         noisy_unitary = expm(1j * _exchange_generator(
             leakage=4 * leakage_rate + qstatic_interf_leakage,
             leakage_phase=p('leakage_phase'),
-            leakage_mobility=p('leakage_mobility_rate'),
+            leakage_mobility_rate=p('leakage_mobility_rate'),
             leakage_mobility_phase=p('leakage_mobility_phase'),
         ))
         cz_unitary = ideal_unitary @ noisy_unitary
@@ -282,7 +276,7 @@ def _ideal_generator(phase_01,
 
 @lru_cache(maxsize=64)
 def _exchange_generator(leakage, leakage_phase,
-                        leakage_mobility, leakage_mobility_phase):
+                        leakage_mobility_rate, leakage_mobility_phase):
     generator = np.zeros((9, 9), dtype=complex)
 
     generator[2][4] = 1j * \
@@ -290,10 +284,10 @@ def _exchange_generator(leakage, leakage_phase,
     generator[4][2] = -1j * \
         np.arcsin(np.sqrt(leakage)) * np.exp(-1j * leakage_phase)
 
-    generator[5][7] = 1j * np.arcsin(np.sqrt(leakage_mobility)) * \
-        np.exp(1j * leakage_mobility_phase)
+    generator[5][7] = 1j * np.arcsin(np.sqrt(leakage_mobility_rate)) * \
+                      np.exp(1j * leakage_mobility_phase)
     generator[7][5] = -1j * \
-        np.arcsin(np.sqrt(leakage_mobility)) * \
+        np.arcsin(np.sqrt(leakage_mobility_rate)) * \
         np.exp(-1j * leakage_mobility_phase)
 
     return generator
@@ -356,3 +350,39 @@ def idle(duration, t1, t2, anharmonicity=0.):
         duration, bases.general(3),
         hamiltonian=ham,
         lindblad_ops=[op_t1, *ops_t2])
+
+
+def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
+    """
+    Returns a gate, that corresponds to measurement-induced excitations.
+    Each measurement should be sandwiched by two of these gates (before
+    and after projection. This operation dephases the qubit immediately.
+
+    Note: if measurement-induced leakage is reported by RB, p1_up should
+    be twice larger, since RB would report average probabllity for both 0
+    and 1 state.
+
+    Parameters
+    ----------
+    p0_up : float
+        Probability to excite to state 1, being in the state 0
+    p1_up : float
+        Probability to excite to state 2, being in the state 1
+    p1_down : float
+        Probability to relax to state 0, being in the state 1
+    p2_down : float
+        Probability to relax to state 1, being in the state 2
+
+    Returns
+    -------
+        quantumsim.operation._PTMOperation
+    """
+    basis = bases.general(3).subbasis([0, 1, 2])
+    return Operation.from_ptm(
+        np.array([
+            [1.-0.5*p0_up, 0.5*p1_down, 0.],
+            [0.5*p0_up, 1.-0.5*p1_down-0.5*p1_up, 0.5*p2_down],
+            [0., 0.5*p1_up, 1-0.5*p2_down],
+        ]),
+        (basis,), (basis,)
+    )
