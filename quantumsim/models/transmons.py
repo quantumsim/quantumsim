@@ -352,6 +352,35 @@ def idle(duration, t1, t2, anharmonicity=0.):
         lindblad_ops=[op_t1, *ops_t2])
 
 
+@lru_cache(maxsize=32)
+def amp_damping(p0_up, p1_up, p1_down, p2_down):
+    """
+    A gate, that excites or relaxes a qubit with a certain probability.
+
+    Parameters
+    ----------
+    p0_up : float
+        Probability to excite to state 1, being in the state 0
+    p1_up : float
+        Probability to excite to state 2, being in the state 1
+    p1_down : float
+        Probability to relax to state 0, being in the state 1
+    p2_down : float
+        Probability to relax to state 1, being in the state 2
+
+    Returns
+    -------
+        quantumsim.operation._PTMOperation
+    """
+    ptm = np.identity(9, dtype=float)
+    ptm[:3, :3] = [[1. - p0_up, p1_down, 0.],
+                   [p0_up, 1. - p1_down - p1_up, p2_down],
+                   [0., p1_up, 1 - p2_down]]
+    basis = (bases.general(3),)
+    return Operation.from_ptm(ptm, basis, basis)
+
+
+@lru_cache(maxsize=32)
 def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
     """
     Returns a gate, that corresponds to measurement-induced excitations.
@@ -377,12 +406,6 @@ def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
     -------
         quantumsim.operation._PTMOperation
     """
-    basis = bases.general(3).subbasis([0, 1, 2])
-    return Operation.from_ptm(
-        np.array([
-            [1.-0.5*p0_up, 0.5*p1_down, 0.],
-            [0.5*p0_up, 1.-0.5*p1_down-0.5*p1_up, 0.5*p2_down],
-            [0., 0.5*p1_up, 1-0.5*p2_down],
-        ]),
-        (basis,), (basis,)
-    )
+    basis = (bases.general(3).computational_subbasis())
+    return amp_damping(0.5*p0_up, 0.5*p1_up, 0.5*p1_down,
+                       0.5*p2_down).set_bases(bases_in=basis, bases_out=basis)
