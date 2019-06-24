@@ -171,7 +171,7 @@ class TestCompiler:
 
         chain = Operation.from_sequence(
             lib.rotate_x(np.pi / 5).at(0),
-            (lib.cphase(angle=3*np.pi/7, leakage=0.1)
+            (lib.cphase(angle=3*np.pi/7, leakage_rate=0.1)
              if d == 3 else lib.cphase(3*np.pi / 7)).at(0, 1),
         )
 
@@ -198,7 +198,7 @@ class TestCompiler:
         dm /= dm.trace()
 
         chain = Operation.from_sequence(
-            (lib.cphase(angle=np.pi/7, leakage=0.25)
+            (lib.cphase(angle=np.pi/7, leakage_rate=0.25)
              if d == 3 else lib.cphase(3*np.pi / 7)).at(0, 1),
             lib.rotate_x(4 * np.pi / 7).at(0),
         )
@@ -242,8 +242,8 @@ class TestCompiler:
         b = bases.general(3)
         chain0 = Operation.from_sequence(
             lib3.rotate_x(0.5*np.pi).at(2),
-            lib3.cphase(leakage=0.1).at(0, 2),
-            lib3.cphase(leakage=0.1).at(1, 2),
+            lib3.cphase(leakage_rate=0.1).at(0, 2),
+            lib3.cphase(leakage_rate=0.1).at(1, 2),
             lib3.rotate_x(-0.75*np.pi).at(2),
             lib3.rotate_x(0.25*np.pi).at(2),
         )
@@ -272,8 +272,8 @@ class TestCompiler:
         bases_out = (b_full, b_full, b012)
         zz = Operation.from_sequence(
             lib3.rotate_x(-np.pi/2).at(2),
-            lib3.cphase(leakage=0.1).at(0, 2),
-            lib3.cphase(leakage=0.25).at(2, 1),
+            lib3.cphase(leakage_rate=0.1).at(0, 2),
+            lib3.cphase(leakage_rate=0.25).at(2, 1),
             lib3.rotate_x(np.pi/2).at(2),
             lib3.rotate_x(np.pi).at(0),
             lib3.rotate_x(np.pi).at(1)

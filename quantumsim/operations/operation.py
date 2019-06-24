@@ -66,7 +66,12 @@ class Operation(metaclass=abc.ABCMeta):
         quantumsim.operations.Operation
             Optimized representation of self.
         """
-        pass
+        if bases_in is None and bases_out is None:
+            raise ValueError('Either bases_in or bases_out must be specified.')
+        if bases_in is not None:
+            self._validate_bases(bases_in=bases_in)
+        if bases_out is not None:
+            self._validate_bases(bases_out=bases_out)
 
     @staticmethod
     def from_ptm(ptm, bases_in, bases_out=None):
@@ -367,6 +372,7 @@ class _PTMOperation(Operation):
         return self._num_qubits
 
     def set_bases(self, bases_in=None, bases_out=None):
+        super().set_bases(bases_in, bases_out)
         b_in = bases_in or self.bases_in
         b_out = bases_out or self.bases_out
         if b_in == self.bases_in and b_out == self.bases_out:
@@ -479,13 +485,10 @@ class _KrausOperation(Operation):
             state.bases[q] = b
 
     def set_bases(self, bases_in=None, bases_out=None):
-        if bases_in is None and bases_out is None:
-            raise ValueError('Either bases_in or bases_out must be specified.')
-        elif bases_in is None:
-            self._validate_bases(bases_out=bases_out)
+        super().set_bases(bases_in, bases_out)
+        if bases_in is None:
             bases_in = tuple(b.superbasis for b in bases_out)
-        elif bases_out is None:
-            self._validate_bases(bases_in=bases_in)
+        if bases_out is None:
             bases_out = tuple(b.superbasis for b in bases_in)
         else:
             self._validate_bases(bases_in=bases_in, bases_out=bases_out)
@@ -546,5 +549,6 @@ class _Chain(Operation):
         return results if len(results) > 0 else None
 
     def set_bases(self, bases_in=None, bases_out=None):
+        super().set_bases(bases_in, bases_out)
         compiler = self._default_compiler_cls(self, optimize=False)
         return compiler.compile(bases_in, bases_out)
