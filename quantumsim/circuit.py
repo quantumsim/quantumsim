@@ -515,7 +515,7 @@ class BitflipNoise(SinglePTMGate, IdlingGate):
                    (coords[self.involved_qubits[-1]]), color='k', marker='o')
 
 
-class ButterflyGate(SinglePTMGate, IdlingGate):
+class ButterflyGate(SinglePTMGate):
 
     def __init__(self, bit, time, p_exc, p_dec, **kwargs):
         super().__init__(
