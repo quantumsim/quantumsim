@@ -2,6 +2,7 @@
 from ._version import __version__
 from . import states, bases
 from .operations.operation import Operation
+from .abstracts import Circuit, SimpleCircuit, QubitRegister
 
 State = states.Default
 
@@ -10,6 +11,9 @@ __all__ = [
     'states',
     'State',
     'Operation',
+    'Circuit',
+    'SimpleCircuit',
+    'QubitRegister'
 ]
 
 

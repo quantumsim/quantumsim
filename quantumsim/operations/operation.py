@@ -43,7 +43,7 @@ class Operation(metaclass=abc.ABCMeta):
         state : quantumsim.State
             A state of a qubit
         q0, ..., qN : int
-            Indices of a qubit in a state
+            Indices of each qubit in the state
         """
         pass
 
