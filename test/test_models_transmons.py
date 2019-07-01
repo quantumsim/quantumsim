@@ -106,31 +106,28 @@ class TestLibrary:
         hadamard(dm, 1)
         assert np.allclose(dm.meas_prob(1), (1, 0, 0))
 
-
-def test_cphase_compatability():
-    cz_op_nz = lib.cphase(angle=np.pi,
-                          leakage_rate=0,
-                          leakage_phase=-np.pi/2,
-                          integrate_idling=False,
-                          model='NetZero')
-
-    cz_op_legacy = lib.cphase(angle=np.pi,
+    def test_cphase_compatability(self):
+        cz_op_nz = lib.cphase(angle=np.pi,
                               leakage_rate=0,
+                              leakage_phase=-np.pi/2,
                               integrate_idling=False,
-                              model='legacy')
+                              model='NetZero')
 
-    assert np.allclose(cz_op_nz.kraus, cz_op_legacy.kraus)
-    ideal_cz_mat = np.diag([1, 1, -1, 1, -1, 1, 1, 1, 1])
-    assert np.allclose(cz_op_nz.kraus, ideal_cz_mat)
+        cz_op_legacy = lib.cphase(angle=np.pi,
+                                  leakage_rate=0,
+                                  integrate_idling=False,
+                                  model='legacy')
 
-    input_leakage_rate = 0.001
-    cz_op_nz = lib.cphase(angle=np.pi,
-                          leakage_rate=input_leakage_rate,
-                          leakage_phase=-np.pi/2,
-                          integrate_idling=False,
-                          model='netzero')
-    cz_op_legacy = lib.cphase(angle=np.pi,
-                              leakage_rate=4*input_leakage_rate,
+        assert np.allclose(cz_op_nz.ptm, cz_op_legacy.ptm)
+
+        input_leakage_rate = 0.001
+        cz_op_nz = lib.cphase(angle=np.pi,
+                              leakage_rate=input_leakage_rate,
+                              leakage_phase=-np.pi/2,
                               integrate_idling=False,
-                              model='legacy')
-    assert np.allclose(cz_op_nz.kraus, cz_op_legacy.kraus)
+                              model='netzero')
+        cz_op_legacy = lib.cphase(angle=np.pi,
+                                  leakage_rate=4*input_leakage_rate,
+                                  integrate_idling=False,
+                                  model='legacy')
+        assert np.allclose(cz_op_nz.ptm, cz_op_legacy.ptm)

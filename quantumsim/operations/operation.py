@@ -82,7 +82,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        ptm: array_like
+        ptm: ndarray
             Pauli transfer matrix in a form of Numpy array
         bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
@@ -100,24 +100,50 @@ class Operation(metaclass=abc.ABCMeta):
         return _PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
 
     @staticmethod
-    def from_kraus(kraus, dim_hilbert):
-        """Construct completely positive map, based on a set of Kraus matrices.
+    def from_kraus(kraus, bases_in, bases_out=None):
+        """Construct an operation from a set of Kraus matrices.
+
+        Either bases, or `dim_hilbert` must be specified.
 
         TODO: elaborate on Kraus matrices format.
 
         Parameters
         ----------
-        kraus: array_like
+        kraus: ndarray
             Pauli transfer matrix in a form of Numpy array
-        dim_hilbert: int
-            Dimensionality of qudits in the operation.
+        bases_in : tuple of PauliBasis
+            Input bases for generated PTMs. If None, default is picked.
+        bases_out : tuple of PauliBasis or None
+            Output bases for generated PTMs. If None, defaults to `bases_in`.
 
         Returns
         -------
         Transformation
             Resulting operation
         """
-        return _KrausOperation(kraus, dim_hilbert)
+        bases_out = bases_out or bases_in
+        if not isinstance(kraus, np.ndarray):
+            kraus = np.array(kraus)
+        if len(kraus.shape) == 2:
+            kraus = kraus.reshape((1, *kraus.shape))
+        elif len(kraus.shape) != 3:
+            raise ValueError(
+                '`kraus` should be a 2D or 3D array, got shape {}'
+                .format(kraus.shape))
+
+        dim_hilbert = bases_in[0].dim_hilbert
+        num_qubits = len(bases_in)
+        kraus_size = kraus.shape[1]
+        if (kraus_size != dim_hilbert ** num_qubits or
+                kraus_size != kraus.shape[2]):
+            raise ValueError(
+                'Shape of the Kraus operator for bases provided must be '
+                '{0}x{0}, got {1}x{2} instead'
+                .format(dim_hilbert ** num_qubits,
+                        kraus.shape[1], kraus.shape[2]))
+
+        return Operation.from_ptm(kraus_to_ptm(kraus, bases_in, bases_out),
+                                  bases_in, bases_out)
 
     @staticmethod
     def from_lindblad_form(time, basis, *, hamiltonian=None, lindblad_ops=None):
@@ -325,7 +351,7 @@ class _PTMOperation(Operation):
 
     Parameters
     ----------
-    ptm : array
+    ptm : ndarray
         Pauli transfer matrix of an operation.
     bases_in : tuple of PauliBasis
         Input bases of the PTM
@@ -415,93 +441,6 @@ class _PTMOperation(Operation):
         state.apply_ptm(op.ptm, *qubit_indices)
         for q, b in zip(qubit_indices, op.bases_out):
             state.bases[q] = b
-
-
-class _KrausOperation(Operation):
-    """Construct completely positive map, based on a set of Kraus matrices.
-
-    TODO: elaborate on Kraus matrices format.
-
-    Parameters
-    ----------
-    kraus: array_like
-        Pauli transfer matrix in a form of Numpy array
-    dim_hilbert: int
-        Dimensionality of qudits in the operation.
-
-    Returns
-    -------
-    Transformation
-        Resulting operation
-    """
-
-    def __init__(self, kraus, dim_hilbert=2):
-        self._dim_hilbert = dim_hilbert
-
-        if not isinstance(kraus, np.ndarray):
-            kraus = np.array(kraus)
-        if len(kraus.shape) == 2:
-            kraus = kraus.reshape((1, *kraus.shape))
-        elif len(kraus.shape) != 3:
-            raise ValueError(
-                '`kraus` should be a 2D or 3D array, got shape {}'
-                .format(kraus.shape))
-
-        kraus_size = kraus.shape[1]
-        if kraus_size != kraus.shape[2]:
-            raise ValueError('Kraus operators should be square matrices, got '
-                             '{}x{}'.format(kraus.shape[1], kraus.shape[2]))
-        if kraus_size == dim_hilbert:
-            self._num_qubits = 1
-        elif kraus_size == dim_hilbert ** 2:
-            self._num_qubits = 2
-        else:
-            raise ValueError(
-                'Expected {n1}x{n1} (single-qubit transformation) or {n2}x{n2} '
-                '(two-qubit transformation) Kraus matrices, got {n}x{n}.'
-                .format(n=kraus_size, n1=dim_hilbert, n2=dim_hilbert**2))
-
-        self.kraus = kraus
-
-    @property
-    def shape(self):
-        return (self.dim_hilbert**2,) * (self.num_qubits*2)
-
-    @property
-    def num_qubits(self):
-        return self._num_qubits
-
-    @property
-    def dim_hilbert(self):
-        return self._dim_hilbert
-
-    def __call__(self, state, *qubit_indices):
-        """
-
-        Parameters
-        ----------
-        state : quantumsim.State
-        q0, ..., qN : indices of qubits to act on
-        """
-        if len(qubit_indices) != self.num_qubits:
-            raise ValueError('This is a {}-qubit operation, but number of '
-                             'qubits provided is {}'
-                             .format(self.num_qubits, len(qubit_indices)))
-        bases_in = [state.bases[i] for i in qubit_indices]
-        op = self.set_bases(bases_in=bases_in)
-        state.apply_ptm(op.ptm, *qubit_indices)
-        for q, b in zip(qubit_indices, op.bases_out):
-            state.bases[q] = b
-
-    def set_bases(self, bases_in=None, bases_out=None):
-        super().set_bases(bases_in, bases_out)
-        if bases_in is None:
-            bases_in = tuple(b.superbasis for b in bases_out)
-        if bases_out is None:
-            bases_out = tuple(b.superbasis for b in bases_in)
-        new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
-        op = _PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
-        return op
 
 
 class _Chain(Operation):
