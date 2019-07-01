@@ -406,6 +406,6 @@ def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
     -------
         quantumsim.operation._PTMOperation
     """
-    basis = (bases.general(3).computational_subbasis())
+    basis = (bases.general(3).computational_subbasis(),)
     return amp_damping(0.5*p0_up, 0.5*p1_up, 0.5*p1_down,
                        0.5*p2_down).set_bases(bases_in=basis, bases_out=basis)

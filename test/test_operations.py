@@ -33,7 +33,7 @@ class TestOperations:
                                  [p_damp, 0, 0, 1-p_damp]])
         assert np.allclose(damp_ptm, expected_mat)
 
-        with pytest.raises(ValueError, match=r'.* should be a list, .*'):
+        with pytest.raises(ValueError, match=r'.* must be list-like, .*'):
             damp_op.set_bases(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])

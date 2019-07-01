@@ -6,6 +6,7 @@ from itertools import chain
 
 from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
                                plm_lindbladian_part, plm_hamiltonian_part)
+from ..bases import PauliBasis
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -54,17 +55,17 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        bases_in : list of quantumsim.bases.PauliBasis or None
+        bases_in : tuple of PauliBasis or None
             Input bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
-        bases_out : list of quantumsim.bases.PauliBasis or None
+        bases_out : tuple of PauliBasis or None
             Output bases of the qubits. If `None` provided, full :math:`01xy`
             basis is assumed.
 
         Returns
         -------
         quantumsim.operations.Operation
-            Optimized representation of self.
+            Equivalent operation in the new basis.
         """
         if bases_in is None and bases_out is None:
             raise ValueError('Either bases_in or bases_out must be specified.')
@@ -94,6 +95,8 @@ class Operation(metaclass=abc.ABCMeta):
         Transformation
             Resulting operation
         """
+        if bases_out is None:
+            bases_out = bases_in
         return _PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
 
     @staticmethod
@@ -156,7 +159,7 @@ class Operation(metaclass=abc.ABCMeta):
         if not np.allclose(ptm.imag, 0):
             raise ValueError('Resulting PTM is not real-valued, check the '
                              'sanity of `hamiltonian` and `lindblad_ops`.')
-        return _PTMOperation(ptm.real, (basis,))
+        return _PTMOperation(ptm.real, (basis,), (basis,))
 
     @staticmethod
     def from_sequence(*operations):
@@ -292,8 +295,13 @@ class Operation(metaclass=abc.ABCMeta):
         for name, bases in kwargs.items():
             if not hasattr(bases, '__iter__'):
                 raise ValueError(
-                    "`{n}` should be a list, got {t}."
+                    "`{n}` must be list-like, got {t}."
                     .format(n=name, t=type(bases)))
+            if self.num_qubits != len(bases):
+                raise ValueError("Number of basis elements in `{}` ({}) does "
+                                 "not match number of qubits in the "
+                                 "operation ({})."
+                                 .format(name, len(bases), self.num_qubits))
             for b in bases:
                 if self.dim_hilbert != b.dim_hilbert:
                     raise ValueError(
@@ -311,9 +319,18 @@ class _PTMOperation(Operation):
     Any transformation, that should be a completely positive map, can be
     represented in a form of set of Kraus operators [1]_ or as a Pauli transfer
     matrix [2]_. Dependent on your preferred representation, you may construct
-    the transformation with :func:`CompletelyPositiveMap.from_kraus` or
-    :func:`CompletelyPositiveMap.from_ptm`. Constructor of this class is not
+    the transformation with :func:`Operation.from_kraus` or
+    :func:`Operation.from_ptm`. Constructor of this class is not
     supposed to be called in user code.
+
+    Parameters
+    ----------
+    ptm : array
+        Pauli transfer matrix of an operation.
+    bases_in : tuple of PauliBasis
+        Input bases of the PTM
+    bases_out : tuple of PauliBasis
+        Output bases of the PTM
 
     References
     ----------
@@ -323,22 +340,12 @@ class _PTMOperation(Operation):
        arXiv:1509.02921 (2000).
     """
 
-    def __init__(self, ptm, bases_in, bases_out=None):
-        if bases_in is None:
-            raise ValueError('`bases_in` must not be None')
+    def __init__(self, ptm, bases_in, bases_out):
         self.ptm = ptm
         self.bases_in = bases_in
-        self.bases_out = bases_out or bases_in
+        self.bases_out = bases_out
         self._dim_hilbert = bases_in[0].dim_hilbert
         self._num_qubits = len(self.bases_in)
-        if self._num_qubits != len(self.bases_out):
-            raise ValueError('Number of qubits should be the same in bases_in '
-                             '(has {} qubits) and bases_out (has {} qubits)'
-                             .format(len(self.bases_in), len(self.bases_out)))
-        for b in chain(self.bases_in, self.bases_out):
-            if b.dim_hilbert != self._dim_hilbert:
-                raise ValueError(
-                    'All bases must have the same Hilbert dimensionality.')
         self._validate_bases(bases_out=self.bases_out)
         shape = tuple(b.dim_pauli for b in
                       chain(self.bases_out, self.bases_in))
@@ -351,6 +358,7 @@ class _PTMOperation(Operation):
 
     @property
     def dim_hilbert(self):
+        """Returns Hilbert dimensionality of an operation."""
         return self._dim_hilbert
 
     @property
@@ -369,6 +377,7 @@ class _PTMOperation(Operation):
 
     @property
     def num_qubits(self):
+        """Returns number of qubits an operation involves."""
         return self._num_qubits
 
     def set_bases(self, bases_in=None, bases_out=None):
@@ -490,8 +499,6 @@ class _KrausOperation(Operation):
             bases_in = tuple(b.superbasis for b in bases_out)
         if bases_out is None:
             bases_out = tuple(b.superbasis for b in bases_in)
-        else:
-            self._validate_bases(bases_in=bases_in, bases_out=bases_out)
         new_ptm = kraus_to_ptm(self.kraus, bases_in, bases_out)
         op = _PTMOperation(new_ptm, bases_in=bases_in, bases_out=bases_out)
         return op
