@@ -24,7 +24,7 @@ class TestOperations:
         gm_two_qubit_basis = gm_qubit_basis * 2
 
         damp_op = Operation.from_kraus(damp_kraus_mat, gm_qubit_basis)
-        damp_ptm = damp_op.ptm
+        damp_ptm = damp_op.ptm(gm_qubit_basis)
 
         expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
@@ -37,9 +37,10 @@ class TestOperations:
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
         cz = Operation.from_kraus(cz_kraus_mat, gm_two_qubit_basis)
+        cz_ptm = cz.ptm(gm_two_qubit_basis)
 
-        assert cz.ptm.shape == (4, 4, 4, 4)
-        cz_ptm = cz.ptm.reshape((16, 16))
+        assert cz_ptm.shape == (4, 4, 4, 4)
+        cz_ptm = cz_ptm.reshape((16, 16))
         assert np.all(cz_ptm.round(3) <= 1)
         assert np.all(cz_ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm[0, :]), 1)
@@ -51,11 +52,12 @@ class TestOperations:
         system_bases = qutrit_basis * 2
 
         cz = Operation.from_kraus(cz_kraus_mat, system_bases)
+        cz_ptm = cz.ptm(system_bases)
 
-        assert cz.ptm.shape == (9, 9, 9, 9)
-        cz_ptm_flat = cz.ptm.reshape((81, 81))
+        assert cz_ptm.shape == (9, 9, 9, 9)
+        cz_ptm_flat = cz_ptm.reshape((81, 81))
         assert np.all(cz_ptm_flat.round(3) <= 1) and np.all(
-            cz.ptm.round(3) >= -1)
+            cz_ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm_flat[0, :]), 1)
         assert np.isclose(np.sum(cz_ptm_flat[:, 0]), 1)
 
@@ -87,7 +89,7 @@ class TestOperations:
         op1 = Operation.from_kraus(damp_kraus_mat, gell_mann_basis)
         op2 = op1.set_bases(general_basis, general_basis) \
             .set_bases(gell_mann_basis, gell_mann_basis)
-        assert np.allclose(op1.ptm, op2.ptm)
+        assert np.allclose(op1.ptm(gell_mann_basis), op2.ptm(gell_mann_basis))
         assert op1.bases_in == op2.bases_in
         assert op1.bases_out == op2.bases_out
 
@@ -162,5 +164,27 @@ class TestOperations:
         circuit = Operation.from_sequence(
             *(op.at(*ix) for op, ix in op_indices))
         circuit(pv2, 0, 1, 2)
-
         assert np.all(pv1.to_pv() == pv2.to_pv())
+
+    def test_ptm(self):
+        # Some random gate sequence
+        op_indices = [(lib2.rotate_x(np.pi/2), (0,)),
+                      (lib2.rotate_y(0.3333), (1,)),
+                      (lib2.cphase(), (0, 2)),
+                      (lib2.cphase(), (1, 2)),
+                      (lib2.rotate_x(-np.pi/2), (0,))]
+        circuit = Operation.from_sequence(
+            *(op.at(*ix) for op, ix in op_indices))
+
+        b = (bases.general(2),) * 3
+        ptm = circuit.ptm(b, b)
+        assert isinstance(ptm, np.ndarray)
+
+        op_3q = Operation.from_ptm(ptm, b)
+        dm = random_density_matrix(8, seed=93)
+        state1 = PauliVector.from_dm(dm, b)
+        state2 = PauliVector.from_dm(dm, b)
+
+        circuit(state1, 0, 1, 2)
+        op_3q(state2, 0, 1, 2)
+        assert np.allclose(state1.to_pv(), state2.to_pv())

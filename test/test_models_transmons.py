@@ -118,7 +118,8 @@ class TestLibrary:
                                   integrate_idling=False,
                                   model='legacy')
 
-        assert np.allclose(cz_op_nz.ptm, cz_op_legacy.ptm)
+        b = (cz_op_nz.bases_in, cz_op_nz.bases_out)
+        assert np.allclose(cz_op_nz.ptm(*b), cz_op_legacy.ptm(*b))
 
         input_leakage_rate = 0.001
         cz_op_nz = lib.cphase(angle=np.pi,
@@ -130,4 +131,5 @@ class TestLibrary:
                                   leakage_rate=4*input_leakage_rate,
                                   integrate_idling=False,
                                   model='legacy')
-        assert np.allclose(cz_op_nz.ptm, cz_op_legacy.ptm)
+        assert np.allclose(
+            cz_op_nz.ptm(*b), cz_op_legacy.ptm(*b))

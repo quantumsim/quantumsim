@@ -45,7 +45,7 @@ class Node:
     def arrange(self):
         offset = max(self.qubits) + 1
         idx = self.qubits + [q + offset for q in self.qubits]
-        new_ptm = np.einsum(self.op.ptm, idx, sorted(idx))
+        new_ptm = np.einsum(self.op._ptm, idx, sorted(idx))
         self.qubits = sorted(self.qubits)
         self.op = _PTMOperation(
             new_ptm, self.bases_in_tuple, self.bases_out_tuple)
@@ -187,7 +187,7 @@ class ChainCompiler:
         """
         d_in = np.prod([b.dim_pauli for b in op.bases_in])
         d_out = np.prod([b.dim_pauli for b in op.bases_out])
-        u, s, vh = np.linalg.svd(op.ptm.reshape(d_out, d_in),
+        u, s, vh = np.linalg.svd(op._ptm.reshape(d_out, d_in),
                                  full_matrices=False)
         (truncate_index,) = (s > self.sv_cutoff).shape
 
@@ -250,8 +250,8 @@ class ChainCompiler:
         for i, j in zip(contr_indices, node_out):
             other_in[i] = j
 
-        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                              other.op.ptm, other_out + other_in,
+        other_ptm = np.einsum(node.op._ptm, node_out + node_in,
+                              other.op._ptm, other_out + other_in,
                               optimize=True)
 
         for qubit, node_prev in node.prev.items():
@@ -298,8 +298,8 @@ class ChainCompiler:
         for i, j in zip(contr_indices, node_in):
             other_out[i] = j
 
-        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                              other.op.ptm, other_out + other_in,
+        other_ptm = np.einsum(node.op._ptm, node_out + node_in,
+                              other.op._ptm, other_out + other_in,
                               optimize=True)
 
         for qubit, node_next in node.next.items():

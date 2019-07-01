@@ -139,16 +139,19 @@ class TestCompiler:
         assert len(chain0.operations) == 2
 
         chain0_c = chain0.compile(bases_full, bases_full)
+        assert isinstance(chain0_c, _PTMOperation)
         pv1 = PauliVector.from_dm(dm, bases_full)
         chain0_c(pv1, 0)
         assert chain0_c.num_qubits == 1
         assert isinstance(chain0_c, _PTMOperation)
         op_angle = chain0_c
         op_2angle = rx_2angle.compile(bases_full, bases_full)
+        assert isinstance(op_2angle, _PTMOperation)
         assert op_angle.shape == op_2angle.shape
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
-        assert op_angle.ptm == approx(op_2angle.ptm)
+        assert op_angle.ptm(op_angle.bases_in, op_angle.bases_out) == \
+               approx(op_2angle.ptm(op_2angle.bases_in, op_2angle.bases_out))
         assert pv1.to_pv() == approx(pv0.to_pv())
 
         rx_pi = lib.rotate_x(np.pi)
