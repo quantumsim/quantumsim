@@ -50,6 +50,8 @@ class MatplotlibPlotter:
             raise ValueError('Qubit order must be a list, callable or None')
 
     def plot(self):
+        for qubit in self.circuit.qubits:
+            self._plot_qubit_line(qubit)
         for gate in self.circuit.gates:
             self.plot_gate(gate)
 
@@ -146,6 +148,11 @@ class MatplotlibPlotter:
         """
         self.ax.plot((time, time), (n_qubit_start, n_qubit_end),
                      **self._get_line_kwargs(metadata))
+
+    def _plot_qubit_line(self, qubit):
+        n = self._qubit_number(qubit)
+        self.ax.plot((self.circuit.time_start, self.circuit.time_end),
+                     (n, n), color='k')
 
     def _qubit_number(self, qubit):
         return self.qubits.index(qubit)
