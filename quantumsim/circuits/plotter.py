@@ -6,10 +6,9 @@ from matplotlib.patches import Rectangle
 _golden_mean = (np.sqrt(5) - 1.0) / 2.0
 
 
-def plot(circuit, *, ax=None, realistic_timing=True, qubit_order=None):
+def plot(circuit, *, ax=None, qubit_order=None, gate_offset=2.):
     plotter = MatplotlibPlotter(
-        circuit, ax, None, qubit_order=qubit_order,
-        realistic_timing=realistic_timing, )
+        circuit, ax, qubit_order, gate_offset)
     return plotter.plot()
 
 
@@ -21,24 +20,15 @@ class MatplotlibPlotter:
         'text': 20,
     }
 
-    def __init__(self, circuit, ax=None, params=None, qubit_order=None,
-                 realistic_timing=True):
+    def __init__(self, circuit, ax, qubit_order, gate_offset):
         self.circuit = circuit
-        self.realistic_timing = realistic_timing
+        self.gate_offset = 0.5*gate_offset
 
         if ax is not None:
             self.fig = None
             self.ax = ax
         else:
             self.fig, self.ax = plt.subplots()
-
-        self.params = {
-            'linewidth': 1,
-            'edgecolor': 'black',
-            'facecolor': 'white'
-        }
-        if params is not None:
-            self.params.update(params)
 
         if callable(qubit_order):
             self.qubits = sorted(circuit.qubits, key=qubit_order)
@@ -124,8 +114,8 @@ class MatplotlibPlotter:
         """
         box_y = n_qubit_start - 0.5 * _golden_mean
         box_dy = n_qubit_end - n_qubit_start + _golden_mean
-        box_x = time_start
-        box_dx = time_end - time_start
+        box_x = time_start + 0.5*self.gate_offset
+        box_dx = time_end - time_start - self.gate_offset
 
         label = metadata.pop('label')
         rect = Rectangle((box_x, box_y), box_dx, box_dy,
