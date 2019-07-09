@@ -42,8 +42,9 @@ class MatplotlibPlotter:
     def plot(self):
         for qubit in self.circuit.qubits:
             self._plot_qubit_line(qubit)
+            self._anotate_qubit(qubit)
         for gate in self.circuit.gates:
-            self.plot_gate(gate)
+            self._plot_gate(gate)
 
         return self.fig
 
@@ -62,12 +63,12 @@ class MatplotlibPlotter:
             self.ax.scatter((time,), (self._qubit_number(qubit),),
                             **marker_kwargs)
         elif style == 'box':
-            return self.plot_box_with_label(
+            return self._plot_box_with_label(
                 time_start, time_start + duration, n, n, marker_dict)
         else:
             raise RuntimeError('Unknown marker style: {}'.format(style))
 
-    def plot_gate(self, gate):
+    def _plot_gate(self, gate):
         """
 
         Parameters
@@ -83,13 +84,13 @@ class MatplotlibPlotter:
         style = metadata.pop('style', 'box')
 
         if style == 'box':
-            return self.plot_box_with_label(
+            return self._plot_box_with_label(
                 gate.time_start, gate.time_end, *self._qubit_range(gate.qubits),
                 metadata)
         elif style == 'line':
             time = gate.time_start + 0.5 * gate.duration
             markers = metadata.pop('markers')
-            self.plot_vline(time, *self._qubit_range(gate.qubits), metadata)
+            self._plot_vline(time, *self._qubit_range(gate.qubits), metadata)
             if markers is not None:
                 for qubit, marker in zip(gate.qubits, markers):
                     self._plot_single_qubit_marker(
@@ -101,8 +102,15 @@ class MatplotlibPlotter:
         else:
             raise RuntimeError("Unknown gate plotting style: {}".format(style))
 
-    def plot_box_with_label(self, time_start, time_end,
-                            n_qubit_start, n_qubit_end, metadata):
+    def _anotate_qubit(self, qubit):
+        xlim = self.ax.get_xlim()
+        xlim = xlim[1] - xlim[0]
+        time = self.circuit.time_start - 0.01*xlim
+        self.ax.text(time, self._qubit_number(qubit), qubit,
+                     ha='right', va='center')
+
+    def _plot_box_with_label(self, time_start, time_end,
+                             n_qubit_start, n_qubit_end, metadata):
         """
         Parameters
         ----------
@@ -126,7 +134,7 @@ class MatplotlibPlotter:
                          label, ha='center', va='center',
                          zorder=self.zorders['text'])
 
-    def plot_vline(self, time, n_qubit_start, n_qubit_end, metadata):
+    def _plot_vline(self, time, n_qubit_start, n_qubit_end, metadata):
         """
 
         Parameters
