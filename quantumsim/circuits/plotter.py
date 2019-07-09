@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from copy import copy
+from copy import copy, deepcopy
 from matplotlib.patches import Rectangle
 
 _golden_mean = (np.sqrt(5) - 1.0) / 2.0
@@ -20,7 +20,7 @@ class MatplotlibPlotter:
         'text': 20,
     }
 
-    def __init__(self, circuit, ax, qubit_order, gate_offset):
+    def __init__(self, circuit, ax, qubit_order, gate_offset, figsize=None):
         self.circuit = circuit
         self.gate_offset = 0.5*gate_offset
 
@@ -28,7 +28,18 @@ class MatplotlibPlotter:
             self.fig = None
             self.ax = ax
         else:
-            self.fig, self.ax = plt.subplots()
+            self.fig, self.ax = plt.subplots(
+                figsize=figsize or (7, 0.5*len(self.circuit.qubits)))
+            self.ax.set_ylim(-1, len(self.circuit.qubits))
+            self.ax.set_yticks([])
+            tmin = self.circuit.time_start
+            tmax = self.circuit.time_end
+
+            if tmax - tmin < 0.1:
+                tmin -= 0.05
+                tmax += 0.05
+            buffer = (tmax - tmin) * 0.05
+            self.ax.set_xlim(tmin - 2.5 * buffer, tmax + 1.5 * buffer)
 
         if callable(qubit_order):
             self.qubits = sorted(circuit.qubits, key=qubit_order)
@@ -45,7 +56,6 @@ class MatplotlibPlotter:
             self._anotate_qubit(qubit)
         for gate in self.circuit.gates:
             self._plot_gate(gate)
-
         return self.fig
 
     def _plot_single_qubit_marker(self, qubit, time_start, duration,
@@ -59,7 +69,6 @@ class MatplotlibPlotter:
         if style == 'marker':
             time = time_start + 0.5 * duration
             marker_kwargs = self._get_marker_kwargs(marker_dict)
-            print(marker_dict, marker_kwargs)
             self.ax.scatter((time,), (self._qubit_number(qubit),),
                             **marker_kwargs)
         elif style == 'box':
@@ -79,7 +88,7 @@ class MatplotlibPlotter:
         -------
 
         """
-        metadata = copy(gate.plot_metadata)
+        metadata = deepcopy(gate.plot_metadata)
         # By default we will plot a box
         style = metadata.pop('style', 'box')
 
