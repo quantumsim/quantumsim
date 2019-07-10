@@ -21,11 +21,10 @@ class TestOperations:
              [[0, np.sqrt(p_damp)], [0, 0]]])
 
         gm_qubit_basis = (bases.gell_mann(2),)
-        gm_two_qubit_basis = gm_qubit_basis + gm_qubit_basis
+        gm_two_qubit_basis = gm_qubit_basis * 2
 
-        damp_op = Operation.from_kraus(damp_kraus_mat, 2)
-        damp_ptm = damp_op.set_bases(bases_in=gm_qubit_basis,
-                                     bases_out=gm_qubit_basis).ptm
+        damp_op = Operation.from_kraus(damp_kraus_mat, gm_qubit_basis)
+        damp_ptm = damp_op.ptm
 
         expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
@@ -33,12 +32,11 @@ class TestOperations:
                                  [p_damp, 0, 0, 1-p_damp]])
         assert np.allclose(damp_ptm, expected_mat)
 
-        with pytest.raises(ValueError, match=r'.* should be a list, .*'):
+        with pytest.raises(ValueError, match=r'.* must be list-like, .*'):
             damp_op.set_bases(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        cz = Operation.from_kraus(cz_kraus_mat, 2).set_bases(gm_two_qubit_basis,
-                                                             gm_two_qubit_basis)
+        cz = Operation.from_kraus(cz_kraus_mat, gm_two_qubit_basis)
 
         assert cz.ptm.shape == (4, 4, 4, 4)
         cz_ptm = cz.ptm.reshape((16, 16))
@@ -52,8 +50,7 @@ class TestOperations:
         qutrit_basis = (bases.gell_mann(3),)
         system_bases = qutrit_basis * 2
 
-        cz = Operation.from_kraus(cz_kraus_mat, 3).set_bases(system_bases,
-                                                             system_bases)
+        cz = Operation.from_kraus(cz_kraus_mat, system_bases)
 
         assert cz.ptm.shape == (9, 9, 9, 9)
         cz_ptm_flat = cz.ptm.reshape((81, 81))
@@ -63,20 +60,21 @@ class TestOperations:
         assert np.isclose(np.sum(cz_ptm_flat[:, 0]), 1)
 
     def test_kraus_to_ptm_errors(self):
+        qubit_basis = (bases.general(2),)
         qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = Operation.from_kraus(cz_kraus_mat, 2)
+        kraus_op = Operation.from_kraus(cz_kraus_mat, qubit_basis*2)
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
-            _ = Operation.from_kraus(wrong_dim_kraus, 2)
+            _ = Operation.from_kraus(wrong_dim_kraus, qubit_basis)
         not_sqr_kraus = np.random.random((4, 2, 3))
         with pytest.raises(ValueError):
-            _ = Operation.from_kraus(not_sqr_kraus, 2)
+            _ = Operation.from_kraus(not_sqr_kraus, qubit_basis)
         with pytest.raises(ValueError):
-            _ = Operation.from_kraus(cz_kraus_mat, 3)
+            _ = Operation.from_kraus(cz_kraus_mat, qutrit_basis)
         with pytest.raises(ValueError):
-            _ = kraus_op.set_bases(qutrit_basis + qutrit_basis)
+            _ = kraus_op.set_bases(qutrit_basis*2)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
@@ -86,9 +84,8 @@ class TestOperations:
         gell_mann_basis = (bases.gell_mann(2),)
         general_basis = (bases.general(2),)
 
-        damp_op_kraus = Operation.from_kraus(damp_kraus_mat, 2)
-        op1 = damp_op_kraus.set_bases(gell_mann_basis, gell_mann_basis)
-        op2 = damp_op_kraus.set_bases(general_basis, general_basis) \
+        op1 = Operation.from_kraus(damp_kraus_mat, gell_mann_basis)
+        op2 = op1.set_bases(general_basis, general_basis) \
             .set_bases(gell_mann_basis, gell_mann_basis)
         assert np.allclose(op1.ptm, op2.ptm)
         assert op1.bases_in == op2.bases_in
