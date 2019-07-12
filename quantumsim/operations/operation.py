@@ -340,6 +340,42 @@ class Operation(metaclass=abc.ABCMeta):
 _IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
 
 
+class PreOperation(Operation):
+    """An operation that does not have a defined PTM, and thus cannot be called.
+
+    Parameters
+    -----
+
+    function - function
+        the generating function for a true operation
+    params - dictionary
+        the currently set variables to be passed to the generation function
+    aliases - dictionary
+        the names to be accepted for any true variable
+    """
+
+    @property
+    def params(self):
+        raise NotImplementedError
+        return self._params
+
+    @property
+    def aliases(self):
+        raise NotImplementedError
+        return self._aliases
+
+    def set(self, **kwargs):
+        raise NotImplementedError
+        for key in kwargs:
+            if key not in self.aliases:
+                raise KeyError("parameter '{}' not currently recognised".format(key))
+            if isinstance(kwargs[key], str):
+                # reset alias:
+                self.aliases[kwargs[key]] = key
+            self.params[self.aliases[key]]
+
+
+
 class _PTMOperation(Operation):
     """Generic transformation of a state.
 
