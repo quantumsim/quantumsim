@@ -20,7 +20,7 @@ import pycuda.reduction
 # noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
-from .state import StateBase
+from .pauli_vector import PauliVectorBase
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -57,7 +57,7 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
 )
 
 
-class StateCuda(StateBase):
+class PauliVectorCuda(PauliVectorBase):
     _gpuarray_cache = {}
 
     def __init__(self, bases, pv=None, *, force=False):

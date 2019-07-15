@@ -18,6 +18,5 @@ Internal operation types
    :toctree: generated/
 
    _PTMOperation
-   _KrausOperation
    _Chain
 

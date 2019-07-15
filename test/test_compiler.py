@@ -12,7 +12,7 @@ from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
 # noinspection PyProtectedMember
 from quantumsim.operations.operation import _PTMOperation
-from quantumsim.states import StateNumpy as State
+from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 
 
 with warnings.catch_warnings():
@@ -133,14 +133,14 @@ class TestCompiler:
         rx_angle = lib.rotate_x(angle)
         rx_2angle = lib.rotate_x(2*angle)
         chain0 = Operation.from_sequence(rx_angle.at(0), rx_angle.at(0))
-        state0 = State.from_dm(dm, bases_full)
-        chain0(state0, 0)
+        pv0 = PauliVector.from_dm(dm, bases_full)
+        chain0(pv0, 0)
         assert chain0.num_qubits == 1
         assert len(chain0.operations) == 2
 
         chain0_c = chain0.compile(bases_full, bases_full)
-        state1 = State.from_dm(dm, bases_full)
-        chain0_c(state1, 0)
+        pv1 = PauliVector.from_dm(dm, bases_full)
+        chain0_c(pv1, 0)
         assert chain0_c.num_qubits == 1
         assert isinstance(chain0_c, _PTMOperation)
         op_angle = chain0_c
@@ -149,7 +149,7 @@ class TestCompiler:
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm == approx(op_2angle.ptm)
-        assert state1.to_pv() == approx(state0.to_pv())
+        assert pv1.to_pv() == approx(pv0.to_pv())
 
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Operation.from_sequence(rx_pi.at(0), rx_pi.at(0))
@@ -180,13 +180,13 @@ class TestCompiler:
         assert len(chain.operations) == 2
         assert isinstance(chain_c, _PTMOperation)
 
-        state1 = State.from_dm(dm, bases_full)
-        state2 = State.from_dm(dm, bases_full)
-        chain(state1, 0, 1)
-        chain_c(state2, 0, 1)
+        pv1 = PauliVector.from_dm(dm, bases_full)
+        pv2 = PauliVector.from_dm(dm, bases_full)
+        chain(pv1, 0, 1)
+        chain_c(pv2, 0, 1)
 
-        assert state1.meas_prob(0) == approx(state2.meas_prob(0))
-        assert state1.meas_prob(1) == approx(state2.meas_prob(1))
+        assert pv1.meas_prob(0) == approx(pv2.meas_prob(0))
+        assert pv1.meas_prob(1) == approx(pv2.meas_prob(1))
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
     def test_chain_merge_prev(self, d, lib):
@@ -208,13 +208,13 @@ class TestCompiler:
         assert len(chain.operations) == 2
         assert isinstance(chain_c, _PTMOperation)
 
-        state1 = State.from_dm(dm, bases_full)
-        state2 = State.from_dm(dm, bases_full)
-        chain(state1, 0, 1)
-        chain_c(state2, 0, 1)
+        pv1 = PauliVector.from_dm(dm, bases_full)
+        pv2 = PauliVector.from_dm(dm, bases_full)
+        chain(pv1, 0, 1)
+        chain_c(pv2, 0, 1)
 
-        assert np.allclose(state1.meas_prob(0), state2.meas_prob(0))
-        assert np.allclose(state1.meas_prob(1), state2.meas_prob(1))
+        assert np.allclose(pv1.meas_prob(0), pv2.meas_prob(0))
+        assert np.allclose(pv1.meas_prob(1), pv2.meas_prob(1))
 
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
     def test_chain_compile_three_qubit(self, d, lib):
@@ -296,12 +296,12 @@ class TestCompiler:
         assert op2.bases_out[1] == bases_out[2]
 
         dm = random_density_matrix(3**3, seed=85)
-        state1 = State.from_dm(dm, (b01, b01, b0))
-        state2 = State.from_dm(dm, (b01, b01, b0))
+        pv1 = PauliVector.from_dm(dm, (b01, b01, b0))
+        pv2 = PauliVector.from_dm(dm, (b01, b01, b0))
 
-        zz(state1, 0, 1, 2)
-        zzc(state2, 0, 1, 2)
+        zz(pv1, 0, 1, 2)
+        zzc(pv2, 0, 1, 2)
 
         # Compiled version still needs to be projected, so we can't compare
         # Pauli vectors, so we can to check only DM diagonals.
-        assert np.allclose(state1.diagonal(), state2.diagonal())
+        assert np.allclose(pv1.diagonal(), pv2.diagonal())

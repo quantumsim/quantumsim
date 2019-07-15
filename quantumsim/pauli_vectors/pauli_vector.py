@@ -3,7 +3,7 @@ import pytools
 from quantumsim.algebra.algebra import dm_to_pv, pv_to_dm
 
 
-class StateBase(metaclass=abc.ABCMeta):
+class PauliVectorBase(metaclass=abc.ABCMeta):
     """A metaclass, that defines standard interface for Quantumsim density
     matrix backend.
 

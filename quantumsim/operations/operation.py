@@ -13,7 +13,8 @@ class Operation(metaclass=abc.ABCMeta):
     """A metaclass for all quantum operations.
 
     Every operation has to implement call method, that takes a
-    :class:`quantumsim.state.StateBase` object and modifies it inline.
+    :class:`quantumsim.pauli_vectors.PauliVectorBase` object and modifies it
+    inline.
     """
 
     @property
@@ -34,15 +35,15 @@ class Operation(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def __call__(self, state, *qubits):
-        """Applies the operation inline (modifying the state) to the state
-        to certain qubits. Number of qubit indices should be aligned with a
+    def __call__(self, pauli_vector, *qubits):
+        """Applies the operation inline (modifying the state) to the Pauli
+        vector. Number of qubit indices should be aligned with a
         dimensionality of the operation.
 
         Parameters
         ----------
-        state : quantumsim.State
-            A state of a qubit
+        pauli_vector : quantumsim.pauli_vectors.PauliVectorBase
+            A Pauli vector, representing the state of qubits
         q0, ..., qN : int
             Indices of a qubit in a state
         """
@@ -267,10 +268,10 @@ class Operation(metaclass=abc.ABCMeta):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.
 
-        `bases_in` should match the basis of a state, to which operation is
-        applied. If the state bases are not subbases of an operation,
-        or operation itself is a compiled operation with a reduced basis,
-        and `bases_in` or `bases_out` are not the subbases of those,
+        `bases_in` should match the basis of a Pauli vector, to which
+        operation is applied. If the state bases are not subbases of an
+        operation, or operation itself is a compiled operation with a reduced
+        basis, and `bases_in` or `bases_out` are not the subbases of those,
         for which operation is compiled for, applying an operation will
         silently produce wrong result. We advice to use this function only
         on operations, that were not yet compiled.
@@ -419,12 +420,12 @@ class _PTMOperation(Operation):
             new_op = _PTMOperation(new_ptm, b_in, b_out)
         return new_op
 
-    def __call__(self, state, *qubit_indices):
+    def __call__(self, pauli_vector, *qubit_indices):
         """
 
         Parameters
         ----------
-        state : quantumsim.State
+        pauli_vector : quantumsim.pauli_vectors.PauliVectorBase
         q0, ..., qN : indices of qubits to act on
         """
         if len(qubit_indices) != self.num_qubits:
@@ -433,14 +434,14 @@ class _PTMOperation(Operation):
                              .format(self.num_qubits, len(qubit_indices)))
         op = self
         for q, b in zip(qubit_indices, self.bases_in):
-            if state.bases[q] != b:
+            if pauli_vector.bases[q] != b:
                 op = self.set_bases(
-                    bases_in=tuple([state.bases[q] for q in qubit_indices]))
+                    bases_in=tuple([pauli_vector.bases[q] for q in qubit_indices]))
                 break
 
-        state.apply_ptm(op.ptm, *qubit_indices)
+        pauli_vector.apply_ptm(op.ptm, *qubit_indices)
         for q, b in zip(qubit_indices, op.bases_out):
-            state.bases[q] = b
+            pauli_vector.bases[q] = b
 
 
 class _Chain(Operation):
@@ -482,14 +483,14 @@ class _Chain(Operation):
     def num_qubits(self):
         return self._num_qubits
 
-    def __call__(self, state, *qubit_indices):
+    def __call__(self, pauli_vector, *qubit_indices):
         if len(qubit_indices) != self._num_qubits:
             raise ValueError('This is a {}-qubit operation, number of qubit '
                              'indices provided is {}'
                              .format(self._num_qubits, len(qubit_indices)))
         results = []
         for op, indices in self.operations:
-            result = op(state, *(qubit_indices[i] for i in indices))
+            result = op(pauli_vector, *(qubit_indices[i] for i in indices))
             if result is not None:
                 results.append(result)
         return results if len(results) > 0 else None

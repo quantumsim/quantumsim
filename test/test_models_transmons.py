@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from quantumsim import bases, State
+from quantumsim import bases, PauliVector
 from quantumsim.models import transmons as lib
 
 
@@ -13,7 +13,7 @@ class TestLibrary:
     def test_rotate_x(self):
         basis = (bases.general(3),)
         sys_bases = basis * 3
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         rotate90 = lib.rotate_x(0.5*np.pi)
         rotate180 = lib.rotate_x(np.pi)
@@ -37,7 +37,7 @@ class TestLibrary:
     def test_rotate_y(self):
         basis = (bases.general(3),)
         sys_bases = basis * 3
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         rotate90 = lib.rotate_y(0.5*np.pi)
         rotate180 = lib.rotate_y(np.pi)
@@ -61,7 +61,7 @@ class TestLibrary:
     def test_rotate_z(self):
         sqrt2 = np.sqrt(2)
         qubit_basis = (bases.general(3),)
-        dm = State(qubit_basis)
+        dm = PauliVector(qubit_basis)
 
         rotate90 = lib.rotate_z(0.5*np.pi)
         rotate180 = lib.rotate_z(np.pi)
@@ -74,7 +74,7 @@ class TestLibrary:
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, 0, sqrt2, 0, 0, 0, 0, 0])
-        superpos_dm = State(qubit_basis, had_expansion)
+        superpos_dm = PauliVector(qubit_basis, had_expansion)
 
         rotate180(superpos_dm, 0)
         assert np.allclose(superpos_dm.to_pv(),
@@ -95,7 +95,7 @@ class TestLibrary:
     def test_hadamard(self):
         qubit_basis = (bases.general(3),)
         sys_bases = qubit_basis+qubit_basis
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         hadamard = lib.hadamard()
 

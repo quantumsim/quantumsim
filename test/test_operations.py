@@ -8,7 +8,7 @@ import numpy as np
 
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
-from quantumsim.states import StateNumpy as State
+from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 from quantumsim.models import qubits as lib2
 from quantumsim.models import transmons as lib3
 
@@ -143,12 +143,11 @@ class TestOperations:
             Operation.from_sequence(op1, op2).at(1)
         )
 
-
     def test_chain_apply(self):
         b = (bases.general(2),) * 3
         dm = random_density_matrix(8, seed=93)
-        state1 = State.from_dm(dm, b)
-        state2 = State.from_dm(dm, b)
+        pv1 = PauliVector.from_dm(dm, b)
+        pv2 = PauliVector.from_dm(dm, b)
 
         # Some random gate sequence
         op_indices = [(lib2.rotate_x(np.pi/2), (0,)),
@@ -158,10 +157,10 @@ class TestOperations:
                       (lib2.rotate_x(-np.pi/2), (0,))]
 
         for op, indices in op_indices:
-            op(state1, *indices),
+            op(pv1, *indices),
 
         circuit = Operation.from_sequence(
             *(op.at(*ix) for op, ix in op_indices))
-        circuit(state2, 0, 1, 2)
+        circuit(pv2, 0, 1, 2)
 
-        assert np.all(state1.to_pv() == state2.to_pv())
+        assert np.all(pv1.to_pv() == pv2.to_pv())
