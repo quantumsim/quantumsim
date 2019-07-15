@@ -2,14 +2,16 @@
 from ._version import __version__
 from . import pauli_vectors, bases
 from .operations.operation import Operation
+from .states import State
 
 PauliVector = pauli_vectors.Default
 
 __all__ = [
     'bases',
     'pauli_vectors',
-    'PauliVector',
     'Operation',
+    'PauliVector',
+    'State',
 ]
 
 
