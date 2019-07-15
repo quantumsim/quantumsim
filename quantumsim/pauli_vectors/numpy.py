@@ -2,10 +2,10 @@ import warnings
 
 import numpy as np
 import pytools
-from .state import StateBase
+from .pauli_vector import PauliVectorBase
 
 
-class StateNumpy(StateBase):
+class PauliVectorNumpy(PauliVectorBase):
     def __init__(self, bases, pv=None, *, force=False):
         """A density matrix describing several subsystems with variable number
         of dimensions.

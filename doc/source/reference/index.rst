@@ -13,7 +13,7 @@ Low-level interface
    :maxdepth: 1
 
    quantumsim.bases
-   quantumsim.states
+   quantumsim.pauli_vectors
    quantumsim.operations
    quantumsim.models
 

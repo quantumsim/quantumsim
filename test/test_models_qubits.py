@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from quantumsim import bases, State
+from quantumsim import bases, PauliVector
 from quantumsim.models import qubits as lib
 
 
@@ -13,7 +13,7 @@ class TestLibrary:
     def test_rotate_x(self):
         qubit_basis = (bases.general(2),)
         sys_bases = qubit_basis * 3
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         rotate90 = lib.rotate_x(0.5*np.pi)
         rotate180 = lib.rotate_x(np.pi)
@@ -37,7 +37,7 @@ class TestLibrary:
     def test_rotate_y(self):
         qubit_basis = (bases.general(2),)
         sys_bases = qubit_basis+qubit_basis+qubit_basis
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         rotate90 = lib.rotate_y(0.5*np.pi)
         rotate180 = lib.rotate_y(np.pi)
@@ -61,7 +61,7 @@ class TestLibrary:
     def test_rotate_z(self):
         sqrt2 = np.sqrt(2)
         qubit_basis = (bases.general(2),)
-        dm = State(qubit_basis)
+        dm = PauliVector(qubit_basis)
 
         rotate90 = lib.rotate_z(0.5*np.pi)
         rotate180 = lib.rotate_z(np.pi)
@@ -74,8 +74,8 @@ class TestLibrary:
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, sqrt2, 0])
-        superpos_dm = State(qubit_basis,
-                            had_expansion)
+        superpos_dm = PauliVector(qubit_basis,
+                                  had_expansion)
 
         rotate180(superpos_dm, 0)
         assert np.allclose(superpos_dm.to_pv(),
@@ -95,7 +95,7 @@ class TestLibrary:
 
     def test_rotate_euler(self):
         qubit_basis = (bases.general(2),)
-        dm = State(qubit_basis + qubit_basis)
+        dm = PauliVector(qubit_basis + qubit_basis)
 
         rotate90x = lib.rotate_euler(0, 0.5*np.pi, 0)
         rotate90y = lib.rotate_euler(0, 0.5*np.pi, 0)
@@ -109,7 +109,7 @@ class TestLibrary:
     def test_hadamard(self):
         qubit_basis = (bases.general(2),)
         sys_bases = qubit_basis+qubit_basis
-        dm = State(sys_bases)
+        dm = PauliVector(sys_bases)
 
         hadamard = lib.hadamard()
 
@@ -127,7 +127,7 @@ class TestLibrary:
                        bases.general(2))
 
         dm = np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0])
-        s = State.from_dm(dm, qubit_bases)
+        s = PauliVector.from_dm(dm, qubit_bases)
         assert np.allclose(s.meas_prob(0), (1, 0))
         assert np.allclose(s.meas_prob(1), (0.25, 0.75))
         assert np.allclose(s.meas_prob(2), (1, 0))
