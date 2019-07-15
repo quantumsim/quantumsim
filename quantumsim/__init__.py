@@ -2,6 +2,7 @@
 from ._version import __version__
 from . import pauli_vectors, bases
 from .operations.operation import Operation
+from .setups import Setup
 from .states import State
 
 PauliVector = pauli_vectors.Default
@@ -11,6 +12,7 @@ __all__ = [
     'pauli_vectors',
     'Operation',
     'PauliVector',
+    'Setup',
     'State',
 ]
 
