@@ -1,12 +1,14 @@
 import abc
+import inspect
 from copy import copy
+
+from quantumsim import Operation
 
 
 class CircuitBase(metaclass=abc.ABCMeta):
 
-    @property
     @abc.abstractmethod
-    def gates(self):
+    def operation(self, **kwargs):
         pass
 
     @property
@@ -14,19 +16,9 @@ class CircuitBase(metaclass=abc.ABCMeta):
     def qubits(self):
         pass
 
-    @qubits.setter
     @abc.abstractmethod
-    def qubits(self, qubits):
+    def __call__(self, qubits):
         pass
-
-    @abc.abstractmethod
-    def call(self, qubits):
-        pass
-
-    def set_qubits(self, qubits):
-        circuit = copy(self)
-        circuit.qubits = qubits
-        return circuit
 
     def __add__(self, other):
         all_gates = self.gates + other.gates
@@ -37,7 +29,6 @@ class CircuitBase(metaclass=abc.ABCMeta):
     def __matmul__(self, other):
         if isinstance(other, CircuitBase):
             raise TypeError("Circuits may only be combined via addition!")
-        state = other
         for gate in self.gates:
             state = gate @ state
         return state
@@ -45,15 +36,11 @@ class CircuitBase(metaclass=abc.ABCMeta):
         #     return self + other.set_time_start(self.time_end)
 
 
-class TimedObject(CircuitBase, metaclass=abc.ABCMeta):
+class TimedCircuitBase(CircuitBase, metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
     def time_start(self):
-        pass
-
-    @abc.abstractmethod
-    def shift(self, time):
         pass
 
     @property
@@ -101,7 +88,7 @@ class Circuit(CircuitBase):
         raise NotImplementedError
 
 
-class TimedCircuit(Circuit, TimedObject):
+class TimedCircuit(Circuit, TimedCircuitBase):
 
     @property
     def time_start(self):
@@ -128,12 +115,63 @@ class TimedCircuit(Circuit, TimedObject):
 
 
 class Gate(CircuitBase):
-    def __init__(self, qubits,
-                 operations=None,
-                 plot_metadata=None):
+    def __init__(self, qubits, operation, plot_metadata=None):
+        """A gate without notion of timing.
+
+        Parameters
+        ----------
+        qubits : str or list of str
+            Names of the involved qubits
+        operation : quantumsim.Operation or function
+            Operation, that corresponds to this gate, or a function,
+            that takes a certain number of arguments (gate parameters) and
+            returns an operation.
+        plot_metadata : None or dict
+            Metadata, that describes how to represent a gate on a plot.
+            TODO: link documentation, when plotting is ready.
+        """
         self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
-        self.operations = operations or []
+        if isinstance(operation, Operation):
+            self._operation_func = lambda: operation
+            self._params = []
+        elif callable(operation):
+            self._operation_func = operation
+            argspec = inspect.getfullargspec(operation)
+            if argspec.varargs is not None:
+                raise ValueError(
+                    "`operation` function can't accept free arguments.")
+            if argspec.varkw is not None:
+                raise ValueError(
+                    "`operation` function can't accept free keyword arguments.")
+            self._params = argspec.args
+        else:
+            raise ValueError('`operation` argument must be either Operation, '
+                             'or a function, that returns Operation.')
         self.plot_metadata = plot_metadata or {}
+
+    def operation(self, **kwargs):
+        try:
+            params = {p: kwargs[p] for p in self._params}
+        except KeyError as err:
+            raise RuntimeError(
+                "Can't obtain an operation for gate {}, since parameter \"{}\" "
+                "is not provided.".format(repr(self), err.args[0]))
+        op = self._operation_func(**params)
+        if not isinstance(op, Operation):
+            raise RuntimeError(
+                'Invalid operation function was provided for the gate {} '
+                'during its creation: it must return quantumsim.Operation. '
+                'See quantumsim.Gate documentation for more information.'
+                .format(repr(self)))
+        if not op.num_qubits == len(self.qubits):
+            raise RuntimeError(
+                'Invalid operation function was provided for the gate {} '
+                'during its creation: its number of qubits does not match '
+                'one of the gate. '
+                'See quantumsim.Gate documentation for more information.'
+                .format(repr(self)))
+        return op
+
 
     @property
     def gates(self):
@@ -152,7 +190,6 @@ class Gate(CircuitBase):
         self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
 
     def __call__(self, *qubits, **kwargs):
-
         new_gate = copy(self)
         new_gate.set(*qubits, **kwargs)
         return new_gate
@@ -189,10 +226,14 @@ class Gate(CircuitBase):
             state = op(**kwargs_to_send) @ state
 
 
-class TimedGate(Gate, TimedObject):
+class TimedGate(Gate, TimedCircuitBase):
+
+    @property
+    def params(self):
+        pass
 
     def __init__(self, durations, times_start=None, **kwargs):
-        '''TimedGate - a gate with a well-defined timing.
+        """TimedGate - a gate with a well-defined timing.
 
         Parameters:
         -----
@@ -200,7 +241,7 @@ class TimedGate(Gate, TimedObject):
             the duration of the gate on each of the qubits
         time_start : dictionary of floats or None
             an absolute start time on each of the qubits
-        '''
+        """
         super().__init__(**kwargs)
         self._times_start = times_start or {q: 0 for q in self.qubits}
         self._durations = durations
