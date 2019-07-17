@@ -1,11 +1,13 @@
 import abc
 import inspect
+import re
 from copy import copy
 
 from quantumsim import Operation
 
 
 class CircuitBase(metaclass=abc.ABCMeta):
+    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
 
     @abc.abstractmethod
     def operation(self, **kwargs):
@@ -133,7 +135,8 @@ class Gate(CircuitBase):
         self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
         if isinstance(operation, Operation):
             self._operation_func = lambda: operation
-            self._params = []
+            self._params_real = tuple()
+            self._params = set()
         elif callable(operation):
             self._operation_func = operation
             argspec = inspect.getfullargspec(operation)
@@ -143,21 +146,27 @@ class Gate(CircuitBase):
             if argspec.varkw is not None:
                 raise ValueError(
                     "`operation` function can't accept free keyword arguments.")
-            self._params = argspec.args
+            self._params_real = tuple(argspec.args)
+            self._params = set(self._params_real)
         else:
             raise ValueError('`operation` argument must be either Operation, '
                              'or a function, that returns Operation.')
+        self._params_set = {}
+        self._params_subs = {}
         self.plot_metadata = plot_metadata or {}
 
     def operation(self, **kwargs):
+        kwargs.update(self._params_set)  # set parameters take priority
         try:
-            params = {p: kwargs[p] for p in self._params}
+            for name, real_name in self._params_subs.items():
+                kwargs[real_name] = kwargs.pop(name)
+            args = tuple(kwargs[name] for name in self._params_real)
         except KeyError as err:
             raise RuntimeError(
                 "Can't construct an operation for gate {}, "
                 "since parameter \"{}\" is not provided."
                 .format(repr(self), err.args[0]))
-        op = self._operation_func(**params)
+        op = self._operation_func(*args)
         if not isinstance(op, Operation):
             raise RuntimeError(
                 'Invalid operation function was provided for the gate {} '
@@ -185,30 +194,28 @@ class Gate(CircuitBase):
     def params(self):
         return self._params
 
-    @qubits.setter
-    def qubits(self, qubits):
-        self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
+    def _set_param(self, name, value):
+        if name not in self._params:
+            return
+        real_name = self._params_subs.pop(name, name)
+        if isinstance(value, str):
+            if self._valid_identifier_re.match(value) is None:
+                raise ValueError("\"{}\" is not a valid Python "
+                                 "identifier.".format(value))
+            self._params_subs[value] = real_name
+            self._params.add(value)
+        else:
+            self._params_set[real_name] = value
+        self._params.remove(name)
+
+    def set(self, **kwargs):
+        for item in kwargs.items():
+            self._set_param(*item)
 
     def __call__(self, *qubits, **kwargs):
         new_gate = copy(self)
         new_gate.set(*qubits, **kwargs)
         return new_gate
-
-    def set(self, *qubits, **kwargs):
-
-        if len(qubits) != 0:
-            self.qubits = qubits
-
-        for key in kwargs:
-            if (key not in self.kwargs) and (key not in self.free_kwargs):
-                raise KeyError("Parameter '{}' not understood.".format(key))
-
-        for key in kwargs:
-            if key in self.kwargs:
-                self.kwargs[key] = kwargs[key]
-            else:  # key in self.free_kwargs
-                self.kwargs[key] = kwargs[key]
-                del self.free_kwargs[self.free_kwargs.index(key)]
 
     def __matmul__(self, other):
         if self.free_kwargs:
