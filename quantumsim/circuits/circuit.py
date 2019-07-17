@@ -154,8 +154,9 @@ class Gate(CircuitBase):
             params = {p: kwargs[p] for p in self._params}
         except KeyError as err:
             raise RuntimeError(
-                "Can't obtain an operation for gate {}, since parameter \"{}\" "
-                "is not provided.".format(repr(self), err.args[0]))
+                "Can't construct an operation for gate {}, "
+                "since parameter \"{}\" is not provided."
+                .format(repr(self), err.args[0]))
         op = self._operation_func(**params)
         if not isinstance(op, Operation):
             raise RuntimeError(
@@ -172,7 +173,6 @@ class Gate(CircuitBase):
                 .format(repr(self)))
         return op
 
-
     @property
     def gates(self):
         return self,
@@ -183,7 +183,7 @@ class Gate(CircuitBase):
 
     @property
     def params(self):
-        raise NotImplementedError
+        return self._params
 
     @qubits.setter
     def qubits(self, qubits):
