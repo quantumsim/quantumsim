@@ -2,7 +2,7 @@ from collections import deque
 from itertools import repeat
 import numpy as np
 
-from .operation import _Chain, _PTMOperation
+from .operation import Operation
 
 
 class Node:
@@ -32,6 +32,10 @@ class Node:
         return self.op.at(*self.qubits)
 
     @property
+    def op_ptm(self):
+        return self.op.ptm(self.op.bases_in, self.op.bases_out)
+
+    @property
     def bases_in_tuple(self):
         return tuple(self.bases_in_dict[qubit] for qubit in self.qubits)
 
@@ -45,9 +49,10 @@ class Node:
     def arrange(self):
         offset = max(self.qubits) + 1
         idx = self.qubits + [q + offset for q in self.qubits]
-        new_ptm = np.einsum(self.op.ptm, idx, sorted(idx))
+        new_ptm = np.einsum(self.op.ptm(self.op.bases_in, self.op.bases_out),
+                            idx, sorted(idx))
         self.qubits = sorted(self.qubits)
-        self.op = _PTMOperation(
+        self.op = Operation.from_ptm(
             new_ptm, self.bases_in_tuple, self.bases_out_tuple)
 
 
@@ -96,7 +101,8 @@ class CircuitGraph:
 
     def to_operation(self):
         if len(self.nodes) > 1:
-            return _Chain([node.to_indexed_operation() for node in self.nodes])
+            return Operation.from_sequence(
+                [node.to_indexed_operation() for node in self.nodes])
         elif len(self.nodes) == 1:
             return self.nodes[0].op
         else:
@@ -141,7 +147,7 @@ class ChainCompiler:
                       zip(node.bases_out_tuple, node.bases_in_tuple))
         node.op = node.op.set_bases(b_in, b_out)
         if self.optimize:
-            b_in, b_out = self.optimal_bases(node.op)
+            b_in, b_out = self.optimal_bases(node)
             node.op = node.op.set_bases(b_in, b_out)
 
         for qubit, bi, bo in zip(node.qubits, node.op.bases_in,
@@ -160,7 +166,7 @@ class ChainCompiler:
         if not node.is_arranged():
             node.arrange()
 
-    def optimal_bases(self, op):
+    def optimal_bases(self, node):
         """Based on input or output bases provided, determine an optimal
         basis, throwing away all basis elements, that are guaranteed not to
         contribute to the result of PTM application.
@@ -178,33 +184,33 @@ class ChainCompiler:
 
         Parameters
         ----------
-        op : quantumsim.operations.Operation
+        node : Node
 
         Returns
         -------
         opt_basis_in, opt_basis_out: tuple of quantumsim.bases.PauliBasis
             Subbases of input bases, that will contribute to computation.
         """
-        d_in = np.prod([b.dim_pauli for b in op.bases_in])
-        d_out = np.prod([b.dim_pauli for b in op.bases_out])
-        u, s, vh = np.linalg.svd(op.ptm.reshape(d_out, d_in),
-                                 full_matrices=False)
+        d_in = np.prod([b.dim_pauli for b in node.op.bases_in])
+        d_out = np.prod([b.dim_pauli for b in node.op.bases_out])
+        u, s, vh = np.linalg.svd(node.op_ptm
+                                 .reshape(d_out, d_in), full_matrices=False)
         (truncate_index,) = (s > self.sv_cutoff).shape
 
         mask_in = np.any(
             np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
-            .reshape(tuple(b.dim_pauli for b in op.bases_in)) \
+            .reshape(tuple(b.dim_pauli for b in node.op.bases_in)) \
             .nonzero()
         mask_out = np.any(
             np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
-            .reshape(tuple(b.dim_pauli for b in op.bases_out)) \
+            .reshape(tuple(b.dim_pauli for b in node.op.bases_out)) \
             .nonzero()
 
         opt_bases_in = []
         opt_bases_out = []
         for opt_bases, bases, mask in (
-                (opt_bases_in, op.bases_in, mask_in),
-                (opt_bases_out, op.bases_out, mask_out)):
+                (opt_bases_in, node.op.bases_in, mask_in),
+                (opt_bases_out, node.op.bases_out, mask_out)):
             for basis, involved_indices in zip(bases, mask):
                 # Figure out what single-qubit basis elements are not
                 # involved at all
@@ -250,14 +256,14 @@ class ChainCompiler:
         for i, j in zip(contr_indices, node_out):
             other_in[i] = j
 
-        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                              other.op.ptm, other_out + other_in,
+        other_ptm = np.einsum(node.op_ptm, node_out + node_in,
+                              other.op_ptm, other_out + other_in,
                               optimize=True)
 
         for qubit, node_prev in node.prev.items():
             other.prev[qubit] = node_prev
             other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
-            other.op = _PTMOperation(
+            other.op = Operation.from_ptm(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_prev is None:
                 graph.starts[qubit] = other
@@ -298,15 +304,15 @@ class ChainCompiler:
         for i, j in zip(contr_indices, node_in):
             other_out[i] = j
 
-        other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                              other.op.ptm, other_out + other_in,
+        other_ptm = np.einsum(node.op_ptm, node_out + node_in,
+                              other.op_ptm, other_out + other_in,
                               optimize=True)
 
         for qubit, node_next in node.next.items():
             other.next[qubit] = node_next
             assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
             other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
-            other.op = _PTMOperation(
+            other.op = Operation.from_ptm(
                 other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_next is None:
                 graph.ends[qubit] = other

@@ -75,6 +75,27 @@ class Operation(metaclass=abc.ABCMeta):
         if bases_out is not None:
             self._validate_bases(bases_out=bases_out)
 
+    @abc.abstractmethod
+    def ptm(self, bases_in, bases_out=None):
+        """Return a full Pauli transfer matrix of the operation.
+
+        Parameters
+        ----------
+        bases_in : tuple of PauliBasis
+            Input basis of the PTM
+        bases_out : tuple of PauliBasis or None
+            Output bases of the PTM. If None, deraults to bases_in
+
+        Returns
+        -------
+        ptm : ndarray
+            Pauli transfer matrix in bases specified.
+        """
+        self._validate_bases(bases_in=bases_in)
+        if bases_out is not None:
+            self._validate_bases(bases_out=bases_out)
+
+
     @staticmethod
     def from_ptm(ptm, bases_in, bases_out=None):
         """Construct completely positive map, based on Pauli transfer matrix.
@@ -368,7 +389,7 @@ class _PTMOperation(Operation):
     """
 
     def __init__(self, ptm, bases_in, bases_out):
-        self.ptm = ptm
+        self._ptm = ptm
         self.bases_in = bases_in
         self.bases_out = bases_out
         self._dim_hilbert = bases_in[0].dim_hilbert
@@ -400,7 +421,7 @@ class _PTMOperation(Operation):
         If PTM acts on a reduced basis or reduces a basis (for example,
         it is a projection), elements can be less than :math:`d^2`.
         """
-        return self.ptm.shape
+        return self._ptm.shape
 
     @property
     def num_qubits(self):
@@ -414,11 +435,18 @@ class _PTMOperation(Operation):
         if b_in == self.bases_in and b_out == self.bases_out:
             new_op = self
         else:
-            new_ptm = ptm_convert_basis(self.ptm,
+            new_ptm = ptm_convert_basis(self._ptm,
                                         self.bases_in, self.bases_out,
                                         b_in, b_out)
             new_op = _PTMOperation(new_ptm, b_in, b_out)
         return new_op
+
+    def ptm(self, bases_in, bases_out=None):
+        bases_out = bases_out or bases_in
+        if bases_in == self.bases_in and bases_out == self.bases_out:
+            return self._ptm
+        else:
+            return self.set_bases(bases_in, bases_out)._ptm
 
     def __call__(self, pauli_vector, *qubit_indices):
         """
@@ -439,7 +467,7 @@ class _PTMOperation(Operation):
                     bases_in=tuple([pauli_vector.bases[q] for q in qubit_indices]))
                 break
 
-        pauli_vector.apply_ptm(op.ptm, *qubit_indices)
+        pauli_vector.apply_ptm(op._ptm, *qubit_indices)
         for q, b in zip(qubit_indices, op.bases_out):
             pauli_vector.bases[q] = b
 
@@ -499,3 +527,16 @@ class _Chain(Operation):
         super().set_bases(bases_in, bases_out)
         compiler = self._default_compiler_cls(self, optimize=False)
         return compiler.compile(bases_in, bases_out)
+
+    def ptm(self, bases_in, bases_out=None):
+        super().ptm(bases_in, bases_out)
+        bases_out = bases_out or bases_in
+        ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
+        start_ptm = Operation.from_ptm(
+            np.identity(np.prod(ptm_in_shape), dtype=float)
+            .reshape(ptm_in_shape*2), bases_in)
+        return self._default_compiler_cls(
+            Operation.from_sequence(start_ptm, self),
+            optimize=False) \
+            .compile(bases_in, bases_out) \
+            .ptm(bases_in, bases_out)
