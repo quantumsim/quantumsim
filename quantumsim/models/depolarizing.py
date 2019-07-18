@@ -2,7 +2,7 @@
 We put the error channel *after* the gate in each instance.
 '''
 
-from quantumsim.circuit import Gate, TwoPTMGate
+from quantumsim.circuit import Gate, SinglePTMGate, TwoPTMGate
 from quantumsim import ptm
 from quantumsim.models import noiseless
 import numpy as np
@@ -11,31 +11,35 @@ import numpy as np
 def depolarizing_channel(depol_prob):
     op = np.identity(4)
     for j in range(3):
-        op[j, j] = depol_prob
+        op[j+1, j+1] *= (1-depol_prob)
     op = ptm.to_0xy1_basis(op)
     return op
 
 
-class DepolarizingGate(Gate):
-    def __init__(self, depol_prob, **kwargs):
-        super().__init__(**kwargs)
+class DepolarizingSinglePTMGate(SinglePTMGate):
+    def __init__(self, bit, time, depol_prob, **kwargs):
+        super().__init__(bit, time, **kwargs)
         error_ptm = depolarizing_channel(depol_prob)
-        if isinstance(self, TwoPTMGate):
-            error_ptm = np.kron(error_ptm, error_ptm)
-        self.ptm = error_ptm @ ptm
+        self.ptm = error_ptm @ self.ptm
 
+class DepolarizingTwoPTMGate(TwoPTMGate):
+    def __init__(self, bit0, bit1, time, depol_prob, **kwargs):
+        super().__init__(bit0, bit1, time, **kwargs)
+        error_ptm = depolarizing_channel(depol_prob)
+        error_ptm = np.kron(error_ptm, error_ptm)
+        self.two_ptm = error_ptm @ self.two_ptm
 
-class RotateX(noiseless.RotateX, DepolarizingGate):
+class RotateX(DepolarizingSinglePTMGate, noiseless.RotateX):
     pass
-class RotateY(noiseless.RotateY, DepolarizingGate):
+class RotateY(DepolarizingSinglePTMGate, noiseless.RotateY):
     pass
-class RotateZ(noiseless.RotateZ, DepolarizingGate):
+class RotateZ(DepolarizingSinglePTMGate, noiseless.RotateZ):
     pass
-class CPhase(noiseless.CPhase, DepolarizingGate):
+class CPhase(DepolarizingSinglePTMGate, noiseless.CPhase):
     pass
-class CNOT(noiseless.CNOT, DepolarizingGate):
+class CNOT(DepolarizingTwoPTMGate, noiseless.CNOT):
     pass
-class ISwap(noiseless.ISwap, DepolarizingGate):
+class ISwap(DepolarizingTwoPTMGate, noiseless.ISwap):
     pass
-class Hadamard(noiseless.Hadamard, DepolarizingGate):
+class Hadamard(DepolarizingSinglePTMGate, noiseless.Hadamard):
     pass

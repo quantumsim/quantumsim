@@ -21,8 +21,8 @@ class RotateX(SinglePTMGate):
             **kwargs):
         """ A rotation around the x-axis on the bloch sphere by `angle`.
         """
-
-        super().__init__(bit, time, None, **kwargs)
+        p = ptm.rotate_x_ptm(angle)
+        super().__init__(bit, time, p, **kwargs)
         self.adjust(angle)
 
     def set_labels(self, angle):
@@ -45,7 +45,8 @@ class RotateY(SinglePTMGate):
             **kwargs):
         """ A rotation around the y-axis on the bloch sphere by `angle`.
         """
-        super().__init__(bit, time, None, **kwargs)
+        p = ptm.rotate_y_ptm(angle)
+        super().__init__(bit, time, p, **kwargs)
         self.adjust(angle)
 
     def set_labels(self, angle):
@@ -63,7 +64,8 @@ class RotateZ(SinglePTMGate):
     def __init__(self, bit, time, angle, **kwargs):
         """ A rotation around the z-axis on the bloch sphere by `angle`.
         """
-        super().__init__(bit, time, None, **kwargs)
+        p = ptm.rotate_z_ptm(angle)
+        super().__init__(bit, time, p, **kwargs)
         self.adjust(angle)
 
     def set_labels(self, angle):
