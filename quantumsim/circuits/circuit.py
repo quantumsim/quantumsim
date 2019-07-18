@@ -1,9 +1,21 @@
 import abc
 import inspect
 import re
+from contextlib import contextmanager
 from copy import copy
+from itertools import chain
 
-from quantumsim import Operation
+from .. import Operation
+
+parameter_collisions_allowed = False
+
+
+@contextmanager
+def allow_parameter_collisions():
+    global parameter_collisions_allowed
+    parameter_collisions_allowed = True
+    yield
+    parameter_collisions_allowed = False
 
 
 class CircuitBase(metaclass=abc.ABCMeta):
@@ -11,31 +23,81 @@ class CircuitBase(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def operation(self, **kwargs):
+        """Convert a gate to a raw operation."""
         pass
 
     @property
     @abc.abstractmethod
     def qubits(self):
+        """Qubit names, associated with this circuit."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def gates(self):
+        """List of gates in this circuit."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def params(self):
+        """Return set of parameters, accepted by this circuit."""
         pass
 
     @abc.abstractmethod
-    def __call__(self, qubits):
+    def set(self, **kwargs):
+        """Either substitute a circuit parameter with a value, or rename it.
+
+        Arguments to this function is a mapping of old parameter name to
+        either its name, or a value. If type of a value provided is
+        :class:`str`, it is interpreted as a new parameter name, else as a
+        value for this parameter.
+        """
         pass
 
+    def __call__(self, **kwargs):
+        """Convenience method to copy a circuit with parameters updated. See
+        :func:`CircuitBase.set` for a description.
+        """
+        copy_ = copy(self)
+        copy_.set(**kwargs)
+        return copy_
+
     def __add__(self, other):
+        """
+        Merge two circuits, locating second one after first.
+
+        Parameters
+        ----------
+        other : CircuitBase
+            Another circuit
+
+        Returns
+        -------
+        CircuitBase
+            A merged circuit.
+        """
+        global parameter_collisions_allowed
+        if not parameter_collisions_allowed:
+            common_params = self.params.intersection(other.params)
+            if len(common_params) > 0:
+                raise RuntimeError(
+                    "The following free parameters are common for the circuits "
+                    "being added, which blocks them from being set "
+                    "separately later:\n"
+                    "   {}\n"
+                    "Rename these parameters in one of the circuits, or use "
+                    "`quantumsim.circuits.allow_parameter_collisions` "
+                    "context manager, if this is intended behaviour."
+                    .format(", ".join(common_params))
+                )
         all_gates = self.gates + other.gates
         all_qubits = self.qubits + tuple(q for q in other.qubits
                                          if q not in self.qubits)
         return Circuit(all_qubits, all_gates)
 
     def __matmul__(self, other):
-        if isinstance(other, CircuitBase):
-            raise TypeError("Circuits may only be combined via addition!")
-        for gate in self.gates:
-            state = gate @ state
-        return state
-        # if isinstance(other, CircuitBase):
-        #     return self + other.set_time_start(self.time_end)
+        raise NotImplementedError
 
 
 class TimedCircuitBase(CircuitBase, metaclass=abc.ABCMeta):
@@ -56,38 +118,54 @@ class TimedCircuitBase(CircuitBase, metaclass=abc.ABCMeta):
         pass
 
     def __add__(self, other):
-        all_gates = self.gates + other.gates
-        all_qubits = self.qubits + tuple(q for q in other.qubits
-                                         if q not in self.qubits)
-        #NEED TO DO TETRIS!
         raise NotImplementedError
-        return TimedCircuit(all_qubits, all_gates)
 
 
 class Circuit(CircuitBase):
     def __init__(self, qubits, gates):
         self._gates = tuple(gates)
         self._qubits = tuple(qubits)
+        self._params_cache = None
+
+    def __copy__(self):
+        # Need a shallow copy of all included gates
+        copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
+        copy_._params_cache = self._params_cache
+        return copy_
+
+    @property
+    def qubits(self):
+        return self._qubits
 
     @property
     def gates(self):
         return self._gates
 
     @property
-    def qubits(self):
-        return self._qubits
-
-    @qubits.setter
-    def qubits(self, qubits):
-        old_new_mapping = {old: new for old, new in zip(self._qubits, qubits)}
-        self._qubits = (qubits,) if isinstance(qubits, str) else qubits
-        self._gates = tuple(copy(g) for g in self._gates)
-        for g in self._gates:
-            g._qubits = tuple(old_new_mapping[q] for q in g._qubits)
+    def params(self):
+        if self._params_cache is None:
+            self._params_cache = set(chain(*(g.params for g in self._gates)))
+        return self._params_cache
 
     @classmethod
-    def schedule(self, *gate_list):
+    def schedule(cls, *gate_list):
         raise NotImplementedError
+
+    def operation(self, **kwargs):
+        operations = []
+        for gate in self._gates:
+            qubit_indices = tuple(self._qubits.index(qubit) for qubit in
+                                  gate.qubits)
+            operations.append(gate.operation(**kwargs).at(*qubit_indices))
+        return Operation.from_sequence(operations)
+
+    def set(self, **kwargs):
+        for gate in self._gates:
+            gate.set(**kwargs)
+        self._params_cache = None
+
+    def __matmul__(self, other):
+        pass
 
 
 class TimedCircuit(Circuit, TimedCircuitBase):
@@ -154,6 +232,12 @@ class Gate(CircuitBase):
         self._params_set = {}
         self._params_subs = {}
         self.plot_metadata = plot_metadata or {}
+
+    def __copy__(self):
+        copy_ = Gate(self._qubits, self._operation_func, self.plot_metadata)
+        copy_._params_set = copy(self._params_set)
+        copy_._params_subs = copy(self._params_subs)
+        return copy_
 
     def operation(self, **kwargs):
         kwargs.update(self._params_set)  # set parameters take priority
