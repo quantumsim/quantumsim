@@ -1283,10 +1283,10 @@ class Circuit:
 
         Parameters
         ----------
-        toposort: bool
+        toposort: bool or str
             Whether to apply topological sorting routine (that may be costly)
-            or to imply only chronological sorting. Defaults to ``True``.
-            See :func:`tp.partial_greedy_toposort` for details.
+            or to imply only chronological sorting, or use a simple toposort.
+            Defaults to ``True`` see :func:`tp.partial_greedy_toposort` for details.
         """
         if not toposort:
             self.gates = sorted(self.gates, key=lambda g: g.time)
@@ -1295,16 +1295,33 @@ class Circuit:
         all_gates = list(enumerate(sorted(self.gates, key=lambda g: g.time)))
 
         gts_list = []
-        targets = []
+        if toposort == "simple":
+            targets = {}
+        else:
+            targets = []
         for n, b in enumerate(self.qubits):
-            gts = [n for n, gate in all_gates if gate.involves_qubit(str(b))]
-            if any(all_gates[g][1].is_measurement and
-                   all_gates[g][1].involved_qubits[-1] == b.name
-                   for g in gts):
-                targets.append(n)
+            gts = [m for m, gate in all_gates if gate.involves_qubit(str(b))]
+            msmts_with_n = [
+                g for g in gts if
+                all_gates[g][1].is_measurement and
+                all_gates[g][1].involved_qubits[-1] == b.name]
+            if msmts_with_n:
+                if toposort == "simple":
+                    # Can only do simple toposort with single msmt
+                    # per qubit per circuit.
+                    if len(msmts_with_n) > 1:
+                        raise ValueError(
+                            'Can only do simple toposort with single msmt' +
+                            ' per qubit per circuit')
+                    targets[n] = msmts_with_n[0]
+                else:
+                    targets.append(n)
             gts_list.append(gts)
 
-        order = tp.partial_greedy_toposort(gts_list, targets=targets)
+        if toposort == "simple":
+            order = tp.simple_toposort(gts_list, targets=targets)
+        else:
+            order = tp.partial_greedy_toposort(gts_list, targets=targets)
 
         for n, i in enumerate(order):
             all_gates[i][1].annotation = "%d" % n
