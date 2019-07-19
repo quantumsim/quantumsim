@@ -34,6 +34,52 @@ class RotateX(SinglePTMGate):
         self.ptm = p
         self.set_labels(angle)
 
+class XGate(SinglePTMGate):
+
+    def __init__(
+            self,
+            bit,
+            time,
+            **kwargs):
+        """ A rotation around the x-axis on the bloch sphere by pi.
+        """
+        p = ptm.rotate_x_ptm(-np.pi)
+        super().__init__(bit, time, p, **kwargs)
+
+    def set_labels(self):
+        self.label = r"$X$"
+
+class YGate(SinglePTMGate):
+
+    def __init__(
+            self,
+            bit,
+            time,
+            **kwargs):
+        """ A rotation around the x-axis on the bloch sphere by `angle`.
+        """
+        p = ptm.rotate_x_ptm(-np.pi)
+        super().__init__(bit, time, p, **kwargs)
+
+    def set_labels(self):
+        self.label = r"$Y$"
+
+
+class ZGate(SinglePTMGate):
+
+    def __init__(
+            self,
+            bit,
+            time,
+            **kwargs):
+        """ A rotation around the x-axis on the bloch sphere by `angle`.
+        """
+        p = ptm.rotate_x_ptm(-np.pi)
+        super().__init__(bit, time, p, **kwargs)
+
+    def set_labels(self):
+        self.label = r"$Z$"
+
 
 class RotateY(SinglePTMGate):
 

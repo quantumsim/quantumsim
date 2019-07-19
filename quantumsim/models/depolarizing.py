@@ -35,6 +35,12 @@ class RotateY(DepolarizingSinglePTMGate, noiseless.RotateY):
     pass
 class RotateZ(DepolarizingSinglePTMGate, noiseless.RotateZ):
     pass
+class XGate(DepolarizingSinglePTMGate, noiseless.XGate):
+    pass
+class YGate(DepolarizingSinglePTMGate, noiseless.YGate):
+    pass
+class ZGate(DepolarizingSinglePTMGate, noiseless.ZGate):
+    pass 
 class CPhase(DepolarizingTwoPTMGate, noiseless.CPhase):
     pass
 class CNOT(DepolarizingTwoPTMGate, noiseless.CNOT):
