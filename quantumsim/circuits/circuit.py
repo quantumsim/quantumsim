@@ -224,9 +224,19 @@ class TimeAware(metaclass=abc.ABCMeta):
     def time_start(self):
         pass
 
+    @time_start.setter
+    @abc.abstractmethod
+    def time_start(self, time):
+        pass
+
     @property
     @abc.abstractmethod
     def time_end(self):
+        pass
+
+    @time_end.setter
+    @abc.abstractmethod
+    def time_end(self, time):
         pass
 
     @property
@@ -238,7 +248,7 @@ class TimeAware(metaclass=abc.ABCMeta):
         pass
 
 
-class Circuit(CircuitBase):
+class Circuit(CircuitBase, metaclass=ABCMeta):
     def __init__(self, qubits, gates):
         self._gates = tuple(gates)
         self._qubits = tuple(qubits)
@@ -291,7 +301,8 @@ class TimeAgnosticCircuit(Circuit, TimeAgnostic):
 
 class TimeAwareGate(Gate, TimeAware):
 
-    def __init__(self, durations, times_start=None, **kwargs):
+    def __init__(self, qubits, operation, duration=0.,
+                 time_start=0., plot_metadata=None):
         """TimedGate - a gate with a well-defined timing.
 
         Parameters:
@@ -301,32 +312,37 @@ class TimeAwareGate(Gate, TimeAware):
         time_start : dictionary of floats or None
             an absolute start time on each of the qubits
         """
-        super().__init__(**kwargs)
-        self._times_start = times_start or {q: 0 for q in self.qubits}
-        self._durations = durations
+        super().__init__(qubits, operation, plot_metadata)
+        self._duration = duration
+        self._time_start = time_start
 
     def __copy__(self):
-        raise NotImplementedError
+        copy_ = self.__class__(
+            self._qubits, self._operation_func,
+            self._duration, self._time_start, self.plot_metadata)
+        copy_._params_set = copy(self._params_set)
+        copy_._params_subs = copy(self._params_subs)
+        return copy_
 
     @property
     def time_start(self):
-        return self._times_start
+        return self._time_start
 
     @time_start.setter
-    def time_start(self, time_start):
-        self._times_start = time_start
-
-    def shift(self, time):
-        raise NotImplementedError
+    def time_start(self, time):
+        self._time_start = time
 
     @property
     def time_end(self):
-        return {q: self.time_start[q] + self.duration[q]
-                for q in self.qubits}
+        return self._time_start + self._duration
+
+    @time_end.setter
+    def time_end(self, time):
+        self._time_start = time - self._duration
 
     @property
     def duration(self):
-        raise NotImplementedError
+        return self._duration
 
 
 class TimeAwareCircuit(Circuit, TimeAware):
@@ -335,10 +351,6 @@ class TimeAwareCircuit(Circuit, TimeAware):
         return {
             q: min(g.time_start[q] for g in self.gates if q in g.qubits)
             for q in self.qubits}
-
-    def shift(self, time):
-        for g in self._gates:
-            g.shift(time)
 
     @property
     def time_end(self):
