@@ -10,7 +10,6 @@ bases1_default = (bases.general(3),)
 bases2_default = bases1_default * 2
 
 
-@lru_cache(maxsize=64)
 def rotate_euler(phi, theta, lamda):
     """A perfect single qubit rotation described by three Euler angles.
 
@@ -39,7 +38,6 @@ def rotate_euler(phi, theta, lamda):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_x(angle=np.pi):
     """A perfect single qubit rotation around :math:`Ox` axis.
 
@@ -58,7 +56,6 @@ def rotate_x(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_y(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oy` axis.
 
@@ -77,7 +74,6 @@ def rotate_y(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_z(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oz` axis.
 
@@ -138,7 +134,6 @@ default_cphase_params = dict(
 )
 
 
-@lru_cache(maxsize=64)
 def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
     """
 
@@ -236,7 +231,6 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
         return cz_op
 
 
-@lru_cache(maxsize=32)
 def _cphase_legacy(angle=np.pi, leakage=0.):
     """A perfect controlled phase rotation.
     First qubit is low-frequency, second qubit is high-frequency (it leaks).
@@ -261,7 +255,6 @@ def _cphase_legacy(angle=np.pi, leakage=0.):
     return Operation.from_kraus(unitary, bases2_default)
 
 
-@lru_cache(maxsize=64)
 def _ideal_generator(phase_01,
                      phase_02,
                      phase_10,
@@ -276,7 +269,6 @@ def _ideal_generator(phase_01,
     return generator
 
 
-@lru_cache(maxsize=64)
 def _exchange_generator(leakage, leakage_phase,
                         leakage_mobility_rate, leakage_mobility_phase):
     generator = np.zeros((9, 9), dtype=complex)
@@ -295,7 +287,6 @@ def _exchange_generator(leakage, leakage_phase,
     return generator
 
 
-@lru_cache(maxsize=32)
 def cnot():
     dcnot = np.zeros((9, 9))
     dcnot[3, 3] = 0.5
@@ -306,7 +297,6 @@ def cnot():
     return Operation.from_kraus(unitary, bases2_default)
 
 
-@lru_cache(maxsize=64)
 def idle(duration, t1, t2, anharmonicity=0.):
     if np.isfinite(t1) and np.isfinite(t2):
         t_phi = 1. / (1. / t2 - 0.5 / t1)
@@ -354,7 +344,6 @@ def idle(duration, t1, t2, anharmonicity=0.):
         lindblad_ops=[op_t1, *ops_t2])
 
 
-@lru_cache(maxsize=32)
 def amp_damping(p0_up, p1_up, p1_down, p2_down):
     """
     A gate, that excites or relaxes a qubit with a certain probability.
@@ -382,7 +371,6 @@ def amp_damping(p0_up, p1_up, p1_down, p2_down):
     return Operation.from_ptm(ptm, basis, basis)
 
 
-@lru_cache(maxsize=32)
 def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
     """
     Returns a gate, that corresponds to measurement-induced excitations.
