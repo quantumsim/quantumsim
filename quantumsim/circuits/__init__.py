@@ -1,5 +1,5 @@
-from .circuit import Gate, Circuit, TimedGate, TimedCircuit,\
-    allow_parameter_collisions
+from .circuit import TimeAgnosticGate, TimeAgnosticCircuit,\
+    TimeAwareGate, TimeAwareCircuit, allow_parameter_collisions
 
-__all__ = ['Gate', 'Circuit', 'TimedGate', 'TimedCircuit',
-           'allow_parameter_collisions']
+__all__ = ['TimeAgnosticGate', 'TimeAgnosticCircuit', 'TimeAwareGate',
+           'TimeAwareCircuit', 'allow_parameter_collisions']

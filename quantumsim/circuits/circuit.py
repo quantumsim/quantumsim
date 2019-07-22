@@ -1,6 +1,7 @@
 import abc
 import inspect
 import re
+from abc import ABCMeta
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
@@ -8,6 +9,8 @@ from itertools import chain
 from .. import Operation
 
 parameter_collisions_allowed = False
+
+# TODO: implement scheduling
 
 
 @contextmanager
@@ -22,6 +25,10 @@ class CircuitBase(metaclass=abc.ABCMeta):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
 
     @abc.abstractmethod
+    def __copy__(self):
+        pass
+
+    @abc.abstractmethod
     def operation(self, **kwargs):
         """Convert a gate to a raw operation."""
         pass
@@ -30,12 +37,6 @@ class CircuitBase(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def qubits(self):
         """Qubit names, associated with this circuit."""
-        pass
-
-    @property
-    @abc.abstractmethod
-    def gates(self):
-        """List of gates in this circuit."""
         pass
 
     @property
@@ -63,138 +64,8 @@ class CircuitBase(metaclass=abc.ABCMeta):
         copy_.set(**kwargs)
         return copy_
 
-    def __add__(self, other):
-        """
-        Merge two circuits, locating second one after first.
 
-        Parameters
-        ----------
-        other : CircuitBase
-            Another circuit
-
-        Returns
-        -------
-        CircuitBase
-            A merged circuit.
-        """
-        global parameter_collisions_allowed
-        if not parameter_collisions_allowed:
-            common_params = self.params.intersection(other.params)
-            if len(common_params) > 0:
-                raise RuntimeError(
-                    "The following free parameters are common for the circuits "
-                    "being added, which blocks them from being set "
-                    "separately later:\n"
-                    "   {}\n"
-                    "Rename these parameters in one of the circuits, or use "
-                    "`quantumsim.circuits.allow_parameter_collisions` "
-                    "context manager, if this is intended behaviour."
-                    .format(", ".join(common_params))
-                )
-        all_gates = self.gates + other.gates
-        all_qubits = self.qubits + tuple(q for q in other.qubits
-                                         if q not in self.qubits)
-        return Circuit(all_qubits, all_gates)
-
-    def __matmul__(self, other):
-        raise NotImplementedError
-
-
-class TimedCircuitBase(CircuitBase, metaclass=abc.ABCMeta):
-
-    @property
-    @abc.abstractmethod
-    def time_start(self):
-        pass
-
-    @property
-    @abc.abstractmethod
-    def time_end(self):
-        pass
-
-    @property
-    @abc.abstractmethod
-    def duration(self):
-        pass
-
-    def __add__(self, other):
-        raise NotImplementedError
-
-
-class Circuit(CircuitBase):
-    def __init__(self, qubits, gates):
-        self._gates = tuple(gates)
-        self._qubits = tuple(qubits)
-        self._params_cache = None
-
-    def __copy__(self):
-        # Need a shallow copy of all included gates
-        copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
-        copy_._params_cache = self._params_cache
-        return copy_
-
-    @property
-    def qubits(self):
-        return self._qubits
-
-    @property
-    def gates(self):
-        return self._gates
-
-    @property
-    def params(self):
-        if self._params_cache is None:
-            self._params_cache = set(chain(*(g.params for g in self._gates)))
-        return self._params_cache
-
-    @classmethod
-    def schedule(cls, *gate_list):
-        raise NotImplementedError
-
-    def operation(self, **kwargs):
-        operations = []
-        for gate in self._gates:
-            qubit_indices = tuple(self._qubits.index(qubit) for qubit in
-                                  gate.qubits)
-            operations.append(gate.operation(**kwargs).at(*qubit_indices))
-        return Operation.from_sequence(operations)
-
-    def set(self, **kwargs):
-        for gate in self._gates:
-            gate.set(**kwargs)
-        self._params_cache = None
-
-    def __matmul__(self, other):
-        pass
-
-
-class TimedCircuit(Circuit, TimedCircuitBase):
-
-    @property
-    def time_start(self):
-        return {
-            q: min(g.time_start[q] for g in self.gates if q in g.qubits)
-            for q in self.qubits}
-
-    def shift(self, time):
-        for g in self._gates:
-            g.shift(time)
-
-    @property
-    def time_end(self):
-        return {
-            q: max(g.time_start[q] for g in self.gates if q in g.qubits)
-            for q in self.qubits}
-
-    @property
-    def duration(self):
-        return {
-            q: max(g.time_start[q] for g in self.gates if q in g.qubits) -
-            min(g.time_start[q] for g in self.gates if q in g.qubits)
-            for q in self.qubits}
-
-
-class Gate(CircuitBase):
+class Gate(CircuitBase, metaclass=ABCMeta):
     def __init__(self, qubits, operation, plot_metadata=None):
         """A gate without notion of timing.
 
@@ -232,12 +103,6 @@ class Gate(CircuitBase):
         self._params_set = {}
         self._params_subs = {}
         self.plot_metadata = plot_metadata or {}
-
-    def __copy__(self):
-        copy_ = Gate(self._qubits, self._operation_func, self.plot_metadata)
-        copy_._params_set = copy(self._params_set)
-        copy_._params_subs = copy(self._params_subs)
-        return copy_
 
     def operation(self, **kwargs):
         kwargs.update(self._params_set)  # set parameters take priority
@@ -296,32 +161,135 @@ class Gate(CircuitBase):
         for item in kwargs.items():
             self._set_param(*item)
 
-    def __call__(self, *qubits, **kwargs):
+    def __call__(self, **kwargs):
         new_gate = copy(self)
-        new_gate.set(*qubits, **kwargs)
+        new_gate.set(**kwargs)
         return new_gate
 
-    def __matmul__(self, other):
-        if self.free_kwargs:
-            raise NotImplementedError(
-                "The following parameters need to be set before"
-                " {} may be applied to a qubit register: {}".format(
-                    self, self.free_kwargs))
 
-        state = other
-        for op in self.operations:
-            kwargs_to_send = {
-                key: self.kwargs[key]
-                for key in op.kwargs
-            }
-            state = op(**kwargs_to_send) @ state
+class TimeAgnostic(metaclass=abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def qubits(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def gates(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def params(self):
+        pass
+
+    def __add__(self, other):
+        """
+        Merge two circuits, locating second one after first.
+
+        Parameters
+        ----------
+        other : TimeAgnostic
+            Another circuit
+
+        Returns
+        -------
+        TimeAgnosticCircuit
+            A merged circuit.
+        """
+        global parameter_collisions_allowed
+        if not parameter_collisions_allowed:
+            common_params = self.params.intersection(other.params)
+            if len(common_params) > 0:
+                raise RuntimeError(
+                    "The following free parameters are common for the circuits "
+                    "being added, which blocks them from being set "
+                    "separately later:\n"
+                    "   {}\n"
+                    "Rename these parameters in one of the circuits, or use "
+                    "`quantumsim.circuits.allow_parameter_collisions` "
+                    "context manager, if this is intended behaviour."
+                    .format(", ".join(common_params))
+                )
+        all_gates = self.gates + other.gates
+        all_qubits = self.qubits + tuple(q for q in other.qubits
+                                         if q not in self.qubits)
+        return TimeAgnosticCircuit(all_qubits, all_gates)
 
 
-class TimedGate(Gate, TimedCircuitBase):
+class TimeAware(metaclass=abc.ABCMeta):
+
+    @property
+    @abc.abstractmethod
+    def time_start(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def time_end(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def duration(self):
+        pass
+
+    def __add__(self, other):
+        pass
+
+
+class Circuit(CircuitBase):
+    def __init__(self, qubits, gates):
+        self._gates = tuple(gates)
+        self._qubits = tuple(qubits)
+        self._params_cache = None
+
+    @property
+    def qubits(self):
+        return self._qubits
+
+    @property
+    def gates(self):
+        return self._gates
 
     @property
     def params(self):
-        pass
+        if self._params_cache is None:
+            self._params_cache = set(chain(*(g.params for g in self._gates)))
+        return self._params_cache
+
+    def operation(self, **kwargs):
+        operations = []
+        for gate in self._gates:
+            qubit_indices = tuple(self._qubits.index(qubit) for qubit in
+                                  gate.qubits)
+            operations.append(gate.operation(**kwargs).at(*qubit_indices))
+        return Operation.from_sequence(operations)
+
+    def set(self, **kwargs):
+        for gate in self._gates:
+            gate.set(**kwargs)
+        self._params_cache = None
+
+
+class TimeAgnosticGate(Gate, TimeAgnostic):
+    def __copy__(self):
+        copy_ = self.__class__(
+            self._qubits, self._operation_func, self.plot_metadata)
+        copy_._params_set = copy(self._params_set)
+        copy_._params_subs = copy(self._params_subs)
+        return copy_
+
+
+class TimeAgnosticCircuit(Circuit, TimeAgnostic):
+    def __copy__(self):
+        # Need a shallow copy of all included gates
+        copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
+        copy_._params_cache = self._params_cache
+        return copy_
+
+
+class TimeAwareGate(Gate, TimeAware):
 
     def __init__(self, durations, times_start=None, **kwargs):
         """TimedGate - a gate with a well-defined timing.
@@ -337,6 +305,9 @@ class TimedGate(Gate, TimedCircuitBase):
         self._times_start = times_start or {q: 0 for q in self.qubits}
         self._durations = durations
 
+    def __copy__(self):
+        raise NotImplementedError
+
     @property
     def time_start(self):
         return self._times_start
@@ -346,11 +317,7 @@ class TimedGate(Gate, TimedCircuitBase):
         self._times_start = time_start
 
     def shift(self, time):
-        if self._time_start is None:
-            raise ValueError("Absolute time is un-defined")
-        for q in self.qubits:
-            self._time_end[q] += time
-            self._time_start[q] += time
+        raise NotImplementedError
 
     @property
     def time_end(self):
@@ -359,4 +326,32 @@ class TimedGate(Gate, TimedCircuitBase):
 
     @property
     def duration(self):
-        return self._duration
+        raise NotImplementedError
+
+
+class TimeAwareCircuit(Circuit, TimeAware):
+    @property
+    def time_start(self):
+        return {
+            q: min(g.time_start[q] for g in self.gates if q in g.qubits)
+            for q in self.qubits}
+
+    def shift(self, time):
+        for g in self._gates:
+            g.shift(time)
+
+    @property
+    def time_end(self):
+        return {
+            q: max(g.time_start[q] for g in self.gates if q in g.qubits)
+            for q in self.qubits}
+
+    @property
+    def duration(self):
+        return {
+            q: max(g.time_start[q] for g in self.gates if q in g.qubits) -
+               min(g.time_start[q] for g in self.gates if q in g.qubits)
+            for q in self.qubits}
+
+    def __copy__(self):
+        raise NotImplementedError
