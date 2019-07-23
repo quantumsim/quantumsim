@@ -1,0 +1,37 @@
+version: '1'
+name: Sample setup
+
+qubits:
+  # Default parameters
+  - t1: .inf   # infinite
+    t2: .inf
+    t2_int: .inf
+    anharmonicity: null   # undefined, will be parsed to None
+  # Override per qubit
+  - name: D0
+    t1: 30000.
+    t2: 35000.
+    anharmonicity: 305.
+  - name: A
+    t1: 20000.
+    t2: 23000.
+    t2_int: 8000.
+    anharmonicity: 315.
+  - name: D1
+    t1: 35000.
+    t2: 35000.
+    t2_int: 8000.
+    anharmoncity: 306.
+
+gates:
+  - name: cphase
+    flux_sensitivity: 0.
+    duration: 40.
+  # Override per pair of qubits
+  - name: cphase
+    qubits: [ A, D1 ]
+    flux_sensitivity: 1e-3
+  - name: rotate_x
+    duration: 20
+  - name: rotate_y
+    duration: 20

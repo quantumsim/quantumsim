@@ -1,8 +1,13 @@
 import inspect
 import abc
+import numpy as np
 
 
 class Model(abc.ABCMeta):
+
+    def __init__(self, setup, seed=None):
+        self._setup = setup
+        self.rng = np.random.RandomState(seed)
 
     @property
     def setup(self):
@@ -11,10 +16,6 @@ class Model(abc.ABCMeta):
     @property
     def compilers(self):
         return self._compilers
-
-    def __init__(self, setup, compilers):
-        self._setup = setup
-        self._compilers = compilers
 
     @staticmethod
     def gate(func, n_qubits=1, plot_metadata=None):
