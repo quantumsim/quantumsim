@@ -4,7 +4,7 @@ from numpy import pi
 from pytest import approx
 import quantumsim.models.qubits as lib
 from quantumsim.circuits import TimeAgnosticGate, TimeAwareGate, \
-    allow_parameter_collisions
+    allow_param_repeat
 from quantumsim import bases, Operation
 
 
@@ -302,10 +302,10 @@ class TestCircuitsCommon:
         with pytest.raises(RuntimeError,
                            match=r".*free parameters.*\n"
                                  r".*angle.*\n"
-                                 r".*allow_parameter_collisions.*"):
-            gcphase + grotate
+                                 r".*allow_param_repeat.*"):
+            _ = gcphase + grotate
 
-        with allow_parameter_collisions():
+        with allow_param_repeat():
             circuit = grotate + gcphase + grotate
 
         assert circuit.params == {'angle'}
@@ -353,13 +353,29 @@ class TestCircuitsTimeAware:
         assert gate.time_end == 90.
         assert gate.duration == 40.
 
-    def test_time_aware_add_gate(self):
+        gate1 = gate.shift(time_start=0.)
+        assert gate.time_start == approx(50.)
+        assert gate.time_end == 90.
+        assert gate.duration == 40.
+        assert gate1.time_start == 0.
+        assert gate1.time_end == 40.
+        assert gate1.duration == 40.
+
+        gate1 = gate.shift(time_end=123.)
+        assert gate.time_start == approx(50.)
+        assert gate.time_end == 90.
+        assert gate.duration == 40.
+        assert gate1.time_start == approx(83.)
+        assert gate1.time_end == 123.
+        assert gate1.duration == 40.
+
+    def test_time_aware_add_gate_no_init_time(self):
         orplus = lib.rotate_y(0.5 * pi)
         ocphase = lib.cphase(pi)
         orminus = lib.rotate_y(-0.5 * pi)
         gate_q0 = TimeAwareGate('Q0', orplus, 20.)
         gate_2q = TimeAwareGate(('Q0', 'Q1'), ocphase, 40.)
-        gate_q1 = TimeAwareGate('Q0', orminus, 30.)
+        gate_q1 = TimeAwareGate('Q1', orminus, 30.)
 
         circuit = gate_q0 + gate_2q
         assert circuit.time_start == 0.
@@ -394,3 +410,31 @@ class TestCircuitsTimeAware:
         assert circuit.duration == approx(130.)
         assert [gate.time_start for gate in circuit.gates] == \
                approx([0., 10., 30., 70., 70., 100., 100.])
+
+    def test_time_aware_add_gate_and_delays(self):
+        big_gate = TimeAwareGate('A', lib.rotate_x(0.), 600.)
+        rotx1 = TimeAwareGate('D0', lib.rotate_x(pi), 20., 290.)
+        rotx2 = TimeAwareGate('A', lib.rotate_x(pi), 20., )
+
+        circuit1 = rotx2.shift(time_start=20.) + \
+                   rotx2.shift(time_end=120.)
+        assert circuit1.time_start == 20.
+        assert circuit1.time_end == approx(160.)
+        assert circuit1.duration == approx(140.)
+        assert [gate.time_start for gate in circuit1.gates] == \
+               approx([20., 140.])
+
+        circuit2 = big_gate + rotx1
+        assert circuit2.time_start == 0.
+        assert circuit2.time_end == approx(600.)
+        assert circuit2.duration == approx(600.)
+        assert [gate.time_start for gate in circuit2.gates] == \
+               approx([0., 290.])
+
+        circuit = circuit1 + circuit2
+        assert circuit.time_start == 20.
+        assert circuit.time_end == approx(760.)
+        assert circuit.duration == approx(740.)
+        assert [gate.time_start for gate in circuit.gates] == \
+               approx([20., 140., 160, 450.])
+
