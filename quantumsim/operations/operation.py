@@ -9,6 +9,10 @@ from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
 from ..bases import PauliBasis
 
 
+class OperationNotDefinedError(RuntimeError):
+    pass
+
+
 class Operation(metaclass=abc.ABCMeta):
     """A metaclass for all quantum operations.
 
@@ -94,7 +98,6 @@ class Operation(metaclass=abc.ABCMeta):
         self._validate_bases(bases_in=bases_in)
         if bases_out is not None:
             self._validate_bases(bases_out=bases_out)
-
 
     @staticmethod
     def from_ptm(ptm, bases_in, bases_out=None):
@@ -361,40 +364,50 @@ class Operation(metaclass=abc.ABCMeta):
 _IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
 
 
-class PreOperation(Operation):
-    """An operation that does not have a defined PTM, and thus cannot be called.
-
-    Parameters
-    -----
-
-    function - function
-        the generating function for a true operation
-    params - dictionary
-        the currently set variables to be passed to the generation function
-    aliases - dictionary
-        the names to be accepted for any true variable
+class Placeholder(Operation):
     """
+    Parameters
+    ----------
+    dim_hilbert: int
+    num_qubits: int
+    bases_in: tuple of quantumsim.bases.PauliBasis
+        Input bases of qubits.
+    bases_out: tuple of quantumsim.bases.PauliBasis or None
+        Output bases of qubits
+
+    Returns
+    -------
+    A placeholder for an operation
+    """
+    def __init__(self, dim_hilbert, num_qubits, bases_in=None, bases_out=None):
+        if bases_out is None:
+            bases_out = bases_in
+        self._dim_hilbert = dim_hilbert
+        self._num_qubits = num_qubits
+        self._bases_in = bases_in
+        self._bases_out = bases_out
 
     @property
-    def params(self):
-        raise NotImplementedError
-        return self._params
+    def dim_hilbert(self):
+        return self._dim_hilbert
 
     @property
-    def aliases(self):
-        raise NotImplementedError
-        return self._aliases
+    def num_qubits(self):
+        return self._num_qubits
 
-    def set(self, **kwargs):
-        raise NotImplementedError
-        for key in kwargs:
-            if key not in self.aliases:
-                raise KeyError("parameter '{}' not currently recognised".format(key))
-            if isinstance(kwargs[key], str):
-                # reset alias:
-                self.aliases[kwargs[key]] = key
-            self.params[self.aliases[key]]
+    def __call__(self, pauli_vector, *qubits):
+        raise OperationNotDefinedError(
+            'Operation placeholder can not be called')
 
+    def set_bases(self, bases_in=None, bases_out=None):
+        if bases_in:
+            self._bases_in = bases_in
+        if bases_out:
+            self._bases_out = bases_out
+
+    def ptm(self, bases_in, bases_out=None):
+        raise OperationNotDefinedError(
+            'Operation placeholder does not have a PTM')
 
 
 class _PTMOperation(Operation):
@@ -534,7 +547,10 @@ class _Chain(Operation):
                 joined_ops.append(op_indices)
 
         self.operations = joined_ops
+        self._has_placeholders = False
         for op in self.operations:
+            if isinstance(op.operation, Placeholder):
+                self._has_placeholders = True
             if isinstance(op.operation, _Chain):
                 raise RuntimeError('Chain must not contain chains; this is '
                                    'probably a bug.')
@@ -548,6 +564,10 @@ class _Chain(Operation):
         return self._num_qubits
 
     def __call__(self, pauli_vector, *qubit_indices):
+        if self._has_placeholders:
+            raise OperationNotDefinedError(
+                'Chain contains placeholders, therefore it can not be applied '
+                'to a state.')
         if len(qubit_indices) != self._num_qubits:
             raise ValueError('This is a {}-qubit operation, number of qubit '
                              'indices provided is {}'
@@ -565,6 +585,9 @@ class _Chain(Operation):
         return compiler.compile(bases_in, bases_out)
 
     def ptm(self, bases_in, bases_out=None):
+        if self._has_placeholders:
+            raise OperationNotDefinedError(
+                'Chain contains placeholders, therefore its PTM is undefined.')
         super().ptm(bases_in, bases_out)
         bases_out = bases_out or bases_in
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)

@@ -2,7 +2,7 @@ from collections import deque
 from itertools import repeat
 import numpy as np
 
-from .operation import Operation
+from .operation import Operation, Placeholder
 
 
 class Node:
@@ -191,6 +191,9 @@ class ChainCompiler:
         opt_basis_in, opt_basis_out: tuple of quantumsim.bases.PauliBasis
             Subbases of input bases, that will contribute to computation.
         """
+        if isinstance(node.op, Placeholder):
+            return node.bases_in_tuple, node.bases_out_tuple
+
         d_in = np.prod([b.dim_pauli for b in node.op.bases_in])
         d_out = np.prod([b.dim_pauli for b in node.op.bases_out])
         u, s, vh = np.linalg.svd(node.op_ptm
@@ -232,10 +235,6 @@ class ChainCompiler:
         ----------
         graph: CircuitGraph
         node: Node
-
-        Returns
-        -------
-
         """
         # Merge is possible, if there is only one next node
         # Assumes that bases are aligned
@@ -243,6 +242,8 @@ class ChainCompiler:
         if len(contr_candidates) != 1 or None in contr_candidates:
             return
         other = contr_candidates.pop()
+        if isinstance(other, Placeholder):
+            return
 
         d_node = len(node.qubits)
         d_other = len(other.qubits)
@@ -280,10 +281,6 @@ class ChainCompiler:
         ----------
         graph: CircuitGraph
         node: Node
-
-        Returns
-        -------
-
         """
         # Merge is possible, if there is only one previous node
         # Assumes that bases are aligned
@@ -291,6 +288,8 @@ class ChainCompiler:
         if len(contr_candidates) != 1 or None in contr_candidates:
             return
         other = contr_candidates.pop()
+        if isinstance(other, Placeholder):
+            return
 
         d_node = len(node.qubits)
         d_other = len(other.qubits)
