@@ -89,3 +89,53 @@ class TestSetup:
               param_name: 2
             """)
 
+    def test_setup_get(self):
+        setup = Setup("""
+        qubits:
+        - name: Q0
+          t1: 100
+        - name: Q1
+          t1: 100
+        - t1: 100000
+        gates:
+        - name: with_default
+          qubits: Q0
+          defined_param: 100
+        - name: with_default
+          defined_param: 0
+        - name: without_default
+          qubits: Q0
+          defined_param: 100
+        - name: twoqubit
+          qubits: [ Q0, Q1 ]
+          defined_param: 300
+        """)
+        assert setup.param_qubit('t1', 'Q0') == 100
+        assert setup.param_qubit('t1', 'Q1') == 100
+        assert setup.param_qubit('t1', 'Qother') == 100000
+        with pytest.raises(KeyError, match='Parameter "t2" is not defined for'
+                                           ' qubit "Q0"'):
+            setup.param_qubit('t2', 'Q0')
+        with pytest.raises(KeyError, match='Parameter "t1" is not defined for'
+                                           ' qubit "Qother"'):
+            Setup("""
+            qubits:
+            - name: Q0
+              t1: 100
+            - name: Q1
+              t1: 100
+            gates: []
+            """).param_qubit('t1', 'Qother')
+
+        assert setup.param_gate('defined_param', 'with_default', 'Q0') == 100
+        assert setup.param_gate('defined_param', 'with_default', 'Q1') == 0
+        assert setup.param_gate('defined_param', 'without_default', 'Q0') == 100
+        with pytest.raises(KeyError, match='Parameter "defined_param" is not '
+                                           'defined for gate "without_default" '
+                                           'with qubits Q1'):
+            setup.param_gate('defined_param', 'without_default', 'Q1')
+        assert setup.param_gate('defined_param', 'twoqubit', 'Q0', 'Q1') == 300
+        with pytest.raises(KeyError, match='Parameter "defined_param" is not '
+                                           'defined for gate "twoqubit" '
+                                           'with qubits Q1, Q0'):
+            setup.param_gate('defined_param', 'twoqubit', 'Q1', 'Q0')

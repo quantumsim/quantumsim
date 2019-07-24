@@ -75,3 +75,28 @@ class Setup:
         with open(filename, 'r') as f:
             return cls(f)
 
+    def param_qubit(self, param, qubit):
+        try:
+            return self._qubits[qubit][param]
+        except KeyError:
+            pass
+        try:
+            return self._qubits[''][param]
+        except KeyError:
+            pass
+        raise KeyError('Parameter "{}" is not defined for qubit "{}"'
+                       .format(param, qubit))
+
+    def param_gate(self, param, gate, *qubits):
+        if gate not in self._gates.keys():
+            raise KeyError('Gate "{}" is not defined.')
+        try:
+            return self._gates[gate][qubits][param]
+        except KeyError:
+            pass
+        try:
+            return self._gates[gate][tuple()][param]
+        except KeyError:
+            pass
+        raise KeyError('Parameter "{}" is not defined for gate "{}" with '
+                       'qubits {}'.format(param, gate, ", ".join(qubits)))
