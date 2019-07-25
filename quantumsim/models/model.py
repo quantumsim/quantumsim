@@ -4,7 +4,6 @@ import numpy as np
 
 
 class Model(abc.ABCMeta):
-
     def __init__(self, setup, seed=None):
         self._setup = setup
         self.rng = np.random.RandomState(seed)

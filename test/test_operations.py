@@ -5,9 +5,14 @@
 
 import pytest
 import numpy as np
+from copy import copy
+from numpy import pi
+from pytest import approx
 
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
+from quantumsim.operations import ParametrizedOperation
+from quantumsim.operations.operation import OperationNotDefinedError
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 from quantumsim.models import qubits as lib2
 from quantumsim.models import transmons as lib3
@@ -188,3 +193,111 @@ class TestOperations:
         circuit(state1, 0, 1, 2)
         op_3q(state2, 0, 1, 2)
         assert np.allclose(state1.to_pv(), state2.to_pv())
+
+
+class TestParametrizedOperations:
+    def test_create(self):
+        op_1q = lib2.rotate_x(0.5*pi)
+        basis = (bases.general(2),)
+
+        with pytest.raises(ValueError,
+                           match=".*can't accept free arguments.*"):
+            ParametrizedOperation(lambda *args: op_1q, basis, basis)
+        with pytest.raises(ValueError,
+                           match=".*can't accept free keyword arguments.*"):
+            ParametrizedOperation(lambda **kwargs: op_1q, basis, basis)
+        with pytest.raises(OperationNotDefinedError,
+                           match="Operation placeholder does not have a PTM"):
+            ParametrizedOperation(lambda: op_1q, basis).ptm(basis)
+        with pytest.raises(OperationNotDefinedError,
+                           match="Operation placeholder can not be called"):
+            ParametrizedOperation(lambda: op_1q, basis)(PauliVector(basis))
+
+    def test_params_numbers(self):
+        angle_ref = -0.8435
+        basis = (bases.general(2),)
+
+        op1q = ParametrizedOperation(lambda angle: lib2.rotate_y(angle), basis)
+        assert op1q.params == {'angle'}
+
+        op = op1q.substitute(angle=angle_ref)
+        assert not isinstance(op, ParametrizedOperation)
+        ptm_ref = lib2.rotate_y(angle=angle_ref).ptm(basis, basis)
+        assert op.ptm(basis, basis) == approx(ptm_ref)
+
+        op = op1q.substitute(foo=42, bar='baz')
+        assert op.params == {'angle'}
+        op = op.substitute(angle=angle_ref, extra_param=42)
+        assert not isinstance(op, ParametrizedOperation)
+        assert op.ptm(basis, basis) == approx(ptm_ref)
+
+        def cnot_like(angle_cphase, angle_rotate):
+            return Operation.from_sequence(
+                lib2.rotate_y(angle_rotate).at(1),
+                lib2.cphase(angle_cphase).at(0, 1),
+                lib2.rotate_y(-angle_rotate).at(1))
+
+        op2q = ParametrizedOperation(cnot_like, basis*2)
+
+        params = dict(angle_cphase=1.02 * pi, angle_rotate=0.47 * pi, foo='bar')
+        ptm_ref = cnot_like(params['angle_cphase'], params['angle_rotate']) \
+            .ptm(basis * 2, basis * 2)
+        assert op2q.params == {'angle_cphase', 'angle_rotate'}
+        op = op2q.substitute(**params)
+        assert not isinstance(op, ParametrizedOperation)
+        assert op.ptm(basis * 2, basis * 2) == approx(ptm_ref)
+
+        _ = ParametrizedOperation(lambda: lib2.rotate_z(0.5*pi), basis) \
+            .substitute()
+        with pytest.raises(RuntimeError,
+                           match=".*does not match one of the basis.*"):
+            ParametrizedOperation(lambda: lib2.rotate_z(0.5*pi),
+                                  basis*2, basis*2).substitute()
+
+    def test_params_rename(self):
+        def cnot_like(angle_cphase, angle_rotate):
+            return Operation.from_sequence(
+                lib2.rotate_y(angle_rotate).at(1),
+                lib2.cphase(angle_cphase).at(0, 1),
+                lib2.rotate_y(-angle_rotate).at(1))
+
+        angle_cphase_ref = 0.98 * pi
+        angle_rotate_ref = 0.5 * pi
+        basis = (bases.general(2),) * 2
+        op = ParametrizedOperation(cnot_like, basis, basis)
+        ptm_ref = cnot_like(angle_cphase_ref, angle_rotate_ref) \
+            .ptm(basis, basis)
+
+        op = op.substitute(angle_cphase='foo')
+        assert op.params == {'foo', 'angle_rotate'}
+        assert op.substitute(
+            foo=angle_cphase_ref, angle_rotate=angle_rotate_ref
+        ).ptm(basis, basis) == approx(ptm_ref)
+
+        op = op.substitute(foo='bar')
+        assert op.params == {'bar', 'angle_rotate'}
+        assert op.substitute(
+            bar=angle_cphase_ref, angle_rotate=angle_rotate_ref
+        ).ptm(basis, basis) == approx(ptm_ref)
+
+        op = op.substitute(bar=angle_cphase_ref)
+        assert op.params == {'angle_rotate'}
+
+        assert op.substitute(
+            angle_rotate=angle_rotate_ref, angle_cphase=42., foo=12,
+            bar='and now something completely different'
+        ).ptm(basis, basis) == approx(ptm_ref)
+
+        op = ParametrizedOperation(cnot_like, basis, basis)
+        op = op.substitute(angle_cphase='foo', angle_rotate='bar')
+        assert op.substitute(
+            bar=angle_rotate_ref, foo=angle_cphase_ref,
+            angle_cphase=-1, angle_rotate=-2
+        ).ptm(basis, basis) == approx(ptm_ref)
+
+        with pytest.raises(ValueError,
+                           match=".* not a valid Python identifier."):
+            op.substitute(bar='')
+        with pytest.raises(ValueError,
+                           match=".* not a valid Python identifier."):
+            op.substitute(bar='42')

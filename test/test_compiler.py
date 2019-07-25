@@ -11,7 +11,8 @@ from pytest import approx
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
 # noinspection PyProtectedMember
-from quantumsim.operations.operation import _PTMOperation
+from quantumsim.operations.operation import _Chain, _PTMOperation, \
+    ParametrizedOperation
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 
 
@@ -311,3 +312,53 @@ class TestCompiler:
         # Compiled version still needs to be projected, so we can't compare
         # Pauli vectors, so we can to check only DM diagonals.
         assert np.allclose(pv1.diagonal(), pv2.diagonal())
+
+    def test_compilation_with_placeholders(self):
+        b_full = bases.general(3)
+        b0 = b_full.subbasis([0])
+        b01 = b_full.subbasis([0, 1])
+        b012 = b_full.subbasis([0, 1, 2])
+
+        bases_in = (b01, b01, b0)
+        bases_out = (b_full, b_full, b012)
+        zz = Operation.from_sequence(
+            lib3.rotate_x(-np.pi/2).at(2),
+            lib3.cphase(leakage_rate=0.1).at(0, 2),
+            lib3.cphase(leakage_rate=0.25).at(2, 1),
+            lib3.rotate_x(np.pi/2).at(2),
+            lib3.rotate_x(np.pi).at(0),
+            lib3.rotate_x(np.pi).at(1)
+        ).compile(bases_in, bases_out)
+        ptm_ref = zz.ptm(bases_in, bases_out)
+
+        zz_parametrized = Operation.from_sequence(
+            Operation.from_sequence(
+                ParametrizedOperation(
+                    lambda angle1: lib3.rotate_x(angle1), (b_full,)
+                ).at(2),
+                ParametrizedOperation(
+                    lambda lr02: lib3.cphase(leakage_rate=lr02), (b_full,) * 2
+                ).at(0, 2),
+                ParametrizedOperation(
+                    lambda lr21: lib3.cphase(leakage_rate=lr21), (b_full,) * 2
+                ).at(2, 1),
+                ParametrizedOperation(
+                    lambda angle2: lib3.rotate_x(angle2), (b_full,)
+                ).at(2),
+                lib3.rotate_x(np.pi).at(0),
+                lib3.rotate_x(np.pi).at(1)
+            ))
+
+        zzpc = zz_parametrized.compile(bases_in, bases_out)
+        assert isinstance(zzpc, _Chain)
+        assert len(zzpc.operations) == 6
+        zzpc = zzpc.substitute(lr21=0.25)
+        zzpc = zzpc.compile(bases_in, bases_out)
+        assert len(zzpc.operations) == 5
+        zzpc = zzpc.substitute(angle2=np.pi/2)
+        zzpc = zzpc.compile(bases_in, bases_out)
+        assert len(zzpc.operations) == 4
+        zzpc = zzpc.substitute(angle1=-np.pi/2, lr02=0.1, foo='bar')
+        zzpc = zzpc.compile(bases_in, bases_out)
+        assert len(zzpc.operations) == 2
+        assert zzpc.ptm(bases_in, bases_out) == approx(ptm_ref)

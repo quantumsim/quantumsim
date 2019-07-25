@@ -1,11 +1,9 @@
 import abc
-import inspect
-import re
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
 
-from .. import Operation
+from ..operations import Operation, ParametrizedOperation
 
 param_repeat_allowed = False
 
@@ -21,20 +19,25 @@ def allow_param_repeat():
 
 
 class CircuitBase(metaclass=abc.ABCMeta):
-    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
-
     @abc.abstractmethod
     def __copy__(self):
         pass
 
+    @property
     @abc.abstractmethod
-    def operation(self, **kwargs):
+    def operation(self):
         """Convert a gate to a raw operation."""
         pass
 
     @property
     @abc.abstractmethod
     def qubits(self):
+        """Qubit names, associated with this circuit."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def gates(self):
         """Qubit names, associated with this circuit."""
         pass
 
@@ -72,63 +75,23 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
         ----------
         qubits : str or list of str
             Names of the involved qubits
-        operation : quantumsim.Operation or function
-            Operation, that corresponds to this gate, or a function,
-            that takes a certain number of arguments (gate parameters) and
-            returns an operation.
+        operation : quantumsim.Operation
+            Operation, that corresponds to this gate.
         plot_metadata : None or dict
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
         """
+        assert isinstance(operation, Operation)
         self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
-        if isinstance(operation, Operation):
-            self._operation_func = lambda: operation
-            self._params_real = tuple()
-            self._params = set()
-        elif callable(operation):
-            self._operation_func = operation
-            argspec = inspect.getfullargspec(operation)
-            if argspec.varargs is not None:
-                raise ValueError(
-                    "`operation` function can't accept free arguments.")
-            if argspec.varkw is not None:
-                raise ValueError(
-                    "`operation` function can't accept free keyword arguments.")
-            self._params_real = tuple(argspec.args)
-            self._params = set(self._params_real)
-        else:
-            raise ValueError('`operation` argument must be either Operation, '
-                             'or a function, that returns Operation.')
-        self._params_set = {}
-        self._params_subs = {}
+        self._operation = operation
+        if len(self._qubits) != operation.num_qubits:
+            raise ValueError('Number of qubits in operation does not match '
+                             'one in `qubits`.')
         self.plot_metadata = plot_metadata or {}
 
-    def operation(self, **kwargs):
-        kwargs.update(self._params_set)  # set parameters take priority
-        try:
-            for name, real_name in self._params_subs.items():
-                kwargs[real_name] = kwargs.pop(name)
-            args = tuple(kwargs[name] for name in self._params_real)
-        except KeyError as err:
-            raise RuntimeError(
-                "Can't construct an operation for gate {}, "
-                "since parameter \"{}\" is not provided."
-                .format(repr(self), err.args[0]))
-        op = self._operation_func(*args)
-        if not isinstance(op, Operation):
-            raise RuntimeError(
-                'Invalid operation function was provided for the gate {} '
-                'during its creation: it must return quantumsim.Operation. '
-                'See quantumsim.Gate documentation for more information.'
-                .format(repr(self)))
-        if not op.num_qubits == len(self.qubits):
-            raise RuntimeError(
-                'Invalid operation function was provided for the gate {} '
-                'during its creation: its number of qubits does not match '
-                'one of the gate. '
-                'See quantumsim.Gate documentation for more information.'
-                .format(repr(self)))
-        return op
+    @property
+    def operation(self):
+        return self._operation
 
     @property
     def gates(self):
@@ -140,25 +103,14 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
 
     @property
     def params(self):
-        return self._params
-
-    def _set_param(self, name, value):
-        if name not in self._params:
-            return
-        real_name = self._params_subs.pop(name, name)
-        if isinstance(value, str):
-            if self._valid_identifier_re.match(value) is None:
-                raise ValueError("\"{}\" is not a valid Python "
-                                 "identifier.".format(value))
-            self._params_subs[value] = real_name
-            self._params.add(value)
+        if isinstance(self._operation, ParametrizedOperation):
+            return self._operation.params
         else:
-            self._params_set[real_name] = value
-        self._params.remove(name)
+            return set()
 
     def set(self, **kwargs):
-        for item in kwargs.items():
-            self._set_param(*item)
+        if isinstance(self._operation, ParametrizedOperation):
+            self._operation = self._operation.substitute(**kwargs)
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -247,6 +199,16 @@ class TimeAware(CircuitAddMixin, metaclass=abc.ABCMeta):
     def duration(self):
         pass
 
+    @property
+    @abc.abstractmethod
+    def qubits(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def gates(self):
+        pass
+
     def shift(self, *, time_start=None, time_end=None):
         """
 
@@ -312,6 +274,7 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
         self._gates = tuple(gates)
         self._qubits = tuple(qubits)
         self._params_cache = None
+        self._operation = None
 
     @property
     def qubits(self):
@@ -327,12 +290,13 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
             self._params_cache = set(chain(*(g.params for g in self._gates)))
         return self._params_cache
 
-    def operation(self, **kwargs):
+    @property
+    def operation(self):
         operations = []
         for gate in self._gates:
             qubit_indices = tuple(self._qubits.index(qubit) for qubit in
                                   gate.qubits)
-            operations.append(gate.operation(**kwargs).at(*qubit_indices))
+            operations.append(gate.operation.at(*qubit_indices))
         return Operation.from_sequence(operations)
 
     def set(self, **kwargs):
@@ -343,11 +307,8 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
 
 class TimeAgnosticGate(Gate, TimeAgnostic):
     def __copy__(self):
-        copy_ = self.__class__(
-            self._qubits, self._operation_func, self.plot_metadata)
-        copy_._params_set = copy(self._params_set)
-        copy_._params_subs = copy(self._params_subs)
-        return copy_
+        return self.__class__(
+            self._qubits, copy(self._operation), self.plot_metadata)
 
 
 class TimeAgnosticCircuit(Circuit, TimeAgnostic):
@@ -376,12 +337,9 @@ class TimeAwareGate(Gate, TimeAware):
         self._time_start = time_start
 
     def __copy__(self):
-        copy_ = self.__class__(
-            self._qubits, self._operation_func,
+        return self.__class__(
+            self._qubits, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
-        copy_._params_set = copy(self._params_set)
-        copy_._params_subs = copy(self._params_subs)
-        return copy_
 
     @property
     def time_start(self):

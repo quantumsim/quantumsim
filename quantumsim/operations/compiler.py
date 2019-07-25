@@ -11,7 +11,7 @@ class Node:
 
         Parameters
         ----------
-        op : quantumsim.operations.Operation
+        op : quantumsim.operations._PTMOperation
         qubits : tuple of int
         """
         self.op = op
@@ -163,7 +163,7 @@ class ChainCompiler:
                 node.next[qubit].bases_in_dict[qubit] = bo
                 queue.add(node.next[qubit])
 
-        if not node.is_arranged():
+        if not node.is_arranged() and not isinstance(node.op, Placeholder):
             node.arrange()
 
     def optimal_bases(self, node):
@@ -238,11 +238,13 @@ class ChainCompiler:
         """
         # Merge is possible, if there is only one next node
         # Assumes that bases are aligned
+        if isinstance(node.op, Placeholder):
+            return
         contr_candidates = set(node.next.values())
         if len(contr_candidates) != 1 or None in contr_candidates:
             return
         other = contr_candidates.pop()
-        if isinstance(other, Placeholder):
+        if isinstance(other.op, Placeholder):
             return
 
         d_node = len(node.qubits)
@@ -284,11 +286,13 @@ class ChainCompiler:
         """
         # Merge is possible, if there is only one previous node
         # Assumes that bases are aligned
+        if isinstance(node.op, Placeholder):
+            return
         contr_candidates = set(node.prev.values())
         if len(contr_candidates) != 1 or None in contr_candidates:
             return
         other = contr_candidates.pop()
-        if isinstance(other, Placeholder):
+        if isinstance(other.op, Placeholder):
             return
 
         d_node = len(node.qubits)
