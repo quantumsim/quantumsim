@@ -281,7 +281,10 @@ class TestCompiler:
             lib3.rotate_x(np.pi).at(0),
             lib3.rotate_x(np.pi).at(1)
         )
+        zz_ptm = zz.ptm(bases_in, bases_out)
         zzc = zz.compile(bases_in=bases_in, bases_out=bases_out)
+        zzc_ptm = zzc.ptm(bases_in, bases_out)
+        assert zz_ptm == approx(zzc_ptm)
 
         assert len(zzc.operations) == 2
         op1, ix1 = zzc.operations[0]
