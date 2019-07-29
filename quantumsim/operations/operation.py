@@ -3,6 +3,7 @@ import numpy as np
 import scipy.linalg.matfuncs
 from collections import namedtuple
 from itertools import chain
+from .compiler import compile_chain
 
 from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
                                plm_lindbladian_part, plm_hamiltonian_part)
@@ -16,11 +17,6 @@ class Operation(metaclass=abc.ABCMeta):
     :class:`quantumsim.pauli_vectors.PauliVectorBase` object and modifies it
     inline.
     """
-
-    @property
-    def _default_compiler_cls(self):
-        from .compiler import ChainCompiler
-        return ChainCompiler
 
     @property
     @abc.abstractmethod
@@ -285,7 +281,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         return _Chain(operations)
 
-    def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
+    def compile(self, bases_in=None, bases_out=None):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.
 
@@ -315,9 +311,7 @@ class Operation(metaclass=abc.ABCMeta):
             op = self
         else:
             op = Operation.from_sequence(self)
-        compiler_cls = compiler_cls or self._default_compiler_cls
-        compiler = compiler_cls(op, optimize=True)
-        return compiler.compile(bases_in, bases_out)
+        return compile_chain(op, bases_in, bases_out)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -525,8 +519,7 @@ class _Chain(Operation):
 
     def set_bases(self, bases_in=None, bases_out=None):
         super().set_bases(bases_in, bases_out)
-        compiler = self._default_compiler_cls(self, optimize=False)
-        return compiler.compile(bases_in, bases_out)
+        return compile_chain(self, bases_in, bases_out)
 
     def ptm(self, bases_in, bases_out=None):
         super().ptm(bases_in, bases_out)
@@ -534,9 +527,11 @@ class _Chain(Operation):
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
         start_ptm = Operation.from_ptm(
             np.identity(np.prod(ptm_in_shape), dtype=float)
-            .reshape(ptm_in_shape*2), bases_in)
-        return self._default_compiler_cls(
-            Operation.from_sequence(start_ptm, self),
-            optimize=False) \
-            .compile(bases_in, bases_out) \
-            .ptm(bases_in, bases_out)
+            .reshape(ptm_in_shape*2), bases_in=bases_in, bases_out=bases_in)
+        op = compile_chain(
+            Operation.from_sequence(start_ptm, self), bases_in, bases_out,
+            optimize_bases=False)
+        if isinstance(op, _PTMOperation):
+            return op.ptm(bases_in, bases_out)
+        else:
+            raise RuntimeError('Could not compile PTM; this is probably a bug.')
