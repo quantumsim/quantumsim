@@ -263,13 +263,13 @@ class ChainCompiler:
         for qubit, node_prev in node.prev.items():
             other.prev[qubit] = node_prev
             other.bases_in_dict[qubit] = node.bases_in_dict[qubit]
-            other.op = Operation.from_ptm(
-                other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_prev is None:
                 graph.starts[qubit] = other
             else:
                 node_prev.next[qubit] = other
 
+        other.op = Operation.from_ptm(
+            other_ptm, other.bases_in_tuple, other.bases_out_tuple)
         node.merged = True
 
     @staticmethod
@@ -312,13 +312,13 @@ class ChainCompiler:
             other.next[qubit] = node_next
             assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
             other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
-            other.op = Operation.from_ptm(
-                other_ptm, other.bases_in_tuple, other.bases_out_tuple)
             if node_next is None:
                 graph.ends[qubit] = other
             else:
                 node_next.prev[qubit] = other
 
+        other.op = Operation.from_ptm(
+            other_ptm, other.bases_in_tuple, other.bases_out_tuple)
         node.merged = True
 
     def compile(self, bases_in=None, bases_out=None):
