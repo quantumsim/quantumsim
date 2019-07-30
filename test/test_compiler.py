@@ -233,6 +233,7 @@ class TestCompiler:
             lib.rotate_x(0.25*np.pi).at(2),
         )
         chain1 = chain0.compile((b, b, b0), (b, b, b))
+        assert isinstance(chain1, _Chain)
         assert chain1.operations[0].indices == (0, 2)
         assert chain1.operations[0].operation.bases_in == (b, b0)
         assert chain1.operations[0].operation.bases_out[0] == b
@@ -255,6 +256,7 @@ class TestCompiler:
         b01 = b.subbasis([0, 1])
         b0134 = b.subbasis([0, 1, 3, 4])
         chain1 = chain0.compile((b0, b0, b0134), (b, b, b))
+        assert isinstance(chain1, _Chain)
         # Ancilla is not leaking here
         anc_basis = chain1.operations[1].operation.bases_out[1]
         for label in anc_basis.labels:
@@ -262,6 +264,7 @@ class TestCompiler:
 
         chain2 = chain0.compile((b01, b01, b0134), (b, b, b))
         # Ancilla is leaking here
+        assert isinstance(chain2, _Chain)
         anc_basis = chain2.operations[1].operation.bases_out[1]
         for label in '2', 'X20', 'Y20', 'X21', 'Y21':
             assert label in anc_basis.labels

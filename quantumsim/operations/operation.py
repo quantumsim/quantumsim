@@ -25,12 +25,6 @@ class Operation(metaclass=abc.ABCMeta):
     :class:`quantumsim.pauli_vectors.PauliVectorBase` object and modifies it
     inline.
     """
-
-    @property
-    def _default_compiler_cls(self):
-        from .compiler import ChainCompiler
-        return ChainCompiler
-
     @property
     @abc.abstractmethod
     def dim_hilbert(self):
@@ -293,7 +287,13 @@ class Operation(metaclass=abc.ABCMeta):
 
         return _Chain(operations)
 
-    def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
+    @property
+    def _compile(self):
+        # Need to lazily import due to circular dependency
+        from .compiler import compile_operation
+        return compile_operation
+
+    def compile(self, bases_in=None, bases_out=None):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.
 
@@ -311,8 +311,6 @@ class Operation(metaclass=abc.ABCMeta):
             Input bases.
         bases_out: None or list of quantumsim.bases.PauliBasis
             Output bases.
-        compiler_cls: none or class
-            Class of a compiler. If None, Quantumsim decides.
 
         Returns
         -------
@@ -323,9 +321,7 @@ class Operation(metaclass=abc.ABCMeta):
             op = self
         else:
             op = Operation.from_sequence(self)
-        compiler_cls = compiler_cls or self._default_compiler_cls
-        compiler = compiler_cls(op, optimize=True)
-        return compiler.compile(bases_in, bases_out)
+        return self._compile(op, bases_in, bases_out, optimize=True)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -593,8 +589,7 @@ class _Chain(Operation):
 
     def set_bases(self, bases_in=None, bases_out=None):
         super().set_bases(bases_in, bases_out)
-        compiler = self._default_compiler_cls(self, optimize=False)
-        return compiler.compile(bases_in, bases_out)
+        return self._compile(self, bases_in, bases_out, optimize=False)
 
     def ptm(self, bases_in, bases_out=None):
         super().ptm(bases_in, bases_out)
@@ -603,14 +598,11 @@ class _Chain(Operation):
         start_ptm = Operation.from_ptm(
             np.identity(np.prod(ptm_in_shape), dtype=float)
             .reshape(ptm_in_shape*2), bases_in)
-        return self._default_compiler_cls(
-            Operation.from_sequence(start_ptm, self),
-            optimize=True) \
-            .compile(bases_in, bases_out) \
-            .ptm(bases_in, bases_out)
+        return self._compile(
+            Operation.from_sequence(start_ptm, self), bases_in, bases_out,
+            optimize=True).ptm(bases_in, bases_out)
 
     def substitute(self, **kwargs):
-        operations = []
         operations = [_IndexedOperation(
             op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
             else op,
