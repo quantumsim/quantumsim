@@ -37,6 +37,11 @@ class Operation(metaclass=abc.ABCMeta):
         """Hilbert dimensionality of qubits the operation acts onto."""
         pass
 
+    def units(self):
+        """A generator of IndexedOperations, correspondent to this operation."""
+        yield self.at(*range(self.num_qubits))
+        return
+
     @abc.abstractmethod
     def __call__(self, pauli_vector, *qubits):
         """Applies the operation inline (modifying the state) to the Pauli
@@ -87,7 +92,7 @@ class Operation(metaclass=abc.ABCMeta):
         bases_in : tuple of PauliBasis
             Input basis of the PTM
         bases_out : tuple of PauliBasis or None
-            Output bases of the PTM. If None, deraults to bases_in
+            Output bases of the PTM. If None, defaults to bases_in
 
         Returns
         -------
@@ -121,7 +126,7 @@ class Operation(metaclass=abc.ABCMeta):
         """
         if bases_out is None:
             bases_out = bases_in
-        return _PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
+        return PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
 
     @staticmethod
     def from_kraus(kraus, bases_in, bases_out=None):
@@ -191,7 +196,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        quantumsim.operations.operation._PTMOperation
+        quantumsim.operations.operation.PTMOperation
         """
         summands = []
         if hamiltonian is not None:
@@ -209,7 +214,7 @@ class Operation(metaclass=abc.ABCMeta):
         if not np.allclose(ptm.imag, 0):
             raise ValueError('Resulting PTM is not real-valued, check the '
                              'sanity of `hamiltonian` and `lindblad_ops`.')
-        return _PTMOperation(ptm.real, (basis,), (basis,))
+        return PTMOperation(ptm.real, (basis,), (basis,))
 
     @staticmethod
     def from_sequence(*operations):
@@ -219,7 +224,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        op0, ..., opN: Operation, _IndexedOperation or list
+        op0, ..., opN: Operation, IndexedOperation or list
             Operations to concatenate, or a single list of operations. If not
             all operations match in qubit dimensionality or in order of qubits
             to be applied to, they must be indexed
@@ -230,7 +235,7 @@ class Operation(metaclass=abc.ABCMeta):
         quantumsim.operations.operation._Chain
             Resulting operation
         """
-        if not (isinstance(operations[0], _IndexedOperation) or
+        if not (isinstance(operations[0], IndexedOperation) or
                 isinstance(operations[0], Operation)):
             if hasattr(operations[0], '__iter__'):
                 operations = operations[0]
@@ -242,7 +247,7 @@ class Operation(metaclass=abc.ABCMeta):
         op0 = operations[0]
         if isinstance(op0, Operation):
             for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, _IndexedOperation):
+                if isinstance(op, IndexedOperation):
                     raise ValueError(
                         "Provide index for operation number 0 (see "
                         "`Operation.at()` method).")
@@ -263,13 +268,13 @@ class Operation(metaclass=abc.ABCMeta):
                         "Provide indices explicitly (see `Operation.at()` "
                         "method).".format(op0.num_qubits, i, op.num_qubits))
         else:
-            # op0 is certainly _IndexedOperation, we checked
+            # op0 is certainly IndexedOperation, we checked
             for i, op in enumerate(operations[1:], 1):
                 if isinstance(op, Operation):
                     raise ValueError(
                         "Provide index for operation number {} (see "
                         "`Operation.at()` method).".format(i))
-                if not isinstance(op, _IndexedOperation):
+                if not isinstance(op, IndexedOperation):
                     raise ValueError(
                         "Wrong type of operation number {}: {}"
                         .format(i, type(op)))
@@ -315,7 +320,7 @@ class Operation(metaclass=abc.ABCMeta):
         Returns
         -------
         quantumsim.operations.operation._Chain or
-        quantumsim.operations.operation._PTMOperation
+        quantumsim.operations.operation.PTMOperation
         """
         if isinstance(self, _Chain):
             op = self
@@ -335,13 +340,13 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        _IndexedOperation
+        IndexedOperation
             Intermediate representation of an operation.
         """
         if not self.num_qubits == len(indices):
             raise ValueError('Number of indices is not equal to the number of '
                              'qubits in the operation.')
-        return _IndexedOperation(self, indices)
+        return IndexedOperation(self, indices)
 
     def _validate_bases(self, **kwargs):
         for name, bases in kwargs.items():
@@ -362,7 +367,7 @@ class Operation(metaclass=abc.ABCMeta):
                         .format(self.dim_hilbert, name, b.dim_hilbert))
 
 
-_IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
+IndexedOperation = namedtuple('IndexedOperation', ['operation', 'indices'])
 
 
 class Placeholder(Operation):
@@ -425,7 +430,7 @@ class Placeholder(Operation):
             'Operation placeholder does not have a PTM')
 
 
-class _PTMOperation(Operation):
+class PTMOperation(Operation):
     """Generic transformation of a state.
 
     Any transformation, that should be a completely positive map, can be
@@ -451,7 +456,6 @@ class _PTMOperation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
-
     def __init__(self, ptm, bases_in, bases_out):
         self._ptm = ptm
         self.bases_in = bases_in
@@ -502,7 +506,7 @@ class _PTMOperation(Operation):
             new_ptm = ptm_convert_basis(self._ptm,
                                         self.bases_in, self.bases_out,
                                         b_in, b_out)
-            new_op = _PTMOperation(new_ptm, b_in, b_out)
+            new_op = PTMOperation(new_ptm, b_in, b_out)
         return new_op
 
     def ptm(self, bases_in, bases_out=None):
@@ -554,18 +558,22 @@ class _Chain(Operation):
         for op_indices in operations:
             # Flatten the operations chain
             if isinstance(op_indices.operation, _Chain):
-                for sub_op, sub_indices in op_indices.operation.operations:
+                for sub_op, sub_indices in op_indices.operation._units:
                     _, indices = op_indices
                     new_indices = tuple((indices[i] for i in sub_indices))
-                    joined_ops.append(_IndexedOperation(sub_op, new_indices))
+                    joined_ops.append(IndexedOperation(sub_op, new_indices))
             else:
                 joined_ops.append(op_indices)
 
-        self.operations = joined_ops
-        for op in self.operations:
+        self._units = joined_ops
+        for op in self._units:
             if isinstance(op.operation, _Chain):
                 raise RuntimeError('Chain must not contain chains; this is '
                                    'probably a bug.')
+
+    def units(self):
+        for unit in self._units:
+            yield unit
 
     @property
     def dim_hilbert(self):
@@ -581,7 +589,7 @@ class _Chain(Operation):
                              'indices provided is {}'
                              .format(self._num_qubits, len(qubit_indices)))
         results = []
-        for op, indices in self.operations:
+        for op, indices in self._units:
             result = op(pauli_vector, *(qubit_indices[i] for i in indices))
             if result is not None:
                 results.append(result)
@@ -592,6 +600,9 @@ class _Chain(Operation):
         return self._compile(self, bases_in, bases_out, optimize=False)
 
     def ptm(self, bases_in, bases_out=None):
+        if np.any([isinstance(x.operation, Placeholder)
+                   for x in self._units]):
+            raise OperationNotDefinedError('Chain contains placeholders')
         super().ptm(bases_in, bases_out)
         bases_out = bases_out or bases_in
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
@@ -603,10 +614,10 @@ class _Chain(Operation):
             optimize=True).ptm(bases_in, bases_out)
 
     def substitute(self, **kwargs):
-        operations = [_IndexedOperation(
+        operations = [IndexedOperation(
             op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
             else op,
-            ix) for op, ix in self.operations]
+            ix) for op, ix in self._units]
         return _Chain(operations)
 
 
@@ -644,6 +655,10 @@ class ParametrizedOperation(Placeholder):
                             self._params}
         self._params_subs = {}
         self._operation = None
+
+    @property
+    def units(self):
+        return self.at(*range(self.num_qubits))
 
     @property
     def params(self):

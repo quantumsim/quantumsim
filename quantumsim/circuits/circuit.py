@@ -398,3 +398,55 @@ class TimeAwareCircuit(Circuit, TimeAware):
         copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
         copy_._params_cache = self._params_cache
         return copy_
+
+
+class FinalizedCircuit:
+    """
+    Parameters
+    ----------
+    Circuit : CircuitBase
+        A circuit to finalize
+    """
+    def __init__(self, circuit, *, bases_in=None):
+        if circuit:
+            self.operation = circuit.operation.compile(bases_in=bases_in)
+
+            self.qubits = copy(circuit.qubits)
+            if hasattr(self.operation, 'operations'):
+                self._params = set().union((op.params for op in filter(
+                    lambda op: isinstance(op, ParametrizedOperation),
+                    self.operation)))
+            elif hasattr(self.operation, 'params'):
+                self._params = self.operation.params
+            else:
+                self._params = set()
+
+    def __call__(self, **params):
+        if len(self._params) > 0:
+            unset_params = self._params - params.keys()
+            if len(unset_params) != 0:
+                raise KeyError(*unset_params)
+            out = FinalizedCircuit(None)
+            out.operation = self.operation.substitute(**params)\
+                .compile(optimize=False)
+            out._params = set()
+            return out
+        else:
+            return self
+
+    def __matmul__(self, state):
+        """
+
+        Parameters
+        ----------
+        state : quantumsim.State
+        """
+        if len(self._params) != 0:
+            raise KeyError(*self._params)
+        try:
+            indices = [state.qubits.index(q) for q in self.qubits]
+        except ValueError as ex:
+            raise ValueError(
+                'Qubit {} is not present in the state'
+                .format(ex.args[0].split()[0]))
+        self.operation(state.pauli_vector, *indices)

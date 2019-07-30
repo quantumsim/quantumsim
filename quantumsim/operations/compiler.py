@@ -14,7 +14,7 @@ def compile_operation(op, bases_in=None, bases_out=None, *,
     ----------
     op : quantumsim.Operation
     bases_in : None or quantumsim.PauliBasis
-    bases_out : None or quantumsim.PauliBasis
+    bases_out : None or quantu#preprint arXiv:1907.13581 "Andreev reflection in ballistic normal metal/graphene/superconductor junctions" exp+theorymsim.PauliBasis
     optimize : bool
         Whether to search possibility to reduce bases.
     sv_cutoff : float
@@ -269,7 +269,7 @@ class CircuitGraph:
         self.starts = [None for _ in range(chain.num_qubits)]
         self.ends = [None for _ in range(chain.num_qubits)]
         self.nodes = []
-        for op, qubtis in chain.operations:
+        for op, qubtis in chain.units():
             node_new = Node(op, qubtis)
             for qubit in qubtis:
                 if self.starts[qubit] is None:

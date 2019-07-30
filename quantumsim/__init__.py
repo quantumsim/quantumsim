@@ -4,12 +4,14 @@ from . import pauli_vectors, bases
 from .operations import Operation
 from .setups import Setup
 from .states import State
+from .models import Model
 
 PauliVector = pauli_vectors.Default
 
 __all__ = [
     'bases',
     'pauli_vectors',
+    'Model',
     'Operation',
     'PauliVector',
     'Setup',

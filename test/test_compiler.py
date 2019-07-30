@@ -11,7 +11,7 @@ from pytest import approx
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
 # noinspection PyProtectedMember
-from quantumsim.operations.operation import _Chain, _PTMOperation, \
+from quantumsim.operations.operation import _Chain, PTMOperation, \
     ParametrizedOperation
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 
@@ -137,17 +137,17 @@ class TestCompiler:
         pv0 = PauliVector.from_dm(dm, bases_full)
         chain0(pv0, 0)
         assert chain0.num_qubits == 1
-        assert len(chain0.operations) == 2
+        assert len(chain0._units) == 2
 
         chain0_c = chain0.compile(bases_full, bases_full)
-        assert isinstance(chain0_c, _PTMOperation)
+        assert isinstance(chain0_c, PTMOperation)
         pv1 = PauliVector.from_dm(dm, bases_full)
         chain0_c(pv1, 0)
         assert chain0_c.num_qubits == 1
-        assert isinstance(chain0_c, _PTMOperation)
+        assert isinstance(chain0_c, PTMOperation)
         op_angle = chain0_c
         op_2angle = rx_2angle.compile(bases_full, bases_full)
-        assert isinstance(op_2angle, _PTMOperation)
+        assert isinstance(op_2angle, PTMOperation)
         assert op_angle.shape == op_2angle.shape
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
@@ -158,12 +158,12 @@ class TestCompiler:
         rx_pi = lib.rotate_x(np.pi)
         chain_2pi = Operation.from_sequence(rx_pi.at(0), rx_pi.at(0))
         chain_2pi_c1 = chain_2pi.compile(subbases, bases_full)
-        assert isinstance(chain_2pi_c1, _PTMOperation)
+        assert isinstance(chain_2pi_c1, PTMOperation)
         assert chain_2pi_c1.bases_in == subbases
         assert chain_2pi_c1.bases_out == subbases
 
         chain_2pi_c2 = chain_2pi.compile(bases_full, subbases)
-        assert isinstance(chain_2pi_c2, _PTMOperation)
+        assert isinstance(chain_2pi_c2, PTMOperation)
         assert chain_2pi_c2.bases_in == subbases
         assert chain_2pi_c2.bases_out == subbases
 
@@ -181,8 +181,8 @@ class TestCompiler:
 
         bases_full = (b, b)
         chain_c = chain.compile(bases_full, bases_full)
-        assert len(chain.operations) == 2
-        assert isinstance(chain_c, _PTMOperation)
+        assert len(chain._units) == 2
+        assert isinstance(chain_c, PTMOperation)
 
         pv1 = PauliVector.from_dm(dm, bases_full)
         pv2 = PauliVector.from_dm(dm, bases_full)
@@ -209,8 +209,8 @@ class TestCompiler:
 
         bases_full = (b, b)
         chain_c = chain.compile(bases_full, bases_full)
-        assert len(chain.operations) == 2
-        assert isinstance(chain_c, _PTMOperation)
+        assert len(chain._units) == 2
+        assert isinstance(chain_c, PTMOperation)
 
         pv1 = PauliVector.from_dm(dm, bases_full)
         pv2 = PauliVector.from_dm(dm, bases_full)
@@ -234,14 +234,14 @@ class TestCompiler:
         )
         chain1 = chain0.compile((b, b, b0), (b, b, b))
         assert isinstance(chain1, _Chain)
-        assert chain1.operations[0].indices == (0, 2)
-        assert chain1.operations[0].operation.bases_in == (b, b0)
-        assert chain1.operations[0].operation.bases_out[0] == b
-        assert chain1.operations[1].indices == (1, 2)
-        assert chain1.operations[1].operation.bases_in[0] == b
-        assert chain1.operations[1].operation.bases_out[0] == b
+        assert chain1._units[0].indices == (0, 2)
+        assert chain1._units[0].operation.bases_in == (b, b0)
+        assert chain1._units[0].operation.bases_out[0] == b
+        assert chain1._units[1].indices == (1, 2)
+        assert chain1._units[1].operation.bases_in[0] == b
+        assert chain1._units[1].operation.bases_out[0] == b
         for label in '0', '1', 'X10', 'Y10':
-            assert label in chain1.operations[1].operation.bases_out[1].labels
+            assert label in chain1._units[1].operation.bases_out[1].labels
 
     def test_chain_compile_leaking(self):
         b = bases.general(3)
@@ -258,14 +258,14 @@ class TestCompiler:
         chain1 = chain0.compile((b0, b0, b0134), (b, b, b))
         assert isinstance(chain1, _Chain)
         # Ancilla is not leaking here
-        anc_basis = chain1.operations[1].operation.bases_out[1]
+        anc_basis = chain1._units[1].operation.bases_out[1]
         for label in anc_basis.labels:
             assert '2' not in label
 
         chain2 = chain0.compile((b01, b01, b0134), (b, b, b))
         # Ancilla is leaking here
         assert isinstance(chain2, _Chain)
-        anc_basis = chain2.operations[1].operation.bases_out[1]
+        anc_basis = chain2._units[1].operation.bases_out[1]
         for label in '2', 'X20', 'Y20', 'X21', 'Y21':
             assert label in anc_basis.labels
 
@@ -290,9 +290,10 @@ class TestCompiler:
         zzc_ptm = zzc.ptm(bases_in, bases_out)
         assert zz_ptm == approx(zzc_ptm)
 
-        assert len(zzc.operations) == 2
-        op1, ix1 = zzc.operations[0]
-        op2, ix2 = zzc.operations[1]
+        units = list(zzc.units())
+        assert len(units) == 2
+        op1, ix1 = units[0]
+        op2, ix2 = units[1]
         assert ix1 == (0, 2)
         assert ix2 == (1, 2)
         assert op1.bases_in[0] == bases_in[0]
@@ -354,14 +355,14 @@ class TestCompiler:
 
         zzpc = zz_parametrized.compile(bases_in, bases_out)
         assert isinstance(zzpc, _Chain)
-        assert len(zzpc.operations) == 6
+        assert len(zzpc._units) == 6
         zzpc = zzpc.substitute(lr21=0.25)
         zzpc = zzpc.compile(bases_in, bases_out)
-        assert len(zzpc.operations) == 5
+        assert len(zzpc._units) == 5
         zzpc = zzpc.substitute(angle2=np.pi/2)
         zzpc = zzpc.compile(bases_in, bases_out)
-        assert len(zzpc.operations) == 4
+        assert len(zzpc._units) == 4
         zzpc = zzpc.substitute(angle1=-np.pi/2, lr02=0.1, foo='bar')
         zzpc = zzpc.compile(bases_in, bases_out)
-        assert len(zzpc.operations) == 2
+        assert len(zzpc._units) == 2
         assert zzpc.ptm(bases_in, bases_out) == approx(ptm_ref)

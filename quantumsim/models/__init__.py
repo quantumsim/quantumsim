@@ -1,7 +1,8 @@
 from . import qubits
 from . import transmons
+from .model import Model
 
-__all__ = ['qubits', 'transmons']
+__all__ = ['Model', 'qubits', 'transmons']
 
 import warnings
 warnings.warn(

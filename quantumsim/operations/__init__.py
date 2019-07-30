@@ -1,3 +1,3 @@
-from .operation import Operation, ParametrizedOperation
+from .operation import Operation, ParametrizedOperation, Placeholder
 
-__all__ = ['Operation', 'ParametrizedOperation']
+__all__ = ['Operation', 'ParametrizedOperation', 'Placeholder']

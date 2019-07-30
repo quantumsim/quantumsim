@@ -26,8 +26,8 @@ class TestSetup:
             - t1: 100
             - t1: 200
             """)
-        with pytest.raises(SetupLoadError, match='Parameters for qubit "X" '
-                                                 'defined repeatedly .*'):
+        with pytest.raises(SetupLoadError, match=r'Parameters for qubit\(s\) '
+                                                 r'X defined repeatedly .*'):
             Setup("""
             setup:
             - t1: 500

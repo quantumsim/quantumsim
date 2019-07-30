@@ -43,7 +43,7 @@ class Setup:
             if qubit:
                 qubits = (qubit,)
             if qubits in self._qubits.keys():
-                what = 'Parameters for qubit(s) "{}"'.format(qubits)\
+                what = 'Parameters for qubit(s) {}'.format(", ".join(qubits))\
                     if qubits else 'Default qubit parameters'
                 raise SetupLoadError(what + ' defined repeatedly in the setup.')
             self._qubits[qubits] = params_dict

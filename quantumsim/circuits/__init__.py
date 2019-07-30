@@ -1,5 +1,5 @@
 from .circuit import TimeAgnosticGate, TimeAgnosticCircuit,\
-    TimeAwareGate, TimeAwareCircuit, allow_param_repeat
+    TimeAwareGate, TimeAwareCircuit, FinalizedCircuit, allow_param_repeat
 
 __all__ = ['TimeAgnosticGate', 'TimeAgnosticCircuit', 'TimeAwareGate',
-           'TimeAwareCircuit', 'allow_param_repeat']
+           'TimeAwareCircuit', 'FinalizedCircuit', 'allow_param_repeat']
