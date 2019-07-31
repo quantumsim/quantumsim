@@ -25,6 +25,7 @@ class Setup:
         self._qubits = {}
         self._gates = defaultdict(dict)
 
+        self.name = setup_dict.get('name', '')
         version = setup_dict.get('version', '1')
         if version != '1' and version != 1:
             raise SetupLoadError('Unknown setup schema version: {}'
@@ -32,71 +33,34 @@ class Setup:
         self._load_setup_v1(setup_dict)
 
     def _load_setup_v1(self, setup_dict):
-        qubits = copy(setup_dict.get('qubits'))
-        if qubits is None:
-            raise SetupLoadError('Setup does not define "qubits" section')
+        params = copy(setup_dict.get('setup'))
+        if params is None:
+            raise SetupLoadError('Setup does not define "setup" section')
 
-        for qubit_dict in qubits:
-            name = str(qubit_dict.pop('name', ''))
-            if name in self._qubits.keys():
-                what = 'Parameters for qubit "{}"'.format(name) if name else \
-                    'Default qubit parameters'
+        for params_dict in params:
+            qubits = tuple(params_dict.pop('qubits', tuple()))
+            qubit = str(params_dict.pop('qubit', ''))
+            if qubit:
+                qubits = (qubit,)
+            if qubits in self._qubits.keys():
+                what = 'Parameters for qubit(s) "{}"'.format(qubits)\
+                    if qubits else 'Default qubit parameters'
                 raise SetupLoadError(what + ' defined repeatedly in the setup.')
-            self._qubits[name] = qubit_dict
-
-        gates = copy(setup_dict.get('gates'))
-        if gates is None:
-            raise SetupLoadError('Setup does not define "gates" section')
-
-        for gate_dict in gates:
-            name = gate_dict.pop('name', None)
-            if not name:
-                raise SetupLoadError('All gate declarations in the setup must '
-                                     'include a field "name".')
-            qubits = gate_dict.pop('qubits', [])
-            if isinstance(qubits, list):
-                qubits = tuple(qubits)
-            elif isinstance(qubits, str):
-                qubits = (qubits,)
-            else:
-                raise SetupLoadError('"qubits" keyword in a gate definition '
-                                     'must be either a string, or a list.')
-            if qubits in self._gates[name].keys():
-                what = ('Default parameters for gate "{}"'.format(name)
-                        if len(qubits) == 0 else
-                        'Parameters for gate "{}" on qubits {}'
-                        .format(name, ", ".join(qubits)))
-                raise SetupLoadError(what +
-                                     ' are defined repeatedly in the setup.')
-            self._gates[name][qubits] = gate_dict
+            self._qubits[qubits] = params_dict
 
     @classmethod
     def from_file(cls, filename):
         with open(filename, 'r') as f:
             return cls(f)
 
-    def param_qubit(self, param, qubit):
+    def param(self, param, *qubits):
         try:
-            return self._qubits[qubit][param]
+            return self._qubits[qubits][param]
         except KeyError:
             pass
         try:
-            return self._qubits[''][param]
+            return self._qubits[tuple()][param]
         except KeyError:
             pass
-        raise KeyError('Parameter "{}" is not defined for qubit "{}"'
-                       .format(param, qubit))
-
-    def param_gate(self, param, gate, *qubits):
-        if gate not in self._gates.keys():
-            raise KeyError('Gate "{}" is not defined.')
-        try:
-            return self._gates[gate][qubits][param]
-        except KeyError:
-            pass
-        try:
-            return self._gates[gate][tuple()][param]
-        except KeyError:
-            pass
-        raise KeyError('Parameter "{}" is not defined for gate "{}" with '
-                       'qubits {}'.format(param, gate, ", ".join(qubits)))
+        raise KeyError('Parameter "{}" is not defined for qubit(s) {}'
+                       .format(param, ", ".join(qubits)))
