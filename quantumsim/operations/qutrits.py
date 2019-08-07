@@ -134,15 +134,13 @@ default_cphase_params = dict(
 )
 
 
-def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
+def cphase(angle=np.pi, *, model='legacy', **kwargs):
     """
 
     Parameters
     ----------
     angle : float
         Conditional phase of a CPhase gate, default is :math:`\\pi`.
-    integrate_idling : bool
-        Whether to return
     model : str
         Error model (currently only 'legacy' and 'NetZero' is implemented).
     **kwargs
@@ -160,12 +158,6 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
     for param in kwargs.keys():
         if param not in default_cphase_params.keys():
             raise ValueError('Unknown model parameter: {}'.format(param))
-
-    int_point_time = p('int_time') - (4 * p('rise_time'))
-    if np.isfinite(p('q1_t2')) and np.isfinite(p('q1_t2_int')):
-        rise_t2 = (p('q1_t2') + p('q1_t2_int')) / 2
-    else:
-        rise_t2 = np.inf
 
     int_time = p('int_time')
     leakage_rate = p('leakage_rate')
@@ -203,32 +195,7 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
         cz_op = Operation.from_kraus(cz_unitary, bases2_default)
     else:
         raise ValueError('Unknown CZ model: {}'.format(model))
-
-    if integrate_idling:
-        q0_t1 = p('q0_t1')
-        q0_t2 = p('q0_t2')
-        q0_anharmonicity = p('q0_anharmonicity')
-        q1_t1 = p('q1_t1')
-        q1_t2 = p('q1_t2')
-        q1_t2_int = p('q1_t2_int')
-        q1_anharmonicity = p('q1_anharmonicity')
-        rise_time = p('rise_time')
-        phase_corr_time = p('phase_corr_time')
-        return Operation.from_sequence(
-            idle(int_time / 2, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_point_time / 2, q1_t1, q1_t2_int, q1_anharmonicity).at(1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            cz_op.at(0, 1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_point_time / 2, q1_t1, q1_t2_int, q1_anharmonicity).at(1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_time / 2, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(phase_corr_time, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(phase_corr_time, q1_t1, q1_t2, q1_anharmonicity).at(1)
-        )
-    else:
-        return cz_op
+    return cz_op
 
 
 def _cphase_legacy(angle=np.pi, leakage=0.):
@@ -295,53 +262,6 @@ def cnot():
     dcnot[4, 3] = -0.5
     unitary = expm(-1j * np.pi * dcnot)
     return Operation.from_kraus(unitary, bases2_default)
-
-
-def idle(duration, t1, t2, anharmonicity=0.):
-    if np.isfinite(t1) and np.isfinite(t2):
-        t_phi = 1. / (1. / t2 - 0.5 / t1)
-        if t_phi < 0:
-            raise ValueError('t2 must be less than 2*t1')
-        elif np.allclose(t_phi, 0):
-            ops_t2 = []
-        else:
-            ops_t2 = [
-                (8. / (9 * t_phi)) ** 0.5 * np.array([
-                    [1, 0, 0],
-                    [0, 0, 0],
-                    [0, 0, -1]
-                ]),
-                (2. / (9 * t_phi)) ** 0.5 * np.array([
-                    [1, 0, 0],
-                    [0, -1, 0],
-                    [0, 0, 0]
-                ]),
-                (2. / (9 * t_phi)) ** 0.5 * np.array([
-                    [0, 0, 0],
-                    [0, 1, 0],
-                    [0, 0, -1]
-                ])
-            ]
-    else:
-        ops_t2 = []
-
-    op_t1 = t1 ** -0.5 * np.array([
-        [0, 1, 0],
-        [0, 0, np.sqrt(2)],
-        [0, 0, 0]
-    ])
-    if not np.allclose(anharmonicity, 0.):
-        ham = np.array([
-            [0., 0., 0.],
-            [0., 0., 0.],
-            [0., 0., anharmonicity],
-        ])
-    else:
-        ham = None
-    return Operation.from_lindblad_form(
-        duration, bases.general(3),
-        hamiltonian=ham,
-        lindblad_ops=[op_t1, *ops_t2])
 
 
 def amp_damping(p0_up, p1_up, p1_down, p2_down):
