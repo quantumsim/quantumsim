@@ -90,15 +90,15 @@ class TestCircuitGen:
 
         # I do like the idea of having a generic set function?
         gate3 = model.cphase('q1', 'q2')
-        gate3.set(angle=np.pi)
+        gate3.subsitiute(angle=np.pi)
 
         # I think it makes more sense to use the operator l->r ordering
         # than time-ordering.
         circuit = gate3 @ circuit
 
         gate4 = model.rotate_y('q1', 'phi')
-        gate4.set(phi=-np.pi/2)
-        gate4.set(angle=-np.pi/2)
+        gate4.subsitiute(phi=-np.pi / 2)
+        gate4.subsitiute(angle=-np.pi / 2)
         circuit = gate4 @ circuit
 
         # To me, the 'compile function' is a promise from the user that
@@ -127,7 +127,7 @@ class TestCircuitGen:
 
         # Now we set the last parameter and the circuit may be
         # applied without qualification
-        circuit.set(theta=np.pi/2)
+        circuit.subsitiute(theta=np.pi / 2)
         qr = Setup(circuit.qubits)
         qr = circuit @ qr
 
@@ -178,7 +178,7 @@ class TestCircuitGen:
 
         # Now we set the last parameter and the circuit may be
         # applied without qualification
-        circuit.set(theta=np.pi/2)
+        circuit.subsitiute(theta=np.pi / 2)
         qr = Setup(circuit.qubits)
         qr = circuit @ qr
 

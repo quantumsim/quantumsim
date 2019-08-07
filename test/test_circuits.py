@@ -5,7 +5,6 @@ from pytest import approx
 import quantumsim.operations.qubits as lib
 from quantumsim.circuits import TimeAgnosticGate, TimeAwareGate, \
     allow_param_repeat
-from quantumsim.circuits.circuit import ParametrizedOperation
 from quantumsim import bases, Operation
 
 
