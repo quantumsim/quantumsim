@@ -110,12 +110,10 @@ class TestLibrary:
         cz_op_nz = lib.cphase(angle=np.pi,
                               leakage_rate=0,
                               leakage_phase=-np.pi/2,
-                              integrate_idling=False,
                               model='NetZero')
 
         cz_op_legacy = lib.cphase(angle=np.pi,
                                   leakage_rate=0,
-                                  integrate_idling=False,
                                   model='legacy')
 
         b = (cz_op_nz.bases_in, cz_op_nz.bases_out)
@@ -125,11 +123,9 @@ class TestLibrary:
         cz_op_nz = lib.cphase(angle=np.pi,
                               leakage_rate=input_leakage_rate,
                               leakage_phase=-np.pi/2,
-                              integrate_idling=False,
                               model='netzero')
         cz_op_legacy = lib.cphase(angle=np.pi,
                                   leakage_rate=4*input_leakage_rate,
-                                  integrate_idling=False,
                                   model='legacy')
         assert np.allclose(
             cz_op_nz.ptm(*b), cz_op_legacy.ptm(*b))
