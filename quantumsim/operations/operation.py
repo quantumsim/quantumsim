@@ -1,6 +1,4 @@
 import abc
-import inspect
-import re
 
 import numpy as np
 import scipy.linalg.matfuncs
@@ -377,12 +375,15 @@ class Placeholder(Operation):
         Input bases of qubits.
     bases_out: tuple of quantumsim.bases.PauliBasis or None
         Output bases of qubits
+    replace_func: function
+        A function that returns an operation and used to replace the
+        placeholder, if necessary.
 
     Returns
     -------
     A placeholder for an operation
     """
-    def __init__(self, bases_in, bases_out=None):
+    def __init__(self, bases_in, bases_out=None, *, replace_func=None):
         self._num_qubits = len(bases_in)
         self._dim_hilbert = bases_in[0].dim_hilbert
         self._validate_bases(bases_in=bases_in)
@@ -392,6 +393,7 @@ class Placeholder(Operation):
             self._validate_bases(bases_out=bases_out)
         self._bases_in = bases_in
         self._bases_out = bases_out
+        self._replace_func = replace_func
 
     @property
     def dim_hilbert(self):
@@ -427,6 +429,13 @@ class Placeholder(Operation):
     def ptm(self, bases_in, bases_out=None):
         raise OperationNotDefinedError(
             'Operation placeholder does not have a PTM')
+
+    def replace(self, **kwargs):
+        if self._replace_func is not None:
+            return self._replace_func(**kwargs)
+        else:
+            raise OperationNotDefinedError(
+                "Placeholder does not have a replace function.")
 
 
 class PTMOperation(Operation):
@@ -608,101 +617,3 @@ class _Chain(Operation):
         return self._compile(
             Operation.from_sequence(start_ptm, self), bases_in, bases_out,
             optimize=True).ptm(bases_in, bases_out)
-
-    def substitute(self, **kwargs):
-        operations = [IndexedOperation(
-            op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
-            else op,
-            ix) for op, ix in self._units]
-        return _Chain(operations)
-
-
-class ParametrizedOperation(Placeholder):
-    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
-
-    def __init__(self, operation_func, bases_in, bases_out=None, **params):
-        """A gate without notion of timing.
-
-        Parameters
-        ----------
-        operation_func : function
-            A function, that takes a certain number of arguments
-            (gate parameters) and returns an operation.
-        bases_in : tuple of quantumsim.PauliBasis
-            Input bases, that will be taken by final, when it is calculated.
-        bases_out : tuple of quantumsim.PauliBasis or None
-            Output bases, that will be taken by final, when it is calculated.
-            If None, the same as input basis is taken.
-        **params:
-            Parameters, that are set initially.
-        """
-        super().__init__(bases_in, bases_out)
-        self._operation_func = operation_func
-        argspec = inspect.getfullargspec(operation_func)
-        if argspec.varargs is not None:
-            raise ValueError(
-                "`operation_func` can't accept free arguments.")
-        if argspec.varkw is not None:
-            raise ValueError(
-                "`operation_func` can't accept free keyword arguments.")
-        self._params_real = tuple(argspec.args)
-        self._params = set(self._params_real)
-        self._params_set = {k: v for k, v in params.items() if k in
-                            self._params}
-        self._params_subs = {}
-        self._operation = None
-
-    @property
-    def params(self):
-        return self._params
-
-    def __copy__(self):
-        copy_ = self.__class__(self._operation_func, self._bases_in,
-                               self._bases_out)
-        copy_._params = copy(self._params)
-        copy_._params_set = copy(self._params_set)
-        copy_._params_subs = copy(self._params_subs)
-        return copy_
-
-    def _substitute_param(self, name, value):
-        if name not in self._params:
-            return
-        real_name = self._params_subs.pop(name, name)
-        if isinstance(value, str):
-            if self._valid_identifier_re.match(value) is None:
-                raise ValueError("\"{}\" is not a valid Python "
-                                 "identifier.".format(value))
-            self._params_subs[value] = real_name
-            self._params.add(value)
-        else:
-            self._params_set[real_name] = value
-        self._params.remove(name)
-
-    def substitute(self, **kwargs):
-        params_to_substitute = self._params.intersection(kwargs.keys())
-        if len(params_to_substitute) == 0 and len(self._params) != 0:
-            return self
-        copy_ = copy(self)
-        for name in params_to_substitute:
-            copy_._substitute_param(name, kwargs[name])
-        if len(copy_._params) == 0:
-            for name, real_name in copy_._params_subs.items():
-                copy_._params_set[real_name] = copy_._params_set.pop(name)
-            args = tuple(copy_._params_set[name] for name in copy_._params_real)
-            op = copy_._operation_func(*args)
-            if not isinstance(op, Operation):
-                raise RuntimeError(
-                    'Invalid operation function was provided for the '
-                    'parametrized operation during its creation: '
-                    'it must raturn a quantumsim.Operation instance, '
-                    'but it returns {} instead.'.format(type(op)))
-            if op.num_qubits != copy_.num_qubits:
-                raise RuntimeError(
-                    'Invalid operation function was provided for the '
-                    'parametrized operation during its creation: '
-                    'its number of qubits ({}) does not match one of the '
-                    'basis ({}).'.format(op.num_qubits,
-                                         copy_.num_qubits))
-            return op.set_bases(self._bases_in, self._bases_out)
-        else:
-            return copy_
