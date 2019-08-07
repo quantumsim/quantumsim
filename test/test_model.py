@@ -8,9 +8,7 @@ from quantumsim.circuits import FinalizedCircuit
 from quantumsim.models.model import WaitPlaceholder
 from quantumsim.operations import ParametrizedOperation
 
-with warnings.catch_warnings():
-    warnings.simplefilter('ignore')
-    import quantumsim.models.qubits as lib
+import quantumsim.operations.qubits as lib
 
 
 def test_create_untimed_model():
@@ -31,10 +29,6 @@ def test_create_untimed_model():
                 lib.cphase(pi).at(qubit_static, qubit_fluxed),
             )
 
-        @Model.gate()
-        def strange_duration_gate(self, qubit):
-            return lib.rotate_y(pi)
-
         def finalize(self, circuit, bases_in=None):
             return FinalizedCircuit(circuit, bases_in=bases_in)
 
@@ -45,6 +39,7 @@ def test_create_untimed_model():
     m = SampleModel(sample_setup)
     cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
            m.rotate_y('D0', angle=-0.5*pi)
+
     assert cnot.operation.ptm(basis*2, basis*2) == approx(
         Operation.from_sequence(
             lib.rotate_y(0.5*pi).at(0),
@@ -84,8 +79,8 @@ def test_create_timed_model():
         def finalize(self, circuit, bases_in=None):
             out = super(SampleModel, self).finalize(circuit, bases_in)
             # Sample compilation: filter out waiting gates
-            operations= [unit for unit in out.operation.units()
-                         if not isinstance(unit.operation, WaitPlaceholder)]
+            operations = [unit for unit in out.operation.units()
+                          if not isinstance(unit.operation, WaitPlaceholder)]
             out.operation = Operation.from_sequence(operations).compile(
                 bases_in=bases_in)
             return out

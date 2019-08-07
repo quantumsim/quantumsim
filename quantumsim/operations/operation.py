@@ -40,7 +40,6 @@ class Operation(metaclass=abc.ABCMeta):
     def units(self):
         """A generator of IndexedOperations, correspondent to this operation."""
         yield self.at(*range(self.num_qubits))
-        return
 
     @abc.abstractmethod
     def __call__(self, pauli_vector, *qubits):
@@ -557,13 +556,10 @@ class _Chain(Operation):
         joined_ops = []
         for op_indices in operations:
             # Flatten the operations chain
-            if isinstance(op_indices.operation, _Chain):
-                for sub_op, sub_indices in op_indices.operation._units:
-                    _, indices = op_indices
-                    new_indices = tuple((indices[i] for i in sub_indices))
-                    joined_ops.append(IndexedOperation(sub_op, new_indices))
-            else:
-                joined_ops.append(op_indices)
+            for sub_op, sub_indices in op_indices.operation.units():
+                _, indices = op_indices
+                new_indices = tuple((indices[i] for i in sub_indices))
+                joined_ops.append(IndexedOperation(sub_op, new_indices))
 
         self._units = joined_ops
         for op in self._units:
@@ -655,10 +651,6 @@ class ParametrizedOperation(Placeholder):
                             self._params}
         self._params_subs = {}
         self._operation = None
-
-    @property
-    def units(self):
-        return self.at(*range(self.num_qubits))
 
     @property
     def params(self):

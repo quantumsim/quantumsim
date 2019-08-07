@@ -1,5 +1,6 @@
 import numpy as np
-from quantumsim import bases, Operation
+from .. import bases
+from .operation import Operation, ParametrizedOperation
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
@@ -88,7 +89,7 @@ def rotate_z(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def phase_shift(angle=np.pi):
+def phase_shift(angle):
     matrix = np.diag([1, np.exp(1j * angle)])
     return Operation.from_kraus(matrix, bases1_default)
 

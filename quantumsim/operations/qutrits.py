@@ -1,8 +1,8 @@
 import numpy as np
-from functools import lru_cache
 from scipy.linalg import expm
-from quantumsim import bases, Operation
-from quantumsim.algebra.tools import verify_kraus_unitarity
+from .. import bases
+from .operation import Operation
+from ..algebra.tools import verify_kraus_unitarity
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
@@ -170,9 +170,9 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
     int_time = p('int_time')
     leakage_rate = p('leakage_rate')
     qstatic_deviation = int_time * np.pi * \
-        p('sensitivity') * (p('quasistatic_flux') ** 2)
+                        p('sensitivity') * (p('quasistatic_flux') ** 2)
     qstatic_interf_leakage = (0.5 - (2 * leakage_rate)) * \
-        (1 - np.cos(1.5 * qstatic_deviation))
+                             (1 - np.cos(1.5 * qstatic_deviation))
     phase_corr_error = p('phase_corr_error')
 
     rot_angle = angle + (1.5 * qstatic_deviation) + (2 * phase_corr_error)
@@ -274,15 +274,15 @@ def _exchange_generator(leakage, leakage_phase,
     generator = np.zeros((9, 9), dtype=complex)
 
     generator[2][4] = 1j * \
-        np.arcsin(np.sqrt(leakage)) * np.exp(1j * leakage_phase)
+                      np.arcsin(np.sqrt(leakage)) * np.exp(1j * leakage_phase)
     generator[4][2] = -1j * \
-        np.arcsin(np.sqrt(leakage)) * np.exp(-1j * leakage_phase)
+                      np.arcsin(np.sqrt(leakage)) * np.exp(-1j * leakage_phase)
 
     generator[5][7] = 1j * np.arcsin(np.sqrt(leakage_mobility_rate)) * \
                       np.exp(1j * leakage_mobility_phase)
     generator[7][5] = -1j * \
-        np.arcsin(np.sqrt(leakage_mobility_rate)) * \
-        np.exp(-1j * leakage_mobility_phase)
+                      np.arcsin(np.sqrt(leakage_mobility_rate)) * \
+                      np.exp(-1j * leakage_mobility_phase)
 
     return generator
 

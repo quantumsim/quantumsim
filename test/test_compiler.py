@@ -15,11 +15,8 @@ from quantumsim.operations.operation import _Chain, PTMOperation, \
     ParametrizedOperation
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 
-
-with warnings.catch_warnings():
-    warnings.simplefilter('ignore')
-    from quantumsim.models import qubits as lib2
-    from quantumsim.models import transmons as lib3
+from quantumsim.operations import qubits as lib2
+from quantumsim.operations import qutrits as lib3
 
 
 class TestCompiler:

@@ -6,7 +6,7 @@
 import numpy as np
 
 from quantumsim import bases, PauliVector
-from quantumsim.models import transmons as lib
+import quantumsim.operations.qutrits as lib
 
 
 class TestLibrary:

@@ -1,4 +1,3 @@
-import inspect
 import abc
 import numpy as np
 
@@ -34,7 +33,7 @@ class Model(metaclass=abc.ABCMeta):
         return WaitPlaceholder(time, self.dim).at(qubit)
 
     def p(self, param, *qubits):
-        return self._setup.param(param, qubits)
+        return self._setup.param(param, *qubits)
 
     @property
     @abc.abstractmethod
@@ -43,7 +42,6 @@ class Model(metaclass=abc.ABCMeta):
 
     @staticmethod
     def _normalize_operation(op, qubits):
-        out = []
         if isinstance(op, Operation):
             if len(qubits) > 1:
                 raise ValueError(

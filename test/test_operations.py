@@ -9,13 +9,13 @@ from copy import copy
 from numpy import pi
 from pytest import approx
 
+import quantumsim.operations.qubits as lib2
+import quantumsim.operations.qutrits as lib3
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_density_matrix
 from quantumsim.operations import ParametrizedOperation
 from quantumsim.operations.operation import OperationNotDefinedError
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
-from quantumsim.models import qubits as lib2
-from quantumsim.models import transmons as lib3
 
 
 class TestOperations:
