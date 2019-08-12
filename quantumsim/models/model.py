@@ -8,7 +8,7 @@ from ..operations import Placeholder
 from .. import bases
 
 
-from ..operations.operation import IndexedOperation
+from ..operations.operation import IndexedOperation, ParametrizedOperation
 
 
 class WaitPlaceholder(Placeholder):
@@ -62,20 +62,19 @@ class Model(metaclass=abc.ABCMeta):
     @staticmethod
     def gate(duration=None, plot_metadata=None):
         def gate_decorator(func):
-            def make_operation(self, *qubits, **params):
+            def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
                 sequence = sequence if hasattr(sequence, '__iter__') else \
                     (sequence,)
                 sequence = [self._normalize_operation(op, qubits) for op
                             in sequence]
-                return Operation.from_sequence(sequence, qubits) \
-                    .substitute(**params)
+                return Operation.from_sequence(sequence, qubits)
 
             if duration is None:
                 def wrapper(self, *qubits, **params):
                     return TimeAgnosticGate(
-                        qubits, make_operation(self, *qubits, **params),
-                        plot_metadata)
+                        qubits, make_operation(self, *qubits),
+                        plot_metadata)(**params)
             else:
                 def wrapper(self, *qubits, **params):
                     if callable(duration):
@@ -85,8 +84,8 @@ class Model(metaclass=abc.ABCMeta):
                     else:
                         _duration = duration
                     return TimeAwareGate(
-                        qubits, make_operation(self, *qubits, **params),
-                        _duration, 0., plot_metadata)
+                        qubits, make_operation(self, *qubits),
+                        _duration, 0., plot_metadata)(**params)
             wrapper.__name__ = func.__name__
             return wrapper
         return gate_decorator

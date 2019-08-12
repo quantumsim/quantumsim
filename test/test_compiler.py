@@ -349,17 +349,27 @@ class TestCompiler:
                 lib3.rotate_x(np.pi).at(0),
                 lib3.rotate_x(np.pi).at(1)
             ))
-
         zzpc = zz_parametrized.compile(bases_in, bases_out)
         assert isinstance(zzpc, _Chain)
-        assert len(zzpc._units) == 6
-        zzpc = zzpc.substitute(lr21=0.25)
-        zzpc = zzpc.compile(bases_in, bases_out)
-        assert len(zzpc._units) == 5
-        zzpc = zzpc.substitute(angle2=np.pi/2)
-        zzpc = zzpc.compile(bases_in, bases_out)
-        assert len(zzpc._units) == 4
-        zzpc = zzpc.substitute(angle1=-np.pi/2, lr02=0.1, foo='bar')
+        assert len(list(zzpc.units())) == 6
+
+        zz_parametrized = Operation.from_sequence(
+            Operation.from_sequence(
+                ParametrizedOperation(
+                    lambda angle1: lib3.rotate_x(angle1), (b_full,)
+                ).at(2),
+                ParametrizedOperation(
+                    lambda lr02: lib3.cphase(leakage_rate=lr02), (b_full,) * 2
+                ).at(0, 2),
+                lib3.cphase(leakage_rate=0.25).at(2, 1),
+                lib3.rotate_x(np.pi/2).at(2),
+                lib3.rotate_x(np.pi).at(0),
+                lib3.rotate_x(np.pi).at(1)
+            ))
+        zzpc = zz_parametrized.compile(bases_in, bases_out)
+        assert len(list(zzpc.units())) == 4
+        zzpc = ParametrizedOperation.chain_substitute(
+            zzpc, angle1=-np.pi/2, lr02=0.1, foo='bar')
         zzpc = zzpc.compile(bases_in, bases_out)
         assert len(zzpc._units) == 2
         assert zzpc.ptm(bases_in, bases_out) == approx(ptm_ref)

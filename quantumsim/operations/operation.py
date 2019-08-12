@@ -5,7 +5,7 @@ import re
 import numpy as np
 import scipy.linalg.matfuncs
 from collections import namedtuple
-from itertools import chain
+from itertools import chain as chain_
 
 from copy import copy
 
@@ -463,7 +463,7 @@ class PTMOperation(Operation):
         self._num_qubits = len(self.bases_in)
         self._validate_bases(bases_out=self.bases_out)
         shape = tuple(b.dim_pauli for b in
-                      chain(self.bases_out, self.bases_in))
+                      chain_(self.bases_out, self.bases_in))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
@@ -547,7 +547,7 @@ class _Chain(Operation):
     def __init__(self, operations):
         self._dim_hilbert = operations[0].operation.dim_hilbert
         all_indices = np.unique(
-            list(chain(*(op.indices for op in operations))))
+            list(chain_(*(op.indices for op in operations))))
         if all_indices[0] != 0 or all_indices[-1] != len(all_indices) - 1:
             raise ValueError('Indices of operations must form an ordered set '
                              'from 0 to N-1')
@@ -609,13 +609,6 @@ class _Chain(Operation):
             Operation.from_sequence(start_ptm, self), bases_in, bases_out,
             optimize=True).ptm(bases_in, bases_out)
 
-    def substitute(self, **kwargs):
-        operations = [IndexedOperation(
-            op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
-            else op,
-            ix) for op, ix in self._units]
-        return _Chain(operations)
-
 
 class ParametrizedOperation(Placeholder):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
@@ -637,7 +630,6 @@ class ParametrizedOperation(Placeholder):
             Parameters, that are set initially.
         """
         super().__init__(bases_in, bases_out)
-        self._operation_func = operation_func
         argspec = inspect.getfullargspec(operation_func)
         if argspec.varargs is not None:
             raise ValueError(
@@ -645,64 +637,47 @@ class ParametrizedOperation(Placeholder):
         if argspec.varkw is not None:
             raise ValueError(
                 "`operation_func` can't accept free keyword arguments.")
-        self._params_real = tuple(argspec.args)
-        self._params = set(self._params_real)
-        self._params_set = {k: v for k, v in params.items() if k in
-                            self._params}
-        self._params_subs = {}
-        self._operation = None
+        self._operation_func = operation_func
+        self.params = tuple(argspec.args)
 
-    @property
-    def params(self):
-        return self._params
+    @staticmethod
+    def chain_substitute(chain, **kwargs):
+        operations = [IndexedOperation(
+            op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
+            else op,
+            ix) for op, ix in chain.units()]
+        if len(operations) == 1:
+            return operations[0].operation
+        else:
+            return _Chain(operations)
+
+    @staticmethod
+    def chain_params(op):
+        out = set()
+        for op, ix in op.units():
+            if isinstance(op, ParametrizedOperation):
+                out.update(op.params)
+        return out
 
     def __copy__(self):
         copy_ = self.__class__(self._operation_func, self._bases_in,
                                self._bases_out)
-        copy_._params = copy(self._params)
-        copy_._params_set = copy(self._params_set)
-        copy_._params_subs = copy(self._params_subs)
         return copy_
 
-    def _substitute_param(self, name, value):
-        if name not in self._params:
-            return
-        real_name = self._params_subs.pop(name, name)
-        if isinstance(value, str):
-            if self._valid_identifier_re.match(value) is None:
-                raise ValueError("\"{}\" is not a valid Python "
-                                 "identifier.".format(value))
-            self._params_subs[value] = real_name
-            self._params.add(value)
-        else:
-            self._params_set[real_name] = value
-        self._params.remove(name)
-
     def substitute(self, **kwargs):
-        params_to_substitute = self._params.intersection(kwargs.keys())
-        if len(params_to_substitute) == 0 and len(self._params) != 0:
-            return self
-        copy_ = copy(self)
-        for name in params_to_substitute:
-            copy_._substitute_param(name, kwargs[name])
-        if len(copy_._params) == 0:
-            for name, real_name in copy_._params_subs.items():
-                copy_._params_set[real_name] = copy_._params_set.pop(name)
-            args = tuple(copy_._params_set[name] for name in copy_._params_real)
-            op = copy_._operation_func(*args)
-            if not isinstance(op, Operation):
-                raise RuntimeError(
-                    'Invalid operation function was provided for the '
-                    'parametrized operation during its creation: '
-                    'it must raturn a quantumsim.Operation instance, '
-                    'but it returns {} instead.'.format(type(op)))
-            if op.num_qubits != copy_.num_qubits:
-                raise RuntimeError(
-                    'Invalid operation function was provided for the '
-                    'parametrized operation during its creation: '
-                    'its number of qubits ({}) does not match one of the '
-                    'basis ({}).'.format(op.num_qubits,
-                                         copy_.num_qubits))
-            return op.set_bases(self._bases_in, self._bases_out)
-        else:
-            return copy_
+        """Replace ParametrizedOperation with a correspondent normal
+        operation.
+
+        Parameters
+        ----------
+        kwargs
+            Arguments, that are provided to `operation_func`.
+        """
+        try:
+            args = tuple(kwargs[p] for p in self.params)
+        except KeyError as exc:
+            raise OperationNotDefinedError(
+                'Arguments to the function do not define the full set, '
+                'needed to instantiate the operation') from exc
+        return self._operation_func(*args).set_bases(
+            self._bases_in, self._bases_out)

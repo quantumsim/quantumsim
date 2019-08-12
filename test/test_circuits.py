@@ -8,6 +8,9 @@ from quantumsim.circuits import TimeAgnosticGate, TimeAwareGate, \
 from quantumsim.circuits.circuit import ParametrizedOperation
 from quantumsim import bases, Operation
 
+bases1q = (bases.general(2),)
+bases2q = bases1q * 2
+
 
 # noinspection PyTypeChecker
 @pytest.mark.parametrize('cls', [TimeAgnosticGate, TimeAwareGate])
@@ -52,6 +55,8 @@ class TestCircuitsCommon:
         angle2_rotate = 0.3 * pi
 
         gate = cls(('D', 'A'), ParametrizedOperation(cnot_like, basis, basis))
+        assert gate.params == {'angle_cphase', 'angle_rotate'}
+
         gate1 = gate(angle_cphase=angle1_cphase, angle_rotate=angle1_rotate)
         assert gate.params == {'angle_cphase', 'angle_rotate'}
         assert gate1.params == set()

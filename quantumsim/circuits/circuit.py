@@ -2,6 +2,7 @@ import abc
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
+import re
 
 from ..operations import Operation, ParametrizedOperation
 
@@ -68,6 +69,8 @@ class CircuitBase(metaclass=abc.ABCMeta):
 
 
 class Gate(CircuitBase, metaclass=abc.ABCMeta):
+    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
+
     def __init__(self, qubits, operation, plot_metadata=None):
         """A gate without notion of timing.
 
@@ -88,10 +91,23 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
             raise ValueError('Number of qubits in operation does not match '
                              'one in `qubits`.')
         self.plot_metadata = plot_metadata or {}
+        self._params_real = ParametrizedOperation.chain_params(self._operation)
+        self._params = set(self._params_real)
+        self._params_set = {}
+        self._params_subs = {}
+
+    def _copy_params_to(self, other):
+        other._params = copy(self._params)
+        other._params_set = copy(self._params_set)
+        other._params_subs = copy(self._params_subs)
 
     @property
     def operation(self):
-        return self._operation
+        if len(self._params) == 0:
+            return ParametrizedOperation.chain_substitute(
+                self._operation, **self.params_set())
+        else:
+            return self._operation
 
     @property
     def gates(self):
@@ -103,14 +119,31 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
 
     @property
     def params(self):
-        if isinstance(self._operation, ParametrizedOperation):
-            return self._operation.params
+        return self._params
+
+    def _set_param(self, name, value):
+        real_name = self._params_subs.pop(name, name)
+        if isinstance(value, str):
+            if self._valid_identifier_re.match(value) is None:
+                raise ValueError("\"{}\" is not a valid Python "
+                                 "identifier.".format(value))
+            self._params_subs[value] = real_name
+            self._params.add(value)
         else:
-            return set()
+            self._params_set[real_name] = value
+        self._params.remove(name)
 
     def set(self, **kwargs):
-        if isinstance(self._operation, ParametrizedOperation):
-            self._operation = self._operation.substitute(**kwargs)
+        params_to_substitute = self._params.intersection(kwargs.keys())
+        if len(params_to_substitute) > 0:
+            for name in params_to_substitute:
+                self._set_param(name, kwargs[name])
+
+    def params_set(self):
+        out = copy(self._params_set)
+        for name, real_name in self._params_subs.items():
+            out[real_name] = out.pop(name)
+        return out
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -307,8 +340,10 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
 
 class TimeAgnosticGate(Gate, TimeAgnostic):
     def __copy__(self):
-        return self.__class__(
+        copy_ = self.__class__(
             self._qubits, copy(self._operation), self.plot_metadata)
+        self._copy_params_to(copy_)
+        return copy_
 
 
 class TimeAgnosticCircuit(Circuit, TimeAgnostic):
@@ -337,9 +372,11 @@ class TimeAwareGate(Gate, TimeAware):
         self._time_start = time_start
 
     def __copy__(self):
-        return self.__class__(
+        copy_ = self.__class__(
             self._qubits, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
+        self._copy_params_to(copy_)
+        return copy_
 
     @property
     def time_start(self):
@@ -404,7 +441,7 @@ class FinalizedCircuit:
     """
     Parameters
     ----------
-    Circuit : CircuitBase
+    circuit : CircuitBase
         A circuit to finalize
     """
     def __init__(self, circuit, *, bases_in=None):
