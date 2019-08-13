@@ -355,7 +355,6 @@ class TimeAgnosticCircuit(Circuit, TimeAgnostic):
 
 
 class TimeAwareGate(Gate, TimeAware):
-
     def __init__(self, qubits, operation, duration=0.,
                  time_start=0., plot_metadata=None):
         """TimedGate - a gate with a well-defined timing.

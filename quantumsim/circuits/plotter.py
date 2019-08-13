@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from copy import copy, deepcopy
+from copy import deepcopy
 from matplotlib.patches import Rectangle
 
 _golden_mean = (np.sqrt(5) - 1.0) / 2.0
@@ -72,8 +72,10 @@ class MatplotlibPlotter:
             self.ax.scatter((time,), (self._qubit_number(qubit),),
                             **marker_kwargs)
         elif style == 'box':
+            label = marker_dict.pop('label', '')
             return self._plot_box_with_label(
-                time_start, time_start + duration, n, n, marker_dict)
+                time_start, time_start + duration, n, n, label,
+                **self._get_box_kwargs(marker_dict))
         else:
             raise RuntimeError('Unknown marker style: {}'.format(style))
 
@@ -93,9 +95,12 @@ class MatplotlibPlotter:
         style = metadata.pop('style', 'box')
 
         if style == 'box':
+            # TODO: formatting with params (it is tricky)
+            # params = gate.params_set()
+            label = metadata.pop('label', r'$\mathcal{G}$')  # .format(**params)
             return self._plot_box_with_label(
                 gate.time_start, gate.time_end, *self._qubit_range(gate.qubits),
-                metadata)
+                label, **self._get_box_kwargs(metadata))
         elif style == 'line':
             time = gate.time_start + 0.5 * gate.duration
             markers = metadata.pop('markers')
@@ -119,7 +124,7 @@ class MatplotlibPlotter:
                      ha='right', va='center')
 
     def _plot_box_with_label(self, time_start, time_end,
-                             n_qubit_start, n_qubit_end, metadata):
+                             n_qubit_start, n_qubit_end, label, **kwargs):
         """
         Parameters
         ----------
@@ -127,16 +132,16 @@ class MatplotlibPlotter:
         time_end : float
         n_qubit_start : int
         n_qubit_end : int
-        metadata : dict
+        label : str
+        kwargs
         """
         box_y = n_qubit_start - 0.5 * _golden_mean
         box_dy = n_qubit_end - n_qubit_start + _golden_mean
         box_x = time_start + 0.5*self.gate_offset
         box_dx = time_end - time_start - self.gate_offset
 
-        label = metadata.pop('label')
         rect = Rectangle((box_x, box_y), box_dx, box_dy,
-                         **self._get_box_kwargs(metadata))
+                         **kwargs)
         self.ax.add_patch(rect)
         if label is not None:
             self.ax.text(box_x + 0.5 * box_dx, box_y + 0.5 * box_dy,
