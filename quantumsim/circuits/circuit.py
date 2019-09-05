@@ -242,13 +242,13 @@ class TimeAware(CircuitAddMixin, metaclass=abc.ABCMeta):
     def gates(self):
         pass
 
-    def shift(self, *, time_start=None, time_end=None):
+    def shift(self, time_start=None, time_end=None):
         """
 
         Parameters
         ----------
         time_start : float or None
-        time_end : float or Nont
+        time_end : float or None
 
         Returns
         -------
