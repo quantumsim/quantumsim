@@ -94,18 +94,16 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
         self._params_real = ParametrizedOperation.chain_params(self._operation)
         self._params = set(self._params_real)
         self._params_set = {}
-        self._params_subs = {}
 
     def _copy_params_to(self, other):
         other._params = copy(self._params)
         other._params_set = copy(self._params_set)
-        other._params_subs = copy(self._params_subs)
 
     @property
     def operation(self):
         if len(self._params) == 0:
             return ParametrizedOperation.chain_substitute(
-                self._operation, **self.params_set())
+                self._operation, **self._params_set)
         else:
             return self._operation
 
@@ -122,15 +120,15 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
         return self._params
 
     def _set_param(self, name, value):
-        real_name = self._params_subs.pop(name, name)
         if isinstance(value, str):
             if self._valid_identifier_re.match(value) is None:
                 raise ValueError("\"{}\" is not a valid Python "
                                  "identifier.".format(value))
-            self._params_subs[value] = real_name
+            self._operation = ParametrizedOperation.rename_params(
+                self._operation, **{name: value})
             self._params.add(value)
         else:
-            self._params_set[real_name] = value
+            self._params_set[name] = value
         self._params.remove(name)
 
     def set(self, **kwargs):
@@ -138,12 +136,6 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
         if len(params_to_substitute) > 0:
             for name in params_to_substitute:
                 self._set_param(name, kwargs[name])
-
-    def params_set(self):
-        out = copy(self._params_set)
-        for name, real_name in self._params_subs.items():
-            out[real_name] = out.pop(name)
-        return out
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -440,32 +432,25 @@ class FinalizedCircuit:
     """
     Parameters
     ----------
-    circuit : CircuitBase
-        A circuit to finalize
+    operation : Operation
+        An operation, that forms a final circuit
+    qubits : list of str
+        List of qubits in the operation
     """
-    def __init__(self, circuit, *, bases_in=None):
-        if circuit:
-            self.operation = circuit.operation.compile(bases_in=bases_in)
-
-            self.qubits = copy(circuit.qubits)
-            if hasattr(self.operation, 'operations'):
-                self._params = set().union((op.params for op in filter(
-                    lambda op: isinstance(op, ParametrizedOperation),
-                    self.operation)))
-            elif hasattr(self.operation, 'params'):
-                self._params = self.operation.params
-            else:
-                self._params = set()
+    def __init__(self, operation, qubits, *, bases_in=None):
+        self.operation = operation.compile(bases_in=bases_in)
+        self.qubits = list(qubits)
+        self._params = ParametrizedOperation.chain_params(self.operation)
 
     def __call__(self, **params):
         if len(self._params) > 0:
             unset_params = self._params - params.keys()
             if len(unset_params) != 0:
                 raise KeyError(*unset_params)
-            out = FinalizedCircuit(None)
-            out.operation = self.operation.substitute(**params)\
-                .compile(optimize=False)
-            out._params = set()
+            out = FinalizedCircuit(
+                ParametrizedOperation.chain_substitute(
+                    self.operation, **params).compile(),
+                self.qubits)
             return out
         else:
             return self

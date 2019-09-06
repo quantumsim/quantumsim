@@ -318,8 +318,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        quantumsim.operations.operation._Chain or
-        quantumsim.operations.operation.PTMOperation
+        quantumsim.Operation
         """
         if isinstance(self, _Chain):
             op = self
@@ -659,9 +658,36 @@ class ParametrizedOperation(Placeholder):
                 out.update(op.params)
         return out
 
+    @staticmethod
+    def rename_params(operation, **kwargs):
+        """
+
+        Parameters
+        ----------
+        operation : Operation
+        kwargs :
+            old-new name mapping
+
+        Returns
+        -------
+        Operation
+        """
+        new_ops = []
+        for unit in operation.units():
+            op, ix = unit
+            if isinstance(op, ParametrizedOperation):
+                new_op = copy(op)
+                new_op.params = tuple(kwargs[p] if p in kwargs.keys() else p
+                                      for p in op.params)
+                new_ops.append(new_op.at(*ix))
+            else:
+                new_ops.append(unit)
+        return _Chain(new_ops)
+
     def __copy__(self):
         copy_ = self.__class__(self._operation_func, self._bases_in,
                                self._bases_out)
+        copy_.params = self.params
         return copy_
 
     def substitute(self, **kwargs):
