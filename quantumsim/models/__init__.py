@@ -1,3 +1,3 @@
-from .model import Model
+from .model import Model, WaitPlaceholder
 
-__all__ = ['Model']
+__all__ = ['Model', 'WaitPlaceholder']
