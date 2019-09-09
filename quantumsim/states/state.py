@@ -13,6 +13,7 @@ class State:
         A class to store the system state. Must be a derivative of
         :class:`quantumsim.pauli_vectors.pauli_vector.PauliVectorBase`.
     """
+
     def __init__(self, qubits, *, dim=2, pauli_vector_class=None):
         self.qubits = list(qubits)
         bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
@@ -21,3 +22,19 @@ class State:
             self.pauli_vector = Default(bases_)
         else:
             self.pauli_vector = pauli_vector_class(bases_)
+
+    def exp_values(self, measurements):
+        """
+
+        Parameters
+        ----------
+        measurements : list of dict
+            List of measurement dictionaries, containing 'X', 'Y' or 'Z' for
+            each non-trivial qubit label.
+
+        Returns
+        -------
+        list of float
+            Expectation value for each of the measurement operators, defined in
+        """
+        raise NotImplementedError
