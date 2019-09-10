@@ -38,3 +38,17 @@ class State:
             Expectation value for each of the measurement operators, defined in
         """
         raise NotImplementedError
+
+    def partial_trace(self, *qubits):
+        """Traces out all qubits, except provided, and returns the resulting
+        state.
+
+        Parameters
+        ----------
+        q0, q1, ... : str
+            Names of qubits to preserve in the state.
+        """
+        out = State(qubits, dim=self.pauli_vector.dim_hilbert[0])
+        out.pauli_vector = self.pauli_vector.partial_trace(*[
+            self.qubits.index(q) for q in qubits])
+        return out
