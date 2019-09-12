@@ -1,4 +1,5 @@
 from .. import bases
+from ..pauli_vectors import PauliVectorBase
 import numpy as np
 
 
@@ -26,6 +27,10 @@ class State:
                 from ..pauli_vectors import Default
                 self.pauli_vector = Default(bases_)
             else:
+                if not issubclass(pauli_vector_class, PauliVectorBase):
+                    raise ValueError(
+                        "pauli_vector_class must be a subclass of "
+                        "quantumsim.pauli_vectors.PauliVectorBase")
                 self.pauli_vector = pauli_vector_class(bases_)
 
     def __copy__(self):
@@ -55,6 +60,9 @@ class State:
             dm, in_idx + out_idx,
             operator, out_idx + in_idx
         )
+
+    def trace(self):
+        return self.pauli_vector.trace()
 
     def partial_trace(self, *qubits):
         """Traces out all qubits, except provided, and returns the resulting

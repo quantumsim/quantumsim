@@ -1,6 +1,6 @@
-from .numpy import PauliVectorNumpy
+from .numpy import PauliVectorNumpy, PauliVectorBase
 
-__all__ = ['Default', 'PauliVectorNumpy']
+__all__ = ['Default', 'PauliVectorNumpy', 'PauliVectorBase']
 
 try:
     from .cuda import PauliVectorCuda
