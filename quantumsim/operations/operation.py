@@ -655,11 +655,11 @@ class ParametrizedOperation(Placeholder):
         out = set()
         for op, ix in op.units():
             if isinstance(op, ParametrizedOperation):
-                out.update(op.params)
+                out.update(filter(lambda p: isinstance(p, str), op.params))
         return out
 
     @staticmethod
-    def rename_params(operation, **kwargs):
+    def set_params(operation, **kwargs):
         """
 
         Parameters
@@ -700,7 +700,8 @@ class ParametrizedOperation(Placeholder):
             Arguments, that are provided to `operation_func`.
         """
         try:
-            args = tuple(kwargs[p] for p in self.params)
+            args = tuple(kwargs[p] if isinstance(p, str) else p
+                         for p in self.params)
         except KeyError as exc:
             raise OperationNotDefinedError(
                 'Arguments to the function do not define the full set, '

@@ -124,11 +124,11 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
             if self._valid_identifier_re.match(value) is None:
                 raise ValueError("\"{}\" is not a valid Python "
                                  "identifier.".format(value))
-            self._operation = ParametrizedOperation.rename_params(
-                self._operation, **{name: value})
             self._params.add(value)
         else:
             self._params_set[name] = value
+        self._operation = ParametrizedOperation.set_params(
+            self._operation, **{name: value})
         self._params.remove(name)
 
     def set(self, **kwargs):
