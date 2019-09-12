@@ -1,4 +1,5 @@
 from .. import bases
+import numpy as np
 
 
 class State:
@@ -23,21 +24,27 @@ class State:
         else:
             self.pauli_vector = pauli_vector_class(bases_)
 
-    def exp_values(self, measurements):
+    def exp_value(self, operator):
         """
 
         Parameters
         ----------
-        measurements : list of dict
-            List of measurement dictionaries, containing 'X', 'Y' or 'Z' for
-            each non-trivial qubit label.
+        operator : numpy.array
+            An operator (TODO: elaborate)
 
         Returns
         -------
-        list of float
+        float
             Expectation value for each of the measurement operators, defined in
         """
-        raise NotImplementedError
+        dm = self.pauli_vector.to_dm().reshape(self.pauli_vector.dim_hilbert*2)
+        nq = len(self.qubits)
+        in_idx = list(range(nq))
+        out_idx = list(range(nq, 2*nq))
+        return np.einsum(
+            dm, in_idx + out_idx,
+            operator, out_idx + in_idx
+        )
 
     def partial_trace(self, *qubits):
         """Traces out all qubits, except provided, and returns the resulting
