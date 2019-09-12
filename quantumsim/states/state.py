@@ -15,14 +15,24 @@ class State:
         :class:`quantumsim.pauli_vectors.pauli_vector.PauliVectorBase`.
     """
 
-    def __init__(self, qubits, *, dim=2, pauli_vector_class=None):
+    def __init__(self, qubits, *, dim=2, pauli_vector_class=None,
+                 pauli_vector=None):
         self.qubits = list(qubits)
-        bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
-        if pauli_vector_class is None:
-            from ..pauli_vectors import Default
-            self.pauli_vector = Default(bases_)
+        if pauli_vector is not None:
+            self.pauli_vector = pauli_vector
         else:
-            self.pauli_vector = pauli_vector_class(bases_)
+            bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
+            if pauli_vector_class is None:
+                from ..pauli_vectors import Default
+                self.pauli_vector = Default(bases_)
+            else:
+                self.pauli_vector = pauli_vector_class(bases_)
+
+    def __copy__(self):
+        return self.copy()
+
+    def copy(self):
+        return State(self.qubits, pauli_vector=self.pauli_vector.copy())
 
     def exp_value(self, operator):
         """
@@ -55,7 +65,5 @@ class State:
         q0, q1, ... : str
             Names of qubits to preserve in the state.
         """
-        out = State(qubits, dim=self.pauli_vector.dim_hilbert[0])
-        out.pauli_vector = self.pauli_vector.partial_trace(*[
-            self.qubits.index(q) for q in qubits])
-        return out
+        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(*[
+            self.qubits.index(q) for q in qubits]))
