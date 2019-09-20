@@ -1,3 +1,4 @@
+from quantumsim.algebra import sigma
 from .. import bases
 from ..pauli_vectors import PauliVectorBase
 import numpy as np
@@ -44,22 +45,42 @@ class State:
 
         Parameters
         ----------
-        operator : numpy.array
+        operator : numpy.array or str
             An operator (TODO: elaborate)
+
+            If string provided, computes an expectation value of the
+            correspondent Pauli. Must have the same length, as the number of
+            qubits in the state.
 
         Returns
         -------
         float
             Expectation value for each of the measurement operators, defined in
         """
-        dm = self.pauli_vector.to_dm().reshape(self.pauli_vector.dim_hilbert*2)
-        nq = len(self.qubits)
-        in_idx = list(range(nq))
-        out_idx = list(range(nq, 2*nq))
-        return np.einsum(
-            dm, in_idx + out_idx,
-            operator, out_idx + in_idx
-        )
+        einsum_args = []
+        n = self.pauli_vector.n_qubits
+        if isinstance(operator, str):
+            if n != len(operator):
+                raise ValueError("operator string must have the same length "
+                                 "as number of qubits in the state")
+            try:
+                sigmas = [sigma[ch.upper()] for ch in operator]
+            except KeyError as ex:
+                raise ValueError("operator string must contain only I, X, "
+                                 "Y or Z") from ex
+            for i, s in enumerate(sigmas):
+                einsum_args.append(s)
+                einsum_args.append([i, n+i])
+        else:
+            einsum_args.append(operator)
+            einsum_args.append(list(range(2*n)))
+        einsum_args.append(self.pauli_vector.to_pv()),
+        einsum_args.append([2*n+i for i in range(n)])
+        for i, basis in enumerate(self.pauli_vector.bases):
+            einsum_args.append(basis.vectors)
+            einsum_args.append([2*n+i, n+i, i])
+        print(einsum_args)
+        return np.einsum(*einsum_args, optimize=True)
 
     def trace(self):
         return self.pauli_vector.trace()
