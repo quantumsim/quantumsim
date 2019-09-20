@@ -85,7 +85,19 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
             TODO: link documentation, when plotting is ready.
         """
         assert isinstance(operation, Operation)
-        self._qubits = (qubits,) if isinstance(qubits, str) else tuple(qubits)
+        if isinstance(qubits, str):
+            self._qubits = (qubits,)
+        elif hasattr(qubits, '__iter__'):
+            self._qubits = tuple(qubits)
+            for q in self._qubits:
+                if not isinstance(q, str):
+                    raise ValueError('qubits must be a string or list of '
+                                     'strings, got elements of type {}'
+                                     .format(type(q)))
+        else:
+            raise ValueError('qubits must be a string or list of '
+                             'strings, got type {}'.format(type(qubits)))
+
         self._operation = operation
         if len(self._qubits) != operation.num_qubits:
             raise ValueError('Number of qubits in operation does not match '
