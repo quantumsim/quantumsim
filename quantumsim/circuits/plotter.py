@@ -53,7 +53,7 @@ class MatplotlibPlotter:
     def plot(self):
         for qubit in self.circuit.qubits:
             self._plot_qubit_line(qubit)
-            self._anotate_qubit(qubit)
+            self._annotate_qubit(qubit)
         for gate in self.circuit.gates:
             self._plot_gate(gate)
         return self.fig
@@ -116,7 +116,7 @@ class MatplotlibPlotter:
         else:
             raise RuntimeError("Unknown gate plotting style: {}".format(style))
 
-    def _anotate_qubit(self, qubit):
+    def _annotate_qubit(self, qubit):
         xlim = self.ax.get_xlim()
         xlim = xlim[1] - xlim[0]
         time = self.circuit.time_start - 0.01*xlim
