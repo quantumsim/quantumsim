@@ -71,20 +71,23 @@ class CircuitBase(metaclass=abc.ABCMeta):
 class Gate(CircuitBase, metaclass=abc.ABCMeta):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
 
-    def __init__(self, qubits, operation, plot_metadata=None):
+    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None):
         """A gate without notion of timing.
 
         Parameters
         ----------
         qubits : str or list of str
             Names of the involved qubits
+        dim_hilbert : int
+            Hilbert dimentionality of the correspondent operations
         operation : quantumsim.Operation
             Operation, that corresponds to this gate.
         plot_metadata : None or dict
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
         """
-        assert isinstance(operation, Operation)
+        assert isinstance(dim_hilbert, int)
+        self.dim_hilbert = dim_hilbert
         if isinstance(qubits, str):
             self._qubits = (qubits,)
         elif hasattr(qubits, '__iter__'):
@@ -345,7 +348,8 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
 class TimeAgnosticGate(Gate, TimeAgnostic):
     def __copy__(self):
         copy_ = self.__class__(
-            self._qubits, copy(self._operation), self.plot_metadata)
+            self._qubits, self.dim_hilbert, copy(self._operation),
+            self.plot_metadata)
         self._copy_params_to(copy_)
         return copy_
 
@@ -359,7 +363,7 @@ class TimeAgnosticCircuit(Circuit, TimeAgnostic):
 
 
 class TimeAwareGate(Gate, TimeAware):
-    def __init__(self, qubits, operation, duration=0.,
+    def __init__(self, qubits, dim_hilbert, operation, duration=0.,
                  time_start=0., plot_metadata=None):
         """TimedGate - a gate with a well-defined timing.
 
@@ -370,13 +374,13 @@ class TimeAwareGate(Gate, TimeAware):
         time_start : dictionary of floats or None
             an absolute start time on each of the qubits
         """
-        super().__init__(qubits, operation, plot_metadata)
+        super().__init__(qubits, dim_hilbert, operation, plot_metadata)
         self._duration = duration
         self._time_start = time_start
 
     def __copy__(self):
         copy_ = self.__class__(
-            self._qubits, copy(self._operation),
+            self._qubits, self.dim_hilbert, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
         self._copy_params_to(copy_)
         return copy_

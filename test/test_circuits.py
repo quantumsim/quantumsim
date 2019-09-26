@@ -17,31 +17,33 @@ bases2q = bases1q * 2
 class TestCircuitsCommon:
     def test_gate_create_no_params(self, cls):
         angle = 1.0758
+        dim = 2
 
         op_1q = lib.rotate_x(angle)
         op_2q = lib.cphase(angle)
 
-        gate = cls('qubit', op_1q)
+        gate = cls('qubit', dim, op_1q)
         assert gate.operation == op_1q
         assert gate.qubits == ('qubit',)
         assert len(gate.params) == 0
 
-        gate = cls('Q0', op_1q)
+        gate = cls('Q0', dim, op_1q)
         assert gate.operation == op_1q
         assert gate.qubits == ('Q0',)
         assert len(gate.params) == 0
 
-        gate = cls(('Q1',), op_1q)
+        gate = cls(('Q1',), dim, op_1q)
         assert gate.operation == op_1q
         assert gate.qubits == ('Q1',)
         assert len(gate.params) == 0
 
-        gate = cls(('D', 'A'), op_2q)
+        gate = cls(('D', 'A'), dim, op_2q)
         assert gate.operation == op_2q
         assert gate.qubits == ('D', 'A')
         assert len(gate.params) == 0
 
     def test_gate_params_call(self, cls):
+        dim = 2
         def cnot_like(angle_cphase, angle_rotate):
             return Operation.from_sequence(
                 lib.rotate_y(angle_rotate).at(1),
@@ -54,7 +56,8 @@ class TestCircuitsCommon:
         angle2_cphase = 0.8 * pi
         angle2_rotate = 0.3 * pi
 
-        gate = cls(('D', 'A'), ParametrizedOperation(cnot_like, basis, basis))
+        gate = cls(('D', 'A'), dim,
+                   ParametrizedOperation(cnot_like, basis, basis))
         assert gate.params == {'angle_cphase', 'angle_rotate'}
 
         gate1 = gate(angle_cphase=angle1_cphase, angle_rotate=angle1_rotate)
@@ -74,12 +77,13 @@ class TestCircuitsCommon:
             .operation.ptm(basis, basis))
 
     def test_circuits_add(self, cls):
+        dim = 2
         orplus = lib.rotate_y(0.5 * pi)
         ocphase = lib.cphase(pi)
         orminus = lib.rotate_y(-0.5 * pi)
-        grplus = cls('Q0', orplus)
-        gcphase = cls(('Q0', 'Q1'), ocphase)
-        grminus = cls('Q0', orminus)
+        grplus = cls('Q0', dim, orplus)
+        gcphase = cls(('Q0', 'Q1'), dim, ocphase)
+        grminus = cls('Q0', dim, orminus)
         basis = (bases.general(2),) * 2
 
         circuit = grplus + gcphase
@@ -106,8 +110,8 @@ class TestCircuitsCommon:
                 orplus.at(0), ocphase.at(0, 1), orminus.at(0)
             ).ptm(basis, basis))
 
-        grplus = cls('Q1', orplus)
-        grminus = cls('Q1', orminus)
+        grplus = cls('Q1', dim, orplus)
+        grminus = cls('Q1', dim, orminus)
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q1', 'Q0')
         assert len(circuit.gates) == 3
@@ -118,8 +122,8 @@ class TestCircuitsCommon:
 
         basis = (basis[0],) * 3
 
-        grplus = cls('Q2', orplus)
-        grminus = cls('Q0', orminus)
+        grplus = cls('Q2', dim, orplus)
+        grminus = cls('Q0', dim, orminus)
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q2', 'Q0', 'Q1')
         assert len(circuit.gates) == 3
@@ -128,8 +132,8 @@ class TestCircuitsCommon:
                 orplus.at(0), ocphase.at(1, 2), orminus.at(1)
             ).ptm(basis, basis))
 
-        grplus = cls('Q0', orplus)
-        grminus = cls('Q2', orminus)
+        grplus = cls('Q0', dim, orplus)
+        grminus = cls('Q2', dim, orminus)
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q0', 'Q1', 'Q2')
         assert len(circuit.gates) == 3
@@ -139,11 +143,12 @@ class TestCircuitsCommon:
             ).ptm(basis, basis))
 
     def test_circuits_params(self, cls):
-        basis = (bases.general(2),) * 2
+        dim = 2
+        basis = (bases.general(dim),) * 2
         orotate = lib.rotate_y
         ocphase = lib.cphase
-        grotate = cls('Q0', ParametrizedOperation(orotate, basis[:1]))
-        gcphase = cls(('Q0', 'Q1'), ParametrizedOperation(ocphase, basis))
+        grotate = cls('Q0', dim, ParametrizedOperation(orotate, basis[:1]))
+        gcphase = cls(('Q0', 'Q1'), dim, ParametrizedOperation(ocphase, basis))
 
         with pytest.raises(RuntimeError,
                            match=r".*free parameters.*\n"
@@ -184,12 +189,13 @@ class TestCircuitsCommon:
 
 class TestCircuitsTimeAware:
     def test_gate_create(self):
-        gate = TimeAwareGate('Q0', lib.rotate_y(0.5 * pi), 20.)
+        dim = 2
+        gate = TimeAwareGate('Q0', dim, lib.rotate_y(0.5 * pi), 20.)
         assert gate.time_start == 0
         assert gate.time_end == 20.
         assert gate.duration == 20.
 
-        gate = TimeAwareGate(('Q0', 'Q1'), lib.cphase(0.5 * pi), 40., 125.)
+        gate = TimeAwareGate(('Q0', 'Q1'), dim, lib.cphase(0.5 * pi), 40., 125.)
         assert gate.time_start == 125.
         assert gate.time_end == approx(165.)
         assert gate.duration == 40.
@@ -216,12 +222,13 @@ class TestCircuitsTimeAware:
         assert gate1.duration == 40.
 
     def test_time_aware_add_gate_no_init_time(self):
+        dim = 2
         orplus = lib.rotate_y(0.5 * pi)
         ocphase = lib.cphase(pi)
         orminus = lib.rotate_y(-0.5 * pi)
-        gate_q0 = TimeAwareGate('Q0', orplus, 20.)
-        gate_2q = TimeAwareGate(('Q0', 'Q1'), ocphase, 40.)
-        gate_q1 = TimeAwareGate('Q1', orminus, 30.)
+        gate_q0 = TimeAwareGate('Q0', dim, orplus, 20.)
+        gate_2q = TimeAwareGate(('Q0', 'Q1'), dim, ocphase, 40.)
+        gate_q1 = TimeAwareGate('Q1', dim, orminus, 30.)
 
         circuit = gate_q0 + gate_2q
         assert circuit.time_start == 0.
@@ -258,9 +265,10 @@ class TestCircuitsTimeAware:
                approx([0., 10., 30., 70., 70., 100., 100.])
 
     def test_time_aware_add_gate_and_delays(self):
-        big_gate = TimeAwareGate('A', lib.rotate_x(0.), 600.)
-        rotx1 = TimeAwareGate('D0', lib.rotate_x(pi), 20., 290.)
-        rotx2 = TimeAwareGate('A', lib.rotate_x(pi), 20., )
+        dim = 2
+        big_gate = TimeAwareGate('A', dim, lib.rotate_x(0.), 600.)
+        rotx1 = TimeAwareGate('D0', dim, lib.rotate_x(pi), 20., 290.)
+        rotx2 = TimeAwareGate('A', dim, lib.rotate_x(pi), 20., )
 
         circuit1 = rotx2.shift(time_start=20.) + \
                    rotx2.shift(time_end=120.)

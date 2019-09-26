@@ -3,10 +3,9 @@ import numpy as np
 from collections import defaultdict
 from more_itertools import pairwise
 
-from quantumsim import Operation
-from quantumsim.circuits import TimeAgnosticGate, TimeAwareGate, \
+from ..circuits import TimeAgnosticGate, TimeAwareGate, \
     FinalizedCircuit, TimeAwareCircuit
-from ..operations import Placeholder
+from ..operations import Operation, Placeholder
 from .. import bases
 
 
@@ -35,7 +34,8 @@ class Model(metaclass=abc.ABCMeta):
         return WaitPlaceholder(duration, self.dim).at(qubit)
 
     def waiting_gate(self, qubit, duration):
-        return TimeAwareGate(qubit, WaitPlaceholder(duration, self.dim),
+        return TimeAwareGate(qubit, self.dim,
+                             WaitPlaceholder(duration, self.dim),
                              duration,
                              plot_metadata={'style': 'marker', 'label': 'x'})
 
@@ -91,7 +91,7 @@ class Model(metaclass=abc.ABCMeta):
             if duration is None:
                 def wrapper(self, *qubits, **params):
                     return TimeAgnosticGate(
-                        qubits, make_operation(self, *qubits),
+                        qubits, self.dim, make_operation(self, *qubits),
                         plot_metadata)(**params)
             else:
                 def wrapper(self, *qubits, **params):
@@ -102,7 +102,7 @@ class Model(metaclass=abc.ABCMeta):
                     else:
                         _duration = duration
                     return TimeAwareGate(
-                        qubits, make_operation(self, *qubits),
+                        qubits, self.dim, make_operation(self, *qubits),
                         _duration, 0., plot_metadata)(**params)
             wrapper.__name__ = func.__name__
             return wrapper
