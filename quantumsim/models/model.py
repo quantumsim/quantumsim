@@ -3,8 +3,7 @@ import numpy as np
 from collections import defaultdict
 from more_itertools import pairwise
 
-from ..circuits import TimeAgnosticGate, TimeAwareGate, \
-    FinalizedCircuit, TimeAwareCircuit
+from ..circuits import TimeAgnosticGate, TimeAwareGate, TimeAwareCircuit
 from ..operations import Operation, Placeholder
 from .. import bases
 
@@ -165,5 +164,4 @@ class Model(metaclass=abc.ABCMeta):
         quantumsim.circuits.FinalizedCircuit
             A post-processed and finalized version of the circuit.
         """
-        return FinalizedCircuit(circuit.operation, circuit.qubits,
-                                bases_in=bases_in)
+        return circuit.finalize(bases_in=bases_in)

@@ -95,7 +95,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        ptm : ndarray
+        ptm : array
             Pauli transfer matrix in bases specified.
         """
         self._validate_bases(bases_in=bases_in)
@@ -110,7 +110,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        ptm: ndarray
+        ptm: array
             Pauli transfer matrix in a form of Numpy array
         bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
@@ -137,7 +137,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        kraus: ndarray
+        kraus: array
             Pauli transfer matrix in a form of Numpy array
         bases_in : tuple of PauliBasis
             Input bases for generated PTMs. If None, default is picked.
@@ -440,7 +440,7 @@ class PTMOperation(Operation):
 
     Parameters
     ----------
-    ptm : ndarray
+    ptm : array
         Pauli transfer matrix of an operation.
     bases_in : tuple of PauliBasis
         Input bases of the PTM
@@ -530,7 +530,8 @@ class PTMOperation(Operation):
         for q, b in zip(qubit_indices, self.bases_in):
             if pauli_vector.bases[q] != b:
                 op = self.set_bases(
-                    bases_in=tuple([pauli_vector.bases[q] for q in qubit_indices]))
+                    bases_in=tuple([pauli_vector.bases[q]
+                                    for q in qubit_indices]))
                 break
 
         pauli_vector.apply_ptm(op._ptm, *qubit_indices)
@@ -601,6 +602,7 @@ class _Chain(Operation):
         super().ptm(bases_in, bases_out)
         bases_out = bases_out or bases_in
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
+        # noinspection PyTypeChecker
         start_ptm = Operation.from_ptm(
             np.identity(np.prod(ptm_in_shape), dtype=float)
             .reshape(ptm_in_shape*2), bases_in)
@@ -612,7 +614,7 @@ class _Chain(Operation):
 class ParametrizedOperation(Placeholder):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
 
-    def __init__(self, operation_func, bases_in, bases_out=None, **params):
+    def __init__(self, operation_func, bases_in, bases_out=None):
         """A gate without notion of timing.
 
         Parameters
@@ -625,8 +627,6 @@ class ParametrizedOperation(Placeholder):
         bases_out : tuple of quantumsim.PauliBasis or None
             Output bases, that will be taken by final, when it is calculated.
             If None, the same as input basis is taken.
-        **params:
-            Parameters, that are set initially.
         """
         super().__init__(bases_in, bases_out)
         argspec = inspect.getfullargspec(operation_func)
@@ -640,9 +640,9 @@ class ParametrizedOperation(Placeholder):
         self.params = tuple(argspec.args)
 
     @staticmethod
-    def chain_substitute(chain, **kwargs):
+    def chain_substitute(chain, **params):
         operations = [IndexedOperation(
-            op.substitute(**kwargs) if isinstance(op, ParametrizedOperation)
+            op.substitute(**params) if isinstance(op, ParametrizedOperation)
             else op,
             ix) for op, ix in chain.units()]
         if len(operations) == 1:
@@ -650,39 +650,24 @@ class ParametrizedOperation(Placeholder):
         else:
             return _Chain(operations)
 
-    @staticmethod
-    def chain_params(op):
-        out = set()
-        for op, ix in op.units():
-            if isinstance(op, ParametrizedOperation):
-                out.update(filter(lambda p: isinstance(p, str), op.params))
-        return out
-
-    @staticmethod
-    def set_params(operation, **kwargs):
+    def set_params(self, params):
         """
+
 
         Parameters
         ----------
-        operation : Operation
-        kwargs :
-            old-new name mapping
+        params: new parameters
 
         Returns
         -------
-        Operation
+        ParametrizedOperation
+            A copy with updated params
         """
-        new_ops = []
-        for unit in operation.units():
-            op, ix = unit
-            if isinstance(op, ParametrizedOperation):
-                new_op = copy(op)
-                new_op.params = tuple(kwargs[p] if p in kwargs.keys() else p
-                                      for p in op.params)
-                new_ops.append(new_op.at(*ix))
-            else:
-                new_ops.append(unit)
-        return _Chain(new_ops)
+        if len(params) != len(self.params):
+            raise ValueError("Number of parameters does not match")
+        out = copy(self)
+        out.params = params
+        return out
 
     def __copy__(self):
         copy_ = self.__class__(self._operation_func, self._bases_in,

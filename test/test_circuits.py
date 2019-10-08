@@ -1,4 +1,5 @@
 import pytest
+import sympy
 
 from numpy import pi
 from pytest import approx
@@ -11,6 +12,8 @@ from quantumsim import bases, Operation
 bases1q = (bases.general(2),)
 bases2q = bases1q * 2
 
+def c_op(circuit):
+    return circuit.finalize().operation
 
 # noinspection PyTypeChecker
 @pytest.mark.parametrize('cls', [TimeAgnosticGate, TimeAwareGate])
@@ -23,27 +26,29 @@ class TestCircuitsCommon:
         op_2q = lib.cphase(angle)
 
         gate = cls('qubit', dim, op_1q)
-        assert gate.operation == op_1q
+        assert c_op(gate) == op_1q
         assert gate.qubits == ('qubit',)
         assert len(gate.params) == 0
 
         gate = cls('Q0', dim, op_1q)
-        assert gate.operation == op_1q
+        assert c_op(gate) == op_1q
         assert gate.qubits == ('Q0',)
         assert len(gate.params) == 0
 
         gate = cls(('Q1',), dim, op_1q)
-        assert gate.operation == op_1q
+        assert c_op(gate) == op_1q
         assert gate.qubits == ('Q1',)
         assert len(gate.params) == 0
 
         gate = cls(('D', 'A'), dim, op_2q)
-        assert gate.operation == op_2q
+        assert c_op(gate) == op_2q
         assert gate.qubits == ('D', 'A')
         assert len(gate.params) == 0
 
     def test_gate_params_call(self, cls):
         dim = 2
+        angle_cphase, angle_rotate = sympy.symbols('angle_cphase angle_rotate')
+
         def cnot_like(angle_cphase, angle_rotate):
             return Operation.from_sequence(
                 lib.rotate_y(angle_rotate).at(1),
@@ -58,23 +63,24 @@ class TestCircuitsCommon:
 
         gate = cls(('D', 'A'), dim,
                    ParametrizedOperation(cnot_like, basis, basis))
-        assert gate.params == {'angle_cphase', 'angle_rotate'}
+        assert gate.params == {angle_cphase, angle_rotate}
 
         gate1 = gate(angle_cphase=angle1_cphase, angle_rotate=angle1_rotate)
-        assert gate.params == {'angle_cphase', 'angle_rotate'}
+        assert gate.params == {angle_cphase, angle_rotate}
         assert gate1.params == set()
 
         gate2 = gate(angle_cphase=angle2_cphase)
-        assert gate.params == {'angle_cphase', 'angle_rotate'}
-        assert gate2.params == {'angle_rotate'}
+        assert gate.params == {angle_cphase, angle_rotate}
+        assert gate2.params == {angle_rotate}
 
-        assert gate1.operation.ptm(basis, basis) == approx(gate(
+        assert gate1.finalize().operation.ptm(basis, basis) == approx(gate(
             angle_cphase=angle1_cphase, angle_rotate=angle1_rotate
-        ).operation.ptm(basis, basis))
-        assert (gate2(angle_rotate=angle2_rotate).operation
+        ).finalize().operation.ptm(basis, basis))
+        assert (gate2.finalize()(angle_rotate=angle2_rotate).operation
                 .ptm(basis, basis)) == approx(
-            gate(angle_cphase=angle2_cphase, angle_rotate=angle2_rotate)
-            .operation.ptm(basis, basis))
+            gate.finalize()(
+                angle_cphase=angle2_cphase, angle_rotate=angle2_rotate
+            ).operation.ptm(basis, basis))
 
     def test_circuits_add(self, cls):
         dim = 2
@@ -89,7 +95,7 @@ class TestCircuitsCommon:
         circuit = grplus + gcphase
         assert circuit.qubits == ('Q0', 'Q1')
         assert len(circuit.gates) == 2
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(0, 1)
             ).ptm(basis, basis))
@@ -97,7 +103,7 @@ class TestCircuitsCommon:
         circuit = circuit + grminus
         assert circuit.qubits == ('Q0', 'Q1')
         assert len(circuit.gates) == 3
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(0, 1), orminus.at(0)
             ).ptm(basis, basis))
@@ -105,7 +111,7 @@ class TestCircuitsCommon:
         circuit = grplus + (gcphase + grminus)
         assert circuit.qubits == ('Q0', 'Q1')
         assert len(circuit.gates) == 3
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(0, 1), orminus.at(0)
             ).ptm(basis, basis))
@@ -115,7 +121,7 @@ class TestCircuitsCommon:
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q1', 'Q0')
         assert len(circuit.gates) == 3
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(0, 1), orminus.at(0)
             ).ptm(basis, basis))
@@ -127,7 +133,7 @@ class TestCircuitsCommon:
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q2', 'Q0', 'Q1')
         assert len(circuit.gates) == 3
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(1, 2), orminus.at(1)
             ).ptm(basis, basis))
@@ -137,7 +143,7 @@ class TestCircuitsCommon:
         circuit = grplus + gcphase + grminus
         assert circuit.qubits == ('Q0', 'Q1', 'Q2')
         assert len(circuit.gates) == 3
-        assert circuit.operation.ptm(basis, basis) == approx(
+        assert c_op(circuit).ptm(basis, basis) == approx(
             Operation.from_sequence(
                 orplus.at(0), ocphase.at(0, 1), orminus.at(2)
             ).ptm(basis, basis))
@@ -159,14 +165,14 @@ class TestCircuitsCommon:
         with allow_param_repeat():
             circuit = grotate + gcphase + grotate
 
-        assert circuit.params == {'angle'}
+        assert circuit.params == {sympy.symbols('angle')}
         assert len(circuit.gates) == 3
         angle = 0.736
-        assert circuit(angle=angle).operation.ptm(basis, basis) == approx(
-            Operation.from_sequence(
-                orotate(angle).at(0), ocphase(angle).at(0, 1),
-                orotate(angle).at(0)
-            ).ptm(basis, basis))
+        assert c_op(circuit(angle=angle)).ptm(basis, basis) == \
+               approx(Operation.from_sequence(
+                   orotate(angle).at(0), ocphase(angle).at(0, 1),
+                   orotate(angle).at(0)
+               ).ptm(basis, basis))
 
         angle1 = 0.4 * pi
         angle2 = 1.01 * pi
@@ -178,13 +184,14 @@ class TestCircuitsCommon:
 
         circuit = grotate(angle=angle1) + gcphase(angle=angle2) + \
                   grotate(angle=angle3)
-        assert circuit.operation.ptm(basis, basis) == approx(ptm_ref)
+        assert circuit.finalize().operation.ptm(basis, basis) == \
+               approx(ptm_ref)
 
         circuit = grotate(angle='angle1') + gcphase(angle='angle2') + \
                   grotate(angle='angle3')
-        assert circuit(
+        assert c_op(circuit(
             angle1=angle1, angle2=angle2, angle3=angle3
-        ).operation.ptm(basis, basis) == approx(ptm_ref)
+        )).ptm(basis, basis) == approx(ptm_ref)
 
 
 class TestCircuitsTimeAware:

@@ -368,8 +368,10 @@ class TestCompiler:
             ))
         zzpc = zz_parametrized.compile(bases_in, bases_out)
         assert len(list(zzpc.units())) == 4
-        zzpc = ParametrizedOperation.chain_substitute(
-            zzpc, angle1=-np.pi/2, lr02=0.1, foo='bar')
-        zzpc = zzpc.compile(bases_in, bases_out)
+        params= dict(angle1=-np.pi / 2, lr02=0.1, foo='bar')
+        new_units = [(op.substitute(**params)
+                      if isinstance(op, ParametrizedOperation)
+                      else op).at(*ix) for op, ix in zzpc.units()]
+        zzpc = Operation.from_sequence(new_units).compile(bases_in, bases_out)
         assert len(zzpc._units) == 2
         assert zzpc.ptm(bases_in, bases_out) == approx(ptm_ref)

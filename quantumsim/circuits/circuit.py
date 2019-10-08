@@ -1,7 +1,8 @@
-import abc
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
+from sympy.core.sympify import sympify
 import re
 
 from ..operations import Operation, ParametrizedOperation
@@ -19,36 +20,36 @@ def allow_param_repeat():
     param_repeat_allowed = False
 
 
-class CircuitBase(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
+class CircuitBase(ABC):
+    @abstractmethod
     def __copy__(self):
         pass
 
     @property
-    @abc.abstractmethod
-    def operation(self):
-        """Convert a gate to a raw operation."""
-        pass
-
-    @property
-    @abc.abstractmethod
+    @abstractmethod
     def qubits(self):
         """Qubit names, associated with this circuit."""
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def gates(self):
         """Qubit names, associated with this circuit."""
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def params(self):
         """Return set of parameters, accepted by this circuit."""
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
+    def operation_sympified(self):
+        """An operation, correspondent to this circuit, with parameters,
+        set to sympy expression"""
+        pass
+
+    @abstractmethod
     def set(self, **kwargs):
         """Either substitute a circuit parameter with a value, or rename it.
 
@@ -67,8 +68,35 @@ class CircuitBase(metaclass=abc.ABCMeta):
         copy_.set(**kwargs)
         return copy_
 
+    def finalize(self, preprocessors=None, bases_in=None):
+        """
+        Returns an optimized version of the circuit, that can be used to
+        apply to the state.
 
-class Gate(CircuitBase, metaclass=abc.ABCMeta):
+        It will compile together all gates, that do not have params.
+        `preprocessors` can be used to adjust the operation before compiling,
+        for example, to instantiate custom placeholders, defined by the model.
+
+        Parameters
+        ----------
+        bases_in : tuple of quantumsim.bases.PauliBasis
+        preprocessors: list of functions
+            Functions, that take an :class:`Operation` as input and return
+            another :class:`Operation`.
+
+        Returns
+        -------
+        FinalizedCircuit
+            Finalized version of this circuit
+        """
+        op = self.operation_sympified()
+        if preprocessors:
+            for func in preprocessors:
+                op = func(op)
+        return FinalizedCircuit(op, self.qubits, bases_in=bases_in)
+
+
+class Gate(CircuitBase, ABC):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
 
     def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None):
@@ -79,14 +107,13 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
         qubits : str or list of str
             Names of the involved qubits
         dim_hilbert : int
-            Hilbert dimentionality of the correspondent operations
+            Hilbert dimensionality of the correspondent operations
         operation : quantumsim.Operation
             Operation, that corresponds to this gate.
         plot_metadata : None or dict
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
         """
-        assert isinstance(dim_hilbert, int)
         self.dim_hilbert = dim_hilbert
         if isinstance(qubits, str):
             self._qubits = (qubits,)
@@ -106,21 +133,26 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
             raise ValueError('Number of qubits in operation does not match '
                              'one in `qubits`.')
         self.plot_metadata = plot_metadata or {}
-        self._params_real = ParametrizedOperation.chain_params(self._operation)
-        self._params = set(self._params_real)
-        self._params_set = {}
+        self._params = {
+            param: sympify(param) for param in
+            self._operation_params(self._operation)}
 
-    def _copy_params_to(self, other):
-        other._params = copy(self._params)
-        other._params_set = copy(self._params_set)
-
-    @property
-    def operation(self):
-        if len(self._params) == 0:
-            return ParametrizedOperation.chain_substitute(
-                self._operation, **self._params_set)
+    def operation_sympified(self):
+        new_units = []
+        for unit in self._operation.units():
+            op, ix = unit
+            if isinstance(op, ParametrizedOperation):
+                new_op = copy(op)
+                new_op.params = tuple(
+                    self._params[p] if p in self._params.keys() else p
+                    for p in op.params)
+                new_units.append(new_op.at(*ix))
+            else:
+                new_units.append(unit)
+        if len(new_units) == 1:
+            return new_units[0].operation
         else:
-            return self._operation
+            return Operation.from_sequence(new_units)
 
     @property
     def gates(self):
@@ -132,39 +164,46 @@ class Gate(CircuitBase, metaclass=abc.ABCMeta):
 
     @property
     def params(self):
-        return self._params
+        return set().union(*(expr.free_symbols
+                             for expr in self._params.values()))
 
-    def _set_param(self, name, value):
-        if isinstance(value, str):
-            if self._valid_identifier_re.match(value) is None:
-                raise ValueError("\"{}\" is not a valid Python "
-                                 "identifier.".format(value))
-            self._params.add(value)
-        else:
-            self._params_set[name] = value
-        self._operation = ParametrizedOperation.set_params(
-            self._operation, **{name: value})
-        self._params.remove(name)
+    # def _set_param(self, name, value):
+    #     if isinstance(value, str):
+    #         if self._valid_identifier_re.match(value) is None:
+    #             raise ValueError("\"{}\" is not a valid Python "
+    #                              "identifier.".format(value))
+    #         self._params.add(value)
+    #     else:
+    #         self._params_set[name] = value
+    #     self._operation = ParametrizedOperation.set_params(
+    #         self._operation, **{name: value})
+    #     self._params.remove(name)
 
     def set(self, **kwargs):
-        params_to_substitute = self._params.intersection(kwargs.keys())
-        if len(params_to_substitute) > 0:
-            for name in params_to_substitute:
-                self._set_param(name, kwargs[name])
+        self._params = {k: v.subs(kwargs)
+                             for k, v in self._params.items()}
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
         new_gate.set(**kwargs)
         return new_gate
 
+    @staticmethod
+    def _operation_params(op):
+        out = set()
+        for op, ix in op.units():
+            if isinstance(op, ParametrizedOperation):
+                out.update(filter(lambda p: isinstance(p, str), op.params))
+        return out
 
-class CircuitAddMixin(metaclass=abc.ABCMeta):
+
+class CircuitAddMixin(ABC):
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def params(self):
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def __add__(self, other):
         global param_repeat_allowed
         if not param_repeat_allowed:
@@ -178,17 +217,17 @@ class CircuitAddMixin(metaclass=abc.ABCMeta):
                     "Rename these parameters in one of the circuits, or use "
                     "`quantumsim.circuits.allow_param_repeat` "
                     "context manager, if this is intended behaviour."
-                    .format(", ".join(common_params)))
+                    .format(", ".join((str(p) for p in common_params))))
 
 
-class TimeAgnostic(CircuitAddMixin, metaclass=abc.ABCMeta):
+class TimeAgnostic(CircuitAddMixin, ABC):
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def qubits(self):
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def gates(self):
         pass
 
@@ -213,39 +252,39 @@ class TimeAgnostic(CircuitAddMixin, metaclass=abc.ABCMeta):
         return TimeAgnosticCircuit(all_qubits, all_gates)
 
 
-class TimeAware(CircuitAddMixin, metaclass=abc.ABCMeta):
+class TimeAware(CircuitAddMixin, ABC):
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def time_start(self):
         pass
 
     @time_start.setter
-    @abc.abstractmethod
+    @abstractmethod
     def time_start(self, time):
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def time_end(self):
         pass
 
     @time_end.setter
-    @abc.abstractmethod
+    @abstractmethod
     def time_end(self, time):
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def duration(self):
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def qubits(self):
         pass
 
     @property
-    @abc.abstractmethod
+    @abstractmethod
     def gates(self):
         pass
 
@@ -309,7 +348,7 @@ class TimeAware(CircuitAddMixin, metaclass=abc.ABCMeta):
         return TimeAwareCircuit(qubits, gates)
 
 
-class Circuit(CircuitBase, metaclass=abc.ABCMeta):
+class Circuit(CircuitBase, ABC):
     def __init__(self, qubits, gates):
         self._gates = tuple(gates)
         self._qubits = tuple(qubits)
@@ -330,13 +369,12 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
             self._params_cache = set(chain(*(g.params for g in self._gates)))
         return self._params_cache
 
-    @property
-    def operation(self):
+    def operation_sympified(self):
         operations = []
         for gate in self._gates:
             qubit_indices = tuple(self._qubits.index(qubit) for qubit in
                                   gate.qubits)
-            operations.append(gate.operation.at(*qubit_indices))
+            operations.append(gate.operation_sympified().at(*qubit_indices))
         return Operation.from_sequence(operations)
 
     def set(self, **kwargs):
@@ -347,11 +385,11 @@ class Circuit(CircuitBase, metaclass=abc.ABCMeta):
 
 class TimeAgnosticGate(Gate, TimeAgnostic):
     def __copy__(self):
-        copy_ = self.__class__(
+        other = self.__class__(
             self._qubits, self.dim_hilbert, copy(self._operation),
             self.plot_metadata)
-        self._copy_params_to(copy_)
-        return copy_
+        other._params = copy(self._params)
+        return other
 
 
 class TimeAgnosticCircuit(Circuit, TimeAgnostic):
@@ -379,11 +417,11 @@ class TimeAwareGate(Gate, TimeAware):
         self._time_start = time_start
 
     def __copy__(self):
-        copy_ = self.__class__(
+        other = self.__class__(
             self._qubits, self.dim_hilbert, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
-        self._copy_params_to(copy_)
-        return copy_
+        other._params = copy(self._params)
+        return other
 
     @property
     def time_start(self):
@@ -454,20 +492,76 @@ class FinalizedCircuit:
         List of qubits in the operation
     """
     def __init__(self, operation, qubits, *, bases_in=None):
-        self.operation = operation.compile(bases_in=bases_in)
         self.qubits = list(qubits)
-        self._params = ParametrizedOperation.chain_params(self.operation)
+        # NB: operation must have sympy expressions in it
+        self._params = set()
+        units = []
+        for unit in operation.units():
+            op, ix = unit
+            params = self._op_params(op)
+            if len(params) == 0:
+                units.append(self._deparametrize(op).at(*ix))
+            else:
+                self._params.update(params)
+                units.append(unit)
+        self.operation = Operation.from_sequence(units)\
+                                  .compile(bases_in=bases_in)
+
+    @staticmethod
+    def _op_params(op):
+        if not isinstance(op, ParametrizedOperation):
+            return set()
+        # All parameters must be sympy expressions at this point
+        return set(map(str, chain(*(p.free_symbols for p in op.params))))
+
+    @staticmethod
+    def _sympy_to_native(symbol):
+        try:
+            if symbol.is_Integer:
+                return int(symbol)
+            if symbol.is_Float:
+                return float(symbol)
+            if symbol.is_Complex:
+                return complex(symbol)
+        except AttributeError:
+            # Not a sympy symbol, may be for good reasons
+            # Say, sympy.sympify('True') is bool
+            return symbol
+
+    @classmethod
+    def _deparametrize(cls, op, params=None):
+        """
+        Convert parametrized operation with sympy expressions, that can be
+        converted into number into an operation.
+
+        Parameters
+        ----------
+        op: ParametrizedOperation
+        params: dict
+            Extra parameters to set before instantiating the operation
+
+        Returns
+        -------
+        Operation
+        """
+        if not isinstance(op, ParametrizedOperation):
+            return op
+        op_params = op.params
+        if params:
+            op_params = (p.subs(params) for p in op_params)
+        op_params = tuple(cls._sympy_to_native(p) for p in op_params)
+        return op.set_params(op_params).substitute()
 
     def __call__(self, **params):
         if len(self._params) > 0:
             unset_params = self._params - params.keys()
             if len(unset_params) != 0:
                 raise KeyError(*unset_params)
-            out = FinalizedCircuit(
-                ParametrizedOperation.chain_substitute(
-                    self.operation, **params).compile(),
+            units = [self._deparametrize(op, params).at(*ix)
+                     for op, ix in self.operation.units()]
+            return FinalizedCircuit(
+                Operation.from_sequence(units).compile(),
                 self.qubits)
-            return out
         else:
             return self
 

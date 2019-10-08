@@ -1,10 +1,7 @@
-import warnings
-
 from numpy import pi
 from pytest import approx
 
 from quantumsim import Model, Setup, bases, Operation
-from quantumsim.circuits import FinalizedCircuit
 from quantumsim.models.model import WaitPlaceholder
 from quantumsim.operations import ParametrizedOperation
 
@@ -29,9 +26,6 @@ def test_create_untimed_model():
                 lib.cphase(pi).at(qubit_static, qubit_fluxed),
             )
 
-        def finalize(self, circuit, bases_in=None):
-            return FinalizedCircuit(circuit, bases_in=bases_in)
-
     sample_setup = Setup("""
     setup: []
     """)
@@ -40,7 +34,7 @@ def test_create_untimed_model():
     cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
            m.rotate_y('D0', angle=-0.5*pi)
 
-    assert cnot.operation.ptm(basis*2, basis*2) == approx(
+    assert cnot.finalize().operation.ptm(basis*2, basis*2) == approx(
         Operation.from_sequence(
             lib.rotate_y(0.5*pi).at(0),
             lib.cphase(pi).at(0, 1),
@@ -76,14 +70,14 @@ def test_create_timed_model():
         def strange_duration_gate(self, qubit):
             return lib.rotate_y(pi)
 
+        @staticmethod
+        def _filter_wait_placeholders(operation):
+            return Operation.from_sequence([
+                unit for unit in operation.units()
+                if not isinstance(unit.operation, WaitPlaceholder)])
+
         def finalize(self, circuit, bases_in=None):
-            out = super(SampleModel, self).finalize(circuit, bases_in)
-            # Sample compilation: filter out waiting gates
-            operations = [unit for unit in out.operation.units()
-                          if not isinstance(unit.operation, WaitPlaceholder)]
-            out.operation = Operation.from_sequence(operations).compile(
-                bases_in=bases_in)
-            return out
+            return circuit.finalize([self._filter_wait_placeholders], bases_in)
 
     sample_setup = Setup("""
     setup:
