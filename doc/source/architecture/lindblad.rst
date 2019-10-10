@@ -37,7 +37,7 @@ where
         + \sum_j \left( 2 \hat{L}_j^\vphantom{\dagger}
           \hat{P}_i^\vphantom{\dagger} \hat{L}_j^\dagger
           \hat{P}_k^\vphantom{\dagger}
-        - \left\{ \hat{L}_j_j^\dagger \hat{L}^\vphantom{\dagger},
+        - \left\{ \hat{L}_j^\dagger \hat{L}_j^\vphantom{\dagger},
           \hat{P}_i^\vphantom{\dagger} \right\} \hat{P}_k
     \right) \right).
 
