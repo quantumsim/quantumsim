@@ -3,16 +3,17 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
+# %%
 import pytest
 import numpy as np
 
 from quantumsim import bases, Operation
-from quantumsim.algebra.tools import random_density_matrix
+from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 from quantumsim.models import qubits as lib2
 from quantumsim.models import transmons as lib3
 
-
+# %%
 class TestOperations:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
@@ -147,7 +148,7 @@ class TestOperations:
 
     def test_chain_apply(self):
         b = (bases.general(2),) * 3
-        dm = random_density_matrix(8, seed=93)
+        dm = random_hermitian_matrix(8, seed=93)
         pv1 = PauliVector.from_dm(dm, b)
         pv2 = PauliVector.from_dm(dm, b)
 
@@ -181,10 +182,103 @@ class TestOperations:
         assert isinstance(ptm, np.ndarray)
 
         op_3q = Operation.from_ptm(ptm, b)
-        dm = random_density_matrix(8, seed=93)
+        dm = random_hermitian_matrix(8, seed=93)
         state1 = PauliVector.from_dm(dm, b)
         state2 = PauliVector.from_dm(dm, b)
 
         circuit(state1, 0, 1, 2)
         op_3q(state2, 0, 1, 2)
+        assert np.allclose(state1.to_pv(), state2.to_pv())
+
+    def test_lindblad_singlequbit(self):
+        ham = random_hermitian_matrix(2, seed=56)
+        lindblad_ops = np.array([
+            [[0, 0.1],
+             [0, 0]],
+            [[0, 0],
+             [0, 0.33]],
+        ])
+        t1 = 10
+        t2 = 25
+        b1 = (bases.general(2),)
+        b2 = (bases.gell_mann(2),)
+        op1 = Operation.from_lindblad_form(t1, b1, b2, hamiltonian=ham,
+                                           lindblad_ops=lindblad_ops)
+        op2 = Operation.from_lindblad_form(t2, b2, b1, hamiltonian=ham,
+                                           lindblad_ops=lindblad_ops)
+        op = Operation.from_lindblad_form(t1+t2, b1, hamiltonian=ham,
+                                           lindblad_ops=lindblad_ops)
+        dm = random_hermitian_matrix(2, seed=3)
+        state1 = PauliVector.from_dm(dm, b1)
+        state2 = PauliVector.from_dm(dm, b1)
+
+        op1(state1, 0)
+        op2(state1, 0)
+        op(state2, 0)
+        assert np.allclose(state1.to_pv(), state2.to_pv())
+
+    def test_lindblad_time_inverse(self):
+        ham = random_hermitian_matrix(2, seed=4)
+        b = (bases.general(2),)
+        op_plus = Operation.from_lindblad_form(20, b, hamiltonian=ham)
+        op_minus = Operation.from_lindblad_form(20, b, hamiltonian=-ham)
+        dm = random_hermitian_matrix(2, seed=5)
+        state = PauliVector.from_dm(dm, b)
+        op_plus(state, 0)
+        op_minus(state, 0)
+        assert np.allclose(state.to_dm(), dm)
+
+    def test_lindblad_two_qubit(self):
+        b = (bases.general(2),)
+        id = np.array([[1, 0], [0, 1]])
+        ham1 = random_hermitian_matrix(2, seed=6)
+        ham2 = random_hermitian_matrix(2, seed=7)
+        ham = np.kron(ham1, id).reshape(2, 2, 2, 2) + \
+              np.kron(id, ham2).reshape(2, 2, 2, 2)
+        dm = random_hermitian_matrix(4, seed=3)
+        op1 = Operation.from_lindblad_form(25, b, hamiltonian=ham1)
+        op2 = Operation.from_lindblad_form(25, b, hamiltonian=ham2)
+        op = Operation.from_lindblad_form(25, b*2, hamiltonian=ham)
+        state1 = PauliVector.from_dm(dm, b*2)
+        state2 = PauliVector.from_dm(dm, b*2)
+        op1(state1, 0)
+        op2(state1, 1)
+        op(state2, 0, 1)
+        assert np.allclose(state1.to_pv(), state2.to_pv())
+
+        ops1 = np.array([
+            [[0, 0.1],
+             [0, 0]],
+            [[0, 0],
+             [0, 0.33]],
+        ])
+        ops2 = np.array([
+            [[0, 0.15],
+             [0, 0]],
+            [[0, 0],
+             [0, 0.17]],
+        ])
+        ops = [np.kron(op, id).reshape(2, 2, 2, 2) for op in ops1] +\
+              [np.kron(id, op).reshape(2, 2, 2, 2) for op in ops2]
+        op1 = Operation.from_lindblad_form(25, b, lindblad_ops=ops1)
+        op2 = Operation.from_lindblad_form(25, b, lindblad_ops=ops2)
+        op = Operation.from_lindblad_form(25, b*2, lindblad_ops=ops)
+        state1 = PauliVector.from_dm(dm, b*2)
+        state2 = PauliVector.from_dm(dm, b*2)
+        op1(state1, 0)
+        op2(state1, 1)
+        op(state2, 0, 1)
+        assert np.allclose(state1.to_pv(), state2.to_pv())
+
+        op1 = Operation.from_lindblad_form(25, b, hamiltonian=ham1,
+                                           lindblad_ops=ops1)
+        op2 = Operation.from_lindblad_form(25, b, hamiltonian=ham2,
+                                           lindblad_ops=ops2)
+        op = Operation.from_lindblad_form(25, b*2, hamiltonian=ham,
+                                          lindblad_ops=ops)
+        state1 = PauliVector.from_dm(dm, b*2)
+        state2 = PauliVector.from_dm(dm, b*2)
+        op1(state1, 0)
+        op2(state1, 1)
+        op(state2, 0, 1)
         assert np.allclose(state1.to_pv(), state2.to_pv())
