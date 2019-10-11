@@ -102,6 +102,7 @@ class Operation(metaclass=abc.ABCMeta):
         if bases_out is not None:
             self._validate_bases(bases_out=bases_out)
 
+
     @staticmethod
     def from_ptm(ptm, bases_in, bases_out=None):
         """Construct completely positive map, based on Pauli transfer matrix.
@@ -174,7 +175,8 @@ class Operation(metaclass=abc.ABCMeta):
                                   bases_in, bases_out)
 
     @staticmethod
-    def from_lindblad_form(time, basis, *, hamiltonian=None, lindblad_ops=None):
+    def from_lindblad_form(time, bases_in, bases_out=None, *,
+                           hamiltonian=None, lindblad_ops=None):
         """Construct and operation from a list of Lindblad operators.
 
         TODO: elaborate on Lindblad operators format
@@ -184,8 +186,10 @@ class Operation(metaclass=abc.ABCMeta):
         time : float
             Duration of an evolution, driven by Lindblad equation,
             in arbitrary units.
-        basis: quantumsim.bases.PauliBasis
-            A basis for the resulting operation.
+        bases_in : tuple of PauliBasis
+            Input bases for generated PTMs. If None, default is picked.
+        bases_out : tuple of PauliBasis or None
+            Output bases for generated PTMs. If None, defaults to `bases_in`.
         hamiltonian: array or None
             Hamiltonian for a Lindblad equation. In units :math:`\\hbar = 1`.
             If `None`, assumed to be zero.
@@ -199,21 +203,29 @@ class Operation(metaclass=abc.ABCMeta):
         """
         summands = []
         if hamiltonian is not None:
-            summands.append(plm_hamiltonian_part(hamiltonian, basis, basis))
+            summands.append(plm_hamiltonian_part(hamiltonian, bases_in))
         if lindblad_ops is not None:
             if isinstance(lindblad_ops, np.ndarray) and \
                     len(lindblad_ops.shape) == 2:
                 lindblad_ops = (lindblad_ops,)
-            for op in lindblad_ops:
-                summands.append(plm_lindbladian_part(op, basis, basis))
+            if not isinstance(lindblad_ops, np.ndarray):
+                lindblad_ops = np.array(lindblad_ops)
+            summands.append(plm_lindbladian_part(lindblad_ops, bases_in))
         if len(summands) == 0:
             raise ValueError("Either `hamiltonian` or `lindblad_ops` must be "
                              "provided.")
-        ptm = scipy.linalg.matfuncs.expm(np.sum(summands, axis=0) * time)
+        plm = np.sum(summands, axis=0) * time
+        dim = np.prod(plm.shape[:len(plm.shape) // 2])
+        ptm = scipy.linalg.matfuncs.expm(plm.reshape((dim, dim)))\
+            .reshape(plm.shape)
         if not np.allclose(ptm.imag, 0):
             raise ValueError('Resulting PTM is not real-valued, check the '
                              'sanity of `hamiltonian` and `lindblad_ops`.')
-        return PTMOperation(ptm.real, (basis,), (basis,))
+        out = PTMOperation(ptm.real, bases_in, bases_in)
+        if bases_out is not None:
+            return out.set_bases(bases_out=bases_out)
+        else:
+            return out
 
     @staticmethod
     def from_sequence(*operations):

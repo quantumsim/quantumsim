@@ -62,7 +62,7 @@ def pv_to_dm(pv, bases):
     return np.einsum(*einsum_args, optimize=True).reshape((dim ** nq,) * 2)
 
 
-def plm_lindbladian_part(lindblad_op, basis_in, basis_out):
+def plm_lindbladian_part(lindblad_op, bases):
     """
     Compute the Lindbladian part of a Pauli Lioville matrix for a single
     Lindblad operator.
@@ -82,10 +82,8 @@ def plm_lindbladian_part(lindblad_op, basis_in, basis_out):
     ----------
     lindblad_op : array
         Lindblad jump operator, in units :math:`\\hbar = 1`.
-    basis_in : quantumsim.bases.PauliBasis
-        Input basis for the resulting PLM.
-    basis_out : quantumsim.bases.PauliBasis
-        Output basis for the resulting PLM.
+    bases : tuple of quantumsim.bases.PauliBasis
+        Input and output basis for the resulting PLM.
 
     Returns
     -------
@@ -95,22 +93,44 @@ def plm_lindbladian_part(lindblad_op, basis_in, basis_out):
     ----------
     .. [1] https://quantumsim.gitlab.io/
     """
-    out = np.einsum("xab, bc, ycd, ad -> xy",
-                    basis_out.vectors, lindblad_op,
-                    basis_in.vectors, lindblad_op.conj(),
-                    optimize=True)
-    out -= 0.5*np.einsum("xab, cb, cd, yda -> xy",
-                         basis_out.vectors, lindblad_op.conj(),
-                         lindblad_op, basis_in.vectors,
-                         optimize=True)
-    out -= 0.5*np.einsum("xab, ybc, dc, da -> xy",
-                         basis_out.vectors, basis_in.vectors,
-                         lindblad_op.conj(), lindblad_op,
-                         optimize=True)
+    n = len(bases)
+    einsum_args = [
+        lindblad_op, [6*n] + list(range(2*n)),
+        lindblad_op.conj(), [6*n] + list(range(2*n, 4*n)),
+    ]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [4*n+i, 2*n+i, i]]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [5*n+i, n+i, 3*n+i]]
+    einsum_args.append(list(range(4*n, 6*n)))
+    out = np.einsum(*einsum_args, optimize=True)
+
+    einsum_args = [
+        lindblad_op, [6*n] + list(range(2*n)),
+        lindblad_op.conj(), [6*n] + list(range(n)) + list(range(2*n, 3*n)),
+    ]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [4*n+i, 3*n+i, 2*n+i]]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [5*n+i, n+i, 3*n+i]]
+    einsum_args.append(list(range(4*n, 6*n)))
+    out -= 0.5 * np.einsum(*einsum_args, optimize=True)
+
+    einsum_args = [
+        lindblad_op, [6*n] + list(range(2*n)),
+        lindblad_op.conj(), [6*n] + list(range(n)) + list(range(2*n, 3*n)),
+    ]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [4*n+i, n+i, 3*n+i]]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [5*n+i, 3*n+i, 2*n+i]]
+    einsum_args.append(list(range(4*n, 6*n)))
+    out -= 0.5 * np.einsum(*einsum_args, optimize=True)
+
     return out
 
 
-def plm_hamiltonian_part(hamiltonian, basis_in, basis_out):
+def plm_hamiltonian_part(hamiltonian, bases):
     """
     Compute the Hamiltonian part of a Pauli Liouville matrix.
 
@@ -127,10 +147,8 @@ def plm_hamiltonian_part(hamiltonian, basis_in, basis_out):
     ----------
     hamiltonian : array
         Hamiltonian in Lindblad equation, in units :math:`\\hbar = 1`.
-    basis_in : quantumsim.bases.PauliBasis
-        Input basis for the resulting PLM.
-    basis_out : quantumsim.bases.PauliBasis
-        Output basis for the resulting PLM.
+    bases : tuple of quantumsim.bases.PauliBasis
+        Input and output bases for the resulting PLM.
 
     Returns
     -------
@@ -140,10 +158,22 @@ def plm_hamiltonian_part(hamiltonian, basis_in, basis_out):
     ----------
     .. [1] https://quantumsim.gitlab.io/
     """
-    out = np.einsum("xab, yca, bc -> xy",
-                    basis_out.vectors, basis_in.vectors, hamiltonian,
-                    optimize=True)
-    out -= np.einsum("xab, ybc, ca -> xy",
-                     basis_out.vectors, basis_in.vectors, hamiltonian,
-                     optimize=True)
+    n = len(bases)
+
+    einsum_args = [hamiltonian, list(range(2*n))]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [3*n+i, 2*n+i, i]]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [4*n+i, n+i, 2*n+i]]
+    einsum_args.append(list(range(3*n, 5*n)))
+    out = np.einsum(*einsum_args, optimize=True)
+
+    einsum_args = [hamiltonian, list(range(2*n))]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [3*n+i, n+i, 2*n+i]]
+    for i, basis in enumerate(bases):
+        einsum_args += [basis.vectors, [4*n+i, 2*n+i, i]]
+    einsum_args.append(list(range(3*n, 5*n)))
+    out -= np.einsum(*einsum_args, optimize=True)
+
     return -1j * out
