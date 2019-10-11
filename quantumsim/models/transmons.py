@@ -349,7 +349,7 @@ def idle(duration, t1, t2, anharmonicity=0.):
     else:
         ham = None
     return Operation.from_lindblad_form(
-        duration, bases.general(3),
+        duration, (bases.general(3),),
         hamiltonian=ham,
         lindblad_ops=[op_t1, *ops_t2])
 

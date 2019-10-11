@@ -2,7 +2,7 @@ import numpy as np
 from scipy.stats import unitary_group
 
 
-def random_density_matrix(dim: int, seed: int):
+def random_hermitian_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)
     # noinspection PyArgumentList
     diag = rng.rand(dim)

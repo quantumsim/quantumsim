@@ -9,7 +9,7 @@ import warnings
 from pytest import approx
 
 from quantumsim import bases, Operation
-from quantumsim.algebra.tools import random_density_matrix
+from quantumsim.algebra.tools import random_hermitian_matrix
 # noinspection PyProtectedMember
 from quantumsim.operations.operation import _PTMOperation
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
@@ -125,7 +125,7 @@ class TestCompiler:
     @pytest.mark.parametrize('d,lib', [(2, lib2), (3, lib3)])
     def test_chain_compile_single_qubit(self, d, lib):
         b = bases.general(d)
-        dm = random_density_matrix(d, seed=487)
+        dm = random_hermitian_matrix(d, seed=487)
 
         bases_full = (b,)
         subbases = (b.subbasis([0, 1]),)
@@ -170,7 +170,7 @@ class TestCompiler:
     def test_chain_merge_next(self, d, lib):
         b = bases.general(d)
 
-        dm = random_density_matrix(d**2, seed=574)
+        dm = random_hermitian_matrix(d ** 2, seed=574)
 
         chain = Operation.from_sequence(
             lib.rotate_x(np.pi / 5).at(0),
@@ -301,7 +301,7 @@ class TestCompiler:
         # Qubit 2 is measured
         assert op2.bases_out[1] == bases_out[2]
 
-        dm = random_density_matrix(3**3, seed=85)
+        dm = random_hermitian_matrix(3 ** 3, seed=85)
         pv1 = PauliVector.from_dm(dm, (b01, b01, b0))
         pv2 = PauliVector.from_dm(dm, (b01, b01, b0))
 
