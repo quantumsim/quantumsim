@@ -25,9 +25,8 @@ class Model(metaclass=abc.ABCMeta):
     seed : int
         Seed for initializing an internal random number generator.
     """
-    def __init__(self, setup, seed=None):
+    def __init__(self, setup):
         self._setup = setup
-        self.rng = np.random.RandomState(seed)
 
     def wait(self, qubit, duration):
         return WaitPlaceholder(duration, self.dim).at(qubit)
