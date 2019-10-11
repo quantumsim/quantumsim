@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
-from sympy.core.sympify import sympify
+from sympy import symbols, sympify, Expr
 import re
 
 from ..operations import Operation, ParametrizedOperation
@@ -98,6 +98,10 @@ class CircuitBase(ABC):
 
 class Gate(CircuitBase, ABC):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
+    _sympify_locals = {
+        'beta': symbols('beta'),
+        'gamma': symbols('gamma'),
+    }
 
     def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None):
         """A gate without notion of timing.
@@ -134,7 +138,7 @@ class Gate(CircuitBase, ABC):
                              'one in `qubits`.')
         self.plot_metadata = plot_metadata or {}
         self._params = {
-            param: sympify(param) for param in
+            param: symbols(param) for param in
             self._operation_params(self._operation)}
 
     def operation_sympified(self):
@@ -180,6 +184,8 @@ class Gate(CircuitBase, ABC):
     #     self._params.remove(name)
 
     def set(self, **kwargs):
+        kwargs = {key: sympify(val, locals=self._sympify_locals)
+                  for key, val in kwargs.items()}
         self._params = {k: v.subs(kwargs)
                              for k, v in self._params.items()}
 
@@ -523,10 +529,14 @@ class FinalizedCircuit:
                 return float(symbol)
             if symbol.is_Complex:
                 return complex(symbol)
-        except AttributeError:
-            # Not a sympy symbol, may be for good reasons
-            # Say, sympy.sympify('True') is bool
             return symbol
+        except Exception as ex:
+            raise RuntimeError(
+                "Could not convert sympy symbol to native type."
+                "It may be due to misinterpretation of some symbols by sympy."
+                "Try to use sympy expressions as gate parameters' values "
+                "explicitly."
+            ) from ex
 
     @classmethod
     def _deparametrize(cls, op, params=None):
