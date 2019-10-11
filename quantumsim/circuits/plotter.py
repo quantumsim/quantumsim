@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from matplotlib.patches import Rectangle
+from sympy import latex
 
 _golden_mean = (np.sqrt(5) - 1.0) / 2.0
 
@@ -98,6 +99,8 @@ class MatplotlibPlotter:
             # TODO: formatting with params (it is tricky)
             # params = gate.params_set()
             label = metadata.pop('label', r'$\mathcal{G}$')  # .format(**params)
+            params = {key: latex(val) for key, val in gate.params.items()}
+            label = label.format(**params)
             return self._plot_box_with_label(
                 gate.time_start, gate.time_end, *self._qubit_range(gate.qubits),
                 label, **self._get_box_kwargs(metadata))

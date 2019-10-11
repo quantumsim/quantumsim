@@ -28,22 +28,22 @@ class TestCircuitsCommon:
         gate = cls('qubit', dim, op_1q)
         assert c_op(gate) == op_1q
         assert gate.qubits == ('qubit',)
-        assert len(gate.params) == 0
+        assert len(gate.free_parameters) == 0
 
         gate = cls('Q0', dim, op_1q)
         assert c_op(gate) == op_1q
         assert gate.qubits == ('Q0',)
-        assert len(gate.params) == 0
+        assert len(gate.free_parameters) == 0
 
         gate = cls(('Q1',), dim, op_1q)
         assert c_op(gate) == op_1q
         assert gate.qubits == ('Q1',)
-        assert len(gate.params) == 0
+        assert len(gate.free_parameters) == 0
 
         gate = cls(('D', 'A'), dim, op_2q)
         assert c_op(gate) == op_2q
         assert gate.qubits == ('D', 'A')
-        assert len(gate.params) == 0
+        assert len(gate.free_parameters) == 0
 
     def test_gate_params_call(self, cls):
         dim = 2
@@ -63,15 +63,15 @@ class TestCircuitsCommon:
 
         gate = cls(('D', 'A'), dim,
                    ParametrizedOperation(cnot_like, basis, basis))
-        assert gate.params == {angle_cphase, angle_rotate}
+        assert gate.free_parameters == {angle_cphase, angle_rotate}
 
         gate1 = gate(angle_cphase=angle1_cphase, angle_rotate=angle1_rotate)
-        assert gate.params == {angle_cphase, angle_rotate}
-        assert gate1.params == set()
+        assert gate.free_parameters == {angle_cphase, angle_rotate}
+        assert gate1.free_parameters == set()
 
         gate2 = gate(angle_cphase=angle2_cphase)
-        assert gate.params == {angle_cphase, angle_rotate}
-        assert gate2.params == {angle_rotate}
+        assert gate.free_parameters == {angle_cphase, angle_rotate}
+        assert gate2.free_parameters == {angle_rotate}
 
         assert gate1.finalize().operation.ptm(basis, basis) == approx(gate(
             angle_cphase=angle1_cphase, angle_rotate=angle1_rotate
@@ -165,7 +165,7 @@ class TestCircuitsCommon:
         with allow_param_repeat():
             circuit = grotate + gcphase + grotate
 
-        assert circuit.params == {sympy.symbols('angle')}
+        assert circuit.free_parameters == {sympy.symbols('angle')}
         assert len(circuit.gates) == 3
         angle = 0.736
         assert c_op(circuit(angle=angle)).ptm(basis, basis) == \

@@ -39,7 +39,7 @@ class CircuitBase(ABC):
 
     @property
     @abstractmethod
-    def params(self):
+    def free_parameters(self):
         """Return set of parameters, accepted by this circuit."""
         pass
 
@@ -168,6 +168,10 @@ class Gate(CircuitBase, ABC):
 
     @property
     def params(self):
+        return self._params
+
+    @property
+    def free_parameters(self):
         return set().union(*(expr.free_symbols
                              for expr in self._params.values()))
 
@@ -206,14 +210,15 @@ class Gate(CircuitBase, ABC):
 class CircuitAddMixin(ABC):
     @property
     @abstractmethod
-    def params(self):
+    def free_parameters(self):
         pass
 
     @abstractmethod
     def __add__(self, other):
         global param_repeat_allowed
         if not param_repeat_allowed:
-            common_params = self.params.intersection(other.params)
+            common_params = self.free_parameters.intersection(
+                other.free_parameters)
             if len(common_params) > 0:
                 raise RuntimeError(
                     "The following free parameters are common for the circuits "
@@ -370,9 +375,9 @@ class Circuit(CircuitBase, ABC):
         return self._gates
 
     @property
-    def params(self):
+    def free_parameters(self):
         if self._params_cache is None:
-            self._params_cache = set(chain(*(g.params for g in self._gates)))
+            self._params_cache = set(chain(*(g.free_parameters for g in self._gates)))
         return self._params_cache
 
     def operation_sympified(self):
