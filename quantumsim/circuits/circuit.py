@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
-from sympy import symbols, sympify, Expr
+from sympy import symbols, sympify
 import re
 
 from ..operations import Operation, ParametrizedOperation
