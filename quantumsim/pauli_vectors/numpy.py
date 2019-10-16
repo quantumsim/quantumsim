@@ -114,6 +114,7 @@ class PauliVectorNumpy(PauliVectorBase):
             warnings.warn(
                 "Density matrix trace is 0; likely your further computation "
                 "will fail. Have you projected DM on a state with zero weight?")
+        return tr
 
     def copy(self):
         return self.from_pv(self.to_pv().copy(), self.bases)
