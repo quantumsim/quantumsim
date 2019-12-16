@@ -39,6 +39,28 @@ check for broken links in doc:
   - cd doc && make linkcheck
   allow_failure: true
 
+pages:
+  stage: deploy
+  dependencies:
+    - build html documentation
+  only:
+    - branches@quantumsim/quantumsim
+  except:
+    - master@quantumsim/quantumsim
+    - schedules
+  environment:
+    name: test/$CI_COMMIT_REF_NAME
+    url: https://quantumsim.gitlab.io/quantumsim/sphinx_build/$CI_PIPELINE_ID/
+  script:
+    - mkdir -p public/sphinx_build
+    - cp -R doc/build/html public/sphinx_build/$CI_PIPELINE_ID
+  artifacts:
+    name: sphinx_build_$CI_PIPELINE_ID
+    paths:
+      - public
+    expire_in: 7 days
+    when: always
+
 upload documentation to docs repo:
   stage: deploy
   only:
