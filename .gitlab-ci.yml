@@ -23,9 +23,13 @@ build distribution packages:
   artifacts:
     paths:
     - dist
+    expire_in: 1 day
 
 run tests:
   stage: test
+  needs:
+    - job: build distribution packages
+      artifacts: true
   script:
   - pip install dist/quantumsim-*-py3-none-any.whl
   - py.test --cov=quantumsim --cov-report=xml
@@ -35,21 +39,25 @@ run tests:
 
 check for broken links in doc:
   stage: test
+  needs:
+    - job: build html documentation
+      artifacts: true
   script:
   - cd doc && make linkcheck
   allow_failure: true
 
 pages:
   stage: deploy
-  dependencies:
-    - build html documentation
+  needs:
+    - job: build html documentation
+      artifacts: true
   only:
     - branches@quantumsim/quantumsim
   except:
     - master@quantumsim/quantumsim
     - schedules
   environment:
-    name: test/$CI_COMMIT_REF_NAME
+    name: sphinx_build/$CI_COMMIT_REF_NAME
     url: https://quantumsim.gitlab.io/quantumsim/sphinx_build/$CI_PIPELINE_ID/
   script:
     - mkdir -p public/sphinx_build
@@ -89,6 +97,9 @@ upload documentation to docs repo:
 # We will upload a new release to PyPI if tag vX.X.X is pushed
 upload new release to PyPI:
   stage: deploy
+  needs:
+    - job: build distribution packages
+      artifacts: true
   only:
   - /\Av\d+\.\d+\.\d+\z/
   except:
