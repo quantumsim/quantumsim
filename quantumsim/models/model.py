@@ -107,7 +107,7 @@ class Model(metaclass=abc.ABCMeta):
         return gate_decorator
 
     def add_waiting_gates(self, circuit):
-        """Insert missing waiting placeholders and return finalized circuit.
+        """Insert missing waiting placeholders.
 
         Parameters
         ----------
@@ -142,7 +142,7 @@ class Model(metaclass=abc.ABCMeta):
                 if duration > margin:
                     waiting_gates.append(self.waiting_gate(qubit, duration)
                                          .shift(time_start=gate1.time_end))
-        gates = sorted(circuit.gates + tuple(waiting_gates),
+        gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return TimeAwareCircuit(circuit.qubits, gates)
 

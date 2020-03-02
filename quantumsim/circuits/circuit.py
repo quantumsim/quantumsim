@@ -361,8 +361,8 @@ class TimeAware(CircuitAddMixin, ABC):
 
 class Circuit(CircuitBase, ABC):
     def __init__(self, qubits, gates):
-        self._gates = tuple(gates)
-        self._qubits = tuple(qubits)
+        self._gates = list(gates)
+        self._qubits = list(qubits)
         self._params_cache = None
         self._operation = None
 

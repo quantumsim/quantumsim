@@ -111,7 +111,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        ptm: array
+        ptm: array-like
             Pauli transfer matrix in a form of Numpy array
         bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
@@ -138,7 +138,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        kraus: array
+        kraus: array-like
             Pauli transfer matrix in a form of Numpy array
         bases_in : tuple of PauliBasis
             Input bases for generated PTMs. If None, default is picked.
