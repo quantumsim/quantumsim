@@ -1,13 +1,11 @@
 import abc
-import numpy as np
 from collections import defaultdict
+
 from more_itertools import pairwise
 
-from ..circuits import TimeAgnosticGate, TimeAwareGate, TimeAwareCircuit
-from ..operations import Operation, Placeholder
 from .. import bases
-
-
+from ..circuits import TimeAgnosticGate, TimeAwareCircuit, TimeAwareGate
+from ..operations import Operation, Placeholder
 from ..operations.operation import IndexedOperation
 
 
@@ -25,6 +23,7 @@ class Model(metaclass=abc.ABCMeta):
     seed : int
         Seed for initializing an internal random number generator.
     """
+
     def __init__(self, setup):
         self._setup = setup
 
