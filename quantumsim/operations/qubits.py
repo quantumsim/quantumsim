@@ -152,6 +152,14 @@ def cnot():
     return Operation.from_kraus(matrix, bases2_default)
 
 
+def swap():
+    matrix = np.array([[1, 0, 0, 0],
+                       [0, 0, 1, 0],
+                       [0, 1, 0, 0],
+                       [0, 0, 0, 1]])
+    return Operation.from_kraus(matrix, bases2_default)
+
+
 def controlled_unitary(unitary):
     dim_hilbert = unitary.shape[0]
     if unitary.shape != (dim_hilbert, dim_hilbert):
