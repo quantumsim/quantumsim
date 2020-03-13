@@ -3,7 +3,7 @@ import numpy as np
 from .. import bases
 from ..operations.operation import ParametrizedOperation
 from ..operations.qubits import (
-    cnot, cphase, hadamard, rotate_x, rotate_y, rotate_z)
+    cnot, cphase, swap, hadamard, rotate_x, rotate_y, rotate_z)
 from .model import Model
 
 _basis = bases.general(2)
@@ -29,10 +29,7 @@ class IdealModel(Model):
 
     dim = 2
 
-    def __init__(self, setup):
-        super().__init__(setup)
-
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_x(self, qubit):
         """Rotation around the X-axis Parameters: `angle` (degrees).
@@ -42,7 +39,7 @@ class IdealModel(Model):
             _basis).at(qubit),
         )
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_y(self, qubit):
         """Rotation around the Y-axis. Parameters: `angle` (degrees).
@@ -52,7 +49,7 @@ class IdealModel(Model):
             _basis).at(qubit),
         )
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_z(self, qubit):
         """Rotation around the Z-axis. Parameters: `angle` (degrees).
@@ -62,14 +59,14 @@ class IdealModel(Model):
             _basis).at(qubit),
         )
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$H$'})
     def hadamard(self, qubit):
         """Rotation around the Z-axis. Parameters: `angle` (degrees).
         """
         return (hadamard().at(qubit),)
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_2qubit', plot_metadata={
         'style': 'line',
         'markers': [
             {'style': 'marker', 'label': 'o'},
@@ -84,7 +81,7 @@ class IdealModel(Model):
             _basis * 2).at(control_qubit, target_qubit),
         )
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_2qubit', plot_metadata={
         'style': 'line',
         'markers': [
             {'style': 'marker', 'label': 'o'},
@@ -96,7 +93,19 @@ class IdealModel(Model):
         """
         return (cnot().at(control_qubit, target_qubit),)
 
-    @Model.gate(duration=0, plot_metadata={
+    @Model.gate(duration='time_2qubit', plot_metadata={
+        'style': 'line',
+        'markers': [
+            {'style': 'marker', 'label': 'x'},
+            {'style': 'marker', 'label': 'x'}
+        ]
+    })
+    def swap(self, control_qubit, target_qubit):
+        """Rotation around the Z-axis. Parameters: `angle` (degrees).
+        """
+        return (swap().at(control_qubit, target_qubit),)
+
+    @Model.gate(duration='time_measure', plot_metadata={
         'style': 'box', 'label': r'$\circ\!\!\!\!\!\!\!\nearrow$'})
     def measure(self, qubit):
         def project(result):
