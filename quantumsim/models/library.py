@@ -10,6 +10,18 @@ _basis = bases.general(2)
 _basis_classical = bases.general(2).subbasis([0, 1]),
 
 
+def get_ideal_setup(qubits):
+    _gate_setup = [{
+        'time_1qubit': 0,
+        'time_2qubit': 0,
+        'time_measure': 0}]
+    _qubit_setup = [{'qubit': q} for q in qubits]
+    return {
+        'version': '1',
+        'name': 'Ideal Setup',
+        'setup': _gate_setup + _qubit_setup}
+
+
 class IdealModel(Model):
     _ptm_project = [rotate_x(0).set_bases(
         (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),)
@@ -17,8 +29,7 @@ class IdealModel(Model):
 
     dim = 2
 
-    def __init__(self):
-        setup = None
+    def __init__(self, setup):
         super().__init__(setup)
 
     @Model.gate(duration=0, plot_metadata={
