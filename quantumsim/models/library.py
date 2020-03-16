@@ -7,7 +7,7 @@ from ..operations.qubits import (
 from .model import Model
 from ..setups import Setup
 
-_basis = bases.general(2)
+_basis = bases.general(2),
 _basis_classical = bases.general(2).subbasis([0, 1]),
 
 
