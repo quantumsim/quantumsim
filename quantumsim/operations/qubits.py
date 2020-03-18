@@ -160,6 +160,19 @@ def swap():
     return Operation.from_kraus(matrix, bases2_default)
 
 
+def reset():
+    """A perfect reset gate, projecting the qubit to the ground state.
+
+    Returns
+    -------
+    Operation.from_ptm
+        An operation, that corresponds to the projection.
+    """
+    matrix = np.zeros((4, 4))
+    matrix[0, 0] = 1
+    return Operation.from_ptm(matrix, bases1_default)
+
+
 def controlled_unitary(unitary):
     dim_hilbert = unitary.shape[0]
     if unitary.shape != (dim_hilbert, dim_hilbert):
