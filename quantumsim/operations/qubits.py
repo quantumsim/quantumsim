@@ -1,6 +1,7 @@
 import numpy as np
+
 from .. import bases
-from .operation import Operation, ParametrizedOperation
+from .operation import Operation
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
