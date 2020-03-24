@@ -103,7 +103,7 @@ class Gate(CircuitBase, ABC):
         'gamma': symbols('gamma'),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None, param_generators=None):
+    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None, param_funcs=None):
         """A gate without notion of timing.
 
         Parameters
@@ -141,7 +141,7 @@ class Gate(CircuitBase, ABC):
             param: symbols(param) for param in
             self._operation_params(self._operation)}
 
-        self._param_gens = param_generators or {}
+        self._param_funcs = param_funcs or {}
 
     def operation_sympified(self):
         new_units = []
@@ -177,9 +177,9 @@ class Gate(CircuitBase, ABC):
         return set().union(*(expr.free_symbols
                              for expr in self._params.values()))
 
-    def param_gen(self, param):
+    def param_func(self, param):
         try:
-            return self._param_gens[param]
+            return self._param_funcs[param]
         except KeyError:
             return None
 
