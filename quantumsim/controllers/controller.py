@@ -1,5 +1,6 @@
 from itertools import chain
 
+import numpy as np
 import xarray as xr
 
 from ..circuits import TimeAwareCircuit, TimeAgnosticCircuit
@@ -9,7 +10,15 @@ from ..states import State
 class Controller:
     # TODO: Add state initialization methods
 
-    def __init__(self, state, circuits, circuit_params):
+    def __init__(self, state, circuits, circuit_params, rng=None):
+        if isinstance(rng, np.random.RandomState):
+            self._rng = rng
+        elif isinstance(rng, int):
+            self._rng = np.random.RandomState(rng)
+        else:
+            raise ValueError(
+                "Please provide a seed or an instance of a np.randomRandomState")
+
         if not isinstance(state, State):
             raise ValueError("Please provide an initial state")
         self._state = state
@@ -31,7 +40,7 @@ class Controller:
             # TODO: add a better message ;D
             raise RuntimeError("ERROR")
 
-        self._params = dict.fromkeys(chain(*_free_circ_params), None)
+        self._free_params = dict.fromkeys(chain(*_free_circ_params), None)
 
         self._circuits = {circ_name: circ.finalize()
                           for circ_name, circ in circuits.items()}
@@ -39,6 +48,10 @@ class Controller:
     @property
     def state(self):
         return self._state
+
+    @property
+    def circuits(self):
+        return self._circuits
 
     def run_round(self):
         raise NotImplementedError
