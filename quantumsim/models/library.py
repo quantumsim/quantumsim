@@ -11,6 +11,13 @@ _basis = bases.general(2),
 _basis_classical = bases.general(2).subbasis([0, 1]),
 
 
+def _born_projection(state, rng):
+    meas_probs = state.pauli_vector.diagonal()
+    meas_probs /= np.sum(meas_probs)
+    result = rng.choice(len(meas_probs), p=meas_probs)
+    return result
+
+
 def get_ideal_setup(qubits):
     """
     Initializes an ideal setup file for a given list of qubit.
@@ -41,6 +48,7 @@ class IdealModel(Model):
     A model for an ideal error model, where gates are
     instantaneous and perfect, while the qubits experiences no noise.
     """
+
     _ptm_project = [rotate_x(0).set_bases(
         (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),)
     ) for i in range(2)]
@@ -125,17 +133,19 @@ class IdealModel(Model):
         """
         return (swap().at(control_qubit, target_qubit),)
 
-    @Model.gate(duration='time_measure', plot_metadata={
-        'style': 'box', 'label': r'$\circ\!\!\!\!\!\!\!\nearrow$'})
+    @Model.gate(
+        duration='time_measure',
+        plot_metadata={
+            'style': 'box',
+            'label': r'$\circ\!\!\!\!\!\!\!\nearrow$'})
     def measure(self, qubit):
         """A measurement gate.
         """
         def project(result):
             if result in (0, 1):
                 return self._ptm_project[result]
-            else:
-                raise ValueError(
-                    'Unknown measurement result: {}'.format(result))
+            raise ValueError(
+                'Unknown measurement result: {}'.format(result))
 
         return (
             ParametrizedOperation(project, _basis_classical).at(qubit),
