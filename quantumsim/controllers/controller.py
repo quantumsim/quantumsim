@@ -3,7 +3,8 @@ from itertools import chain
 import numpy as np
 import xarray as xr
 
-from ..circuits import TimeAwareCircuit, TimeAgnosticCircuit
+from ..operations import ParametrizedOperation, Operation
+from ..circuits import TimeAwareCircuit, TimeAgnosticCircuit, FinalizedCircuit
 from ..states import State
 
 
@@ -45,6 +46,8 @@ class Controller:
         self._circuits = {circ_name: circ.finalize()
                           for circ_name, circ in circuits.items()}
 
+        self._params = circuit_params
+
     @property
     def state(self):
         return self._state
@@ -53,13 +56,43 @@ class Controller:
     def circuits(self):
         return self._circuits
 
+    def eval_params(self, params):
+        raise NotImplementedError
+
     def run_round(self):
         raise NotImplementedError
 
     def _apply_circuit(self, circuit_name, **kwargs):
         try:
-            self._circuits[circuit_name] @ self._state
+            circuit = self._circuits[circuit_name]
         except KeyError:
-            raise KeyError("Message")
-        outcome = xr.DataArray()
-        return outcome
+            raise KeyError("Circuit {} not found".format(circuit_name))
+
+        if len(circuit.params) > 0:
+            missing_params = circuit.params - kwargs.keys()
+            if len(missing_params) != 0:
+                unset_params = missing_params - self._params.keys()
+                if len(unset_params) != 0:
+                    raise KeyError(**unset_params)
+                units, qubits = [], []
+                for operation, inds in circuit.operation.units():
+                    if isinstance(operation, ParametrizedOperation):
+                        if units:
+                            sub_circ = FinalizedCircuit(
+                                Operation.from_sequence(units).compile(),
+                                qubits)
+                            sub_circ.apply_to(self._state)
+                            units, qubits = [], []
+                        _params = self.eval_params(missing_params)
+                        # TODO: Once previous operation are compiles, the paramterizerd op can be evaluated
+                        # FIXME: One doesn't need to eval all missing parm
+                        # FIXME: deparameterize doesn't need to be calss method - take it outside and import here. Alternative solution - make circuitm and call, but useless bloat.
+                        circuit._deparametrize(operation, _params).at(*inds)
+                    else:
+                        units.append(operation)
+                        qubits += [circuit.qubits[i]
+                                   for i in inds if circuit.qubits[i] not in qubits]
+            else:
+                circuit(**kwargs).apply_to(self._state)
+        else:
+            circuit.apply_to(self._state)

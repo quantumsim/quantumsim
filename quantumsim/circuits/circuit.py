@@ -421,8 +421,7 @@ class TimeAgnosticCircuit(Circuit, TimeAgnostic):
 
 
 class TimeAwareGate(Gate, TimeAware):
-    def __init__(self, qubits, dim_hilbert, operation, duration=0.,
-                 time_start=0., plot_metadata=None):
+    def __init__(self, qubits, dim_hilbert, operation, duration=0., time_start=0., plot_metadata=None, param_funcs=None):
         """TimedGate - a gate with a well-defined timing.
 
         Parameters:
@@ -432,7 +431,7 @@ class TimeAwareGate(Gate, TimeAware):
         time_start : dictionary of floats or None
             an absolute start time on each of the qubits
         """
-        super().__init__(qubits, dim_hilbert, operation, plot_metadata)
+        super().__init__(qubits, dim_hilbert, operation, plot_metadata, param_funcs)
         self._duration = duration
         self._time_start = time_start
 
@@ -528,6 +527,10 @@ class FinalizedCircuit:
         self.operation = Operation.from_sequence(units)\
                                   .compile(bases_in=bases_in)
 
+    @property
+    def params(self):
+        return self._params
+
     @staticmethod
     def _op_params(op):
         if not isinstance(op, ParametrizedOperation):
@@ -590,7 +593,7 @@ class FinalizedCircuit:
         else:
             return self
 
-    def __matmul__(self, state):
+    def apply_to(self, state):
         """
 
         Parameters
@@ -606,3 +609,13 @@ class FinalizedCircuit:
                 'Qubit {} is not present in the state'
                 .format(ex.args[0].split()[0]))
         self.operation(state.pauli_vector, *indices)
+
+    def __matmul__(self, state):
+        """
+        Parameters
+        ----------
+        state : quantumsim.State
+        """
+        # double definition due to complaint from IDE (normally matmul is expected to return something?)
+
+        self.apply_to(state)
