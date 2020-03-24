@@ -103,7 +103,7 @@ class Gate(CircuitBase, ABC):
         'gamma': symbols('gamma'),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None):
+    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None, param_generators=None):
         """A gate without notion of timing.
 
         Parameters
@@ -141,6 +141,8 @@ class Gate(CircuitBase, ABC):
             param: symbols(param) for param in
             self._operation_params(self._operation)}
 
+        self._param_gens = param_generators or {}
+
     def operation_sympified(self):
         new_units = []
         for unit in self._operation.units():
@@ -175,6 +177,12 @@ class Gate(CircuitBase, ABC):
         return set().union(*(expr.free_symbols
                              for expr in self._params.values()))
 
+    def param_gen(self, param):
+        try:
+            return self._param_gens[param]
+        except KeyError:
+            return None
+
     # def _set_param(self, name, value):
     #     if isinstance(value, str):
     #         if self._valid_identifier_re.match(value) is None:
@@ -191,7 +199,7 @@ class Gate(CircuitBase, ABC):
         kwargs = {key: sympify(val, locals=self._sympify_locals)
                   for key, val in kwargs.items()}
         self._params = {k: v.subs(kwargs)
-                             for k, v in self._params.items()}
+                        for k, v in self._params.items()}
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -377,7 +385,8 @@ class Circuit(CircuitBase, ABC):
     @property
     def free_parameters(self):
         if self._params_cache is None:
-            self._params_cache = set(chain(*(g.free_parameters for g in self._gates)))
+            self._params_cache = set(
+                chain(*(g.free_parameters for g in self._gates)))
         return self._params_cache
 
     def operation_sympified(self):
@@ -502,6 +511,7 @@ class FinalizedCircuit:
     qubits : list of str
         List of qubits in the operation
     """
+
     def __init__(self, operation, qubits, *, bases_in=None):
         self.qubits = list(qubits)
         # NB: operation must have sympy expressions in it
