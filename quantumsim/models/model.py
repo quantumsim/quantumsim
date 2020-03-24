@@ -74,7 +74,7 @@ class Model(metaclass=abc.ABCMeta):
                 .format(type(op)))
 
     @staticmethod
-    def gate(duration=None, plot_metadata=None):
+    def gate(duration=None, plot_metadata=None, param_funcs=None):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
@@ -89,7 +89,7 @@ class Model(metaclass=abc.ABCMeta):
                 def wrapper(self, *qubits, **params):
                     return TimeAgnosticGate(
                         qubits, self.dim, make_operation(self, *qubits),
-                        plot_metadata)(**params)
+                        plot_metadata, param_funcs)(**params)
             else:
                 def wrapper(self, *qubits, **params):
                     if callable(duration):
@@ -100,7 +100,7 @@ class Model(metaclass=abc.ABCMeta):
                         _duration = duration
                     return TimeAwareGate(
                         qubits, self.dim, make_operation(self, *qubits),
-                        _duration, 0., plot_metadata)(**params)
+                        _duration, 0., plot_metadata, param_funcs)(**params)
             wrapper.__name__ = func.__name__
             return wrapper
         return gate_decorator
