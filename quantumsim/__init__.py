@@ -5,6 +5,7 @@ from .operations import Operation
 from .setups import Setup
 from .states import State
 from .models import Model
+from .controllers import Controller
 
 PauliVector = pauli_vectors.Default
 
@@ -16,6 +17,7 @@ __all__ = [
     'PauliVector',
     'Setup',
     'State',
+    'Controller',
 ]
 
 

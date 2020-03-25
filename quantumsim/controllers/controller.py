@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from ..operations import ParametrizedOperation, Operation
-from ..circuits import TimeAwareCircuit, TimeAgnosticCircuit, FinalizedCircuit
+from ..circuits import TimeAwareCircuit, TimeAgnosticCircuit, deparametrize, _to_str
 from ..states import State
 
 
@@ -28,23 +28,8 @@ class Controller:
             raise ValueError("circuits should be a dictionary")
         if not all(isinstance(circ_name, str) for circ_name in circuits.keys()):
             raise ValueError("Only names")
-        if not all(isinstance(circ, (TimeAwareCircuit, TimeAgnosticCircuit))
-                   for circ in circuits.values()):
-            raise ValueError("Only circuits")
 
-        _free_circ_params = list(
-            circuit.free_parameters for circuit in circuits.values())
-
-        # Common pareters in different circuits currently not allowed
-        common_params = set.intersection(*_free_circ_params)
-        if len(common_params) > 0:
-            # TODO: add a better message ;D
-            raise RuntimeError("ERROR")
-
-        self._free_params = dict.fromkeys(chain(*_free_circ_params), None)
-
-        self._circuits = {circ_name: circ.finalize()
-                          for circ_name, circ in circuits.items()}
+        self._circuits = circuits
 
         self._params = circuit_params
 
@@ -56,43 +41,31 @@ class Controller:
     def circuits(self):
         return self._circuits
 
-    def eval_params(self, params):
-        raise NotImplementedError
-
-    def run_round(self):
-        raise NotImplementedError
-
-    def _apply_circuit(self, circuit_name, **kwargs):
+    def apply(self, circuit_name, num_rounds=1, **params):
         try:
-            circuit = self._circuits[circuit_name]
+            circuit = self._circuits[circuit_name](**params)
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
 
         if len(circuit.params) > 0:
-            missing_params = circuit.params - kwargs.keys()
-            if len(missing_params) != 0:
-                unset_params = missing_params - self._params.keys()
-                if len(unset_params) != 0:
-                    raise KeyError(**unset_params)
-                units, qubits = [], []
-                for operation, inds in circuit.operation.units():
-                    if isinstance(operation, ParametrizedOperation):
-                        if units:
-                            sub_circ = FinalizedCircuit(
-                                Operation.from_sequence(units).compile(),
-                                qubits)
-                            sub_circ.apply_to(self._state)
-                            units, qubits = [], []
-                        _params = self.eval_params(missing_params)
-                        # TODO: Once previous operation are compiles, the paramterizerd op can be evaluated
-                        # FIXME: One doesn't need to eval all missing parm
-                        # FIXME: deparameterize doesn't need to be calss method - take it outside and import here. Alternative solution - make circuitm and call, but useless bloat.
-                        circuit._deparametrize(operation, _params).at(*inds)
-                    else:
-                        units.append(operation)
-                        qubits += [circuit.qubits[i]
-                                   for i in inds if circuit.qubits[i] not in qubits]
-            else:
-                circuit(**kwargs).apply_to(self._state)
+            unset_params = circuit.params - self._params.keys()
+            if len(unset_params) != 0:
+                raise KeyError(*unset_params)
+            self._apply_circuit(circuit)
         else:
             circuit.apply_to(self._state)
+
+    def _apply_circuit(self, circuit):
+        for operation, inds in circuit.operation.units():
+            op_qubits = [circuit.qubits[i] for i in inds]
+            op_inds = [self._state.qubits.index(q) for q in op_qubits]
+
+            if isinstance(operation, ParametrizedOperation):
+                _params = {
+                    par: self._params[par](
+                        state=self._state.partial_trace(*op_qubits),
+                        rng=self._rng)
+                    for par in _to_str(operation.params)}
+                operation = deparametrize(operation, _params)
+
+            operation(self._state.pauli_vector, *op_inds)

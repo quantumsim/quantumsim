@@ -12,6 +12,10 @@ param_repeat_allowed = False
 # TODO: implement scheduling
 
 
+def _to_str(op_params):
+    return set(map(str, chain(*(p.free_symbols for p in op_params))))
+
+
 def _sympy_to_native(symbol):
     try:
         if symbol.is_Integer:
@@ -49,6 +53,8 @@ def deparametrize(op, params=None):
         return op
     op_params = op.params
     if params:
+        if not _to_str(op_params).issubset(params.keys()):
+            return op
         op_params = (p.subs(params) for p in op_params)
     op_params = tuple(_sympy_to_native(p) for p in op_params)
     return op.set_params(op_params).substitute()
@@ -560,9 +566,10 @@ class FinalizedCircuit:
         units = []
         for unit in operation.units():
             op, ix = unit
-            params = self._op_params(op)
+            params = _to_str(op.params) if isinstance(
+                op, ParametrizedOperation) else set()
             if len(params) == 0:
-                units.append(self._deparametrize(op).at(*ix))
+                units.append(deparametrize(op).at(*ix))
             else:
                 self._params.update(params)
                 units.append(unit)
@@ -573,67 +580,14 @@ class FinalizedCircuit:
     def params(self):
         return self._params
 
-    @staticmethod
-    def _op_params(op):
-        if not isinstance(op, ParametrizedOperation):
-            return set()
-        # All parameters must be sympy expressions at this point
-        return set(map(str, chain(*(p.free_symbols for p in op.params))))
-
-    @staticmethod
-    def _sympy_to_native(symbol):
-        try:
-            if symbol.is_Integer:
-                return int(symbol)
-            if symbol.is_Float:
-                return float(symbol)
-            if symbol.is_Complex:
-                return complex(symbol)
-            return symbol
-        except Exception as ex:
-            raise RuntimeError(
-                "Could not convert sympy symbol to native type."
-                "It may be due to misinterpretation of some symbols by sympy."
-                "Try to use sympy expressions as gate parameters' values "
-                "explicitly."
-            ) from ex
-
-    @classmethod
-    def _deparametrize(cls, op, params=None):
-        """
-        Convert parametrized operation with sympy expressions, that can be
-        converted into number into an operation.
-
-        Parameters
-        ----------
-        op: ParametrizedOperation
-        params: dict
-            Extra parameters to set before instantiating the operation
-
-        Returns
-        -------
-        Operation
-        """
-        if not isinstance(op, ParametrizedOperation):
-            return op
-        op_params = op.params
-        if params:
-            op_params = (p.subs(params) for p in op_params)
-        op_params = tuple(cls._sympy_to_native(p) for p in op_params)
-        return op.set_params(op_params).substitute()
-
     def __call__(self, **params):
         if len(self._params) > 0:
-            unset_params = self._params - params.keys()
-            if len(unset_params) != 0:
-                raise KeyError(*unset_params)
-            units = [self._deparametrize(op, params).at(*ix)
+            units = [deparametrize(op, params).at(*ix)
                      for op, ix in self.operation.units()]
             return FinalizedCircuit(
                 Operation.from_sequence(units).compile(),
                 self.qubits)
-        else:
-            return self
+        return self
 
     def apply_to(self, state):
         """
