@@ -5,7 +5,6 @@
 
 import pytest
 import numpy as np
-import warnings
 from pytest import approx
 
 from quantumsim import bases, Operation

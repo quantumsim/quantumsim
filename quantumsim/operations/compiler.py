@@ -1,5 +1,4 @@
-from collections import deque, OrderedDict
-from copy import copy
+from collections import deque
 
 import numpy as np
 
@@ -41,7 +40,6 @@ def stage_align_bases(graph, *, optimize=True, sv_cutoff=1e-5):
     while len(queue) > 0:
         compile_next_node_in_queue(queue, optimize=optimize,
                                    sv_cutoff=sv_cutoff)
-
 
 def stage_merge_nodes(graph):
     """
