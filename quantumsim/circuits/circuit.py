@@ -12,6 +12,48 @@ param_repeat_allowed = False
 # TODO: implement scheduling
 
 
+def _sympy_to_native(symbol):
+    try:
+        if symbol.is_Integer:
+            return int(symbol)
+        if symbol.is_Float:
+            return float(symbol)
+        if symbol.is_Complex:
+            return complex(symbol)
+        return symbol
+    except Exception as ex:
+        raise RuntimeError(
+            "Could not convert sympy symbol to native type."
+            "It may be due to misinterpretation of some symbols by sympy."
+            "Try to use sympy expressions as gate parameters' values "
+            "explicitly."
+        ) from ex
+
+
+def deparametrize(op, params=None):
+    """
+    Convert parametrized operation with sympy expressions, that can be
+    converted into number into an operation.
+
+    Parameters
+    ----------
+    op: ParametrizedOperation
+    params: dict
+        Extra parameters to set before instantiating the operation
+
+    Returns
+    -------
+    Operation
+    """
+    if not isinstance(op, ParametrizedOperation):
+        return op
+    op_params = op.params
+    if params:
+        op_params = (p.subs(params) for p in op_params)
+    op_params = tuple(_sympy_to_native(p) for p in op_params)
+    return op.set_params(op_params).substitute()
+
+
 @contextmanager
 def allow_param_repeat():
     global param_repeat_allowed
