@@ -7,12 +7,13 @@ from ..operations.qubits import (
 from .model import Model
 from ..setups import Setup
 
-_basis = bases.general(2),
-_basis_classical = bases.general(2).subbasis([0, 1]),
+_BASIS = bases.general(2),
+_BASIS_CLASSICAL = bases.general(2).subbasis([0, 1]),
 
 
-def _born_projection(state, rng):
+def _born_projection(state, rng, *, atol=1e-08):
     meas_probs = state.pauli_vector.diagonal()
+    meas_probs[np.abs(meas_probs) < atol] = 0
     meas_probs /= np.sum(meas_probs)
     result = rng.choice(len(meas_probs), p=meas_probs)
     return result
@@ -62,7 +63,7 @@ class IdealModel(Model):
         """
         return (ParametrizedOperation(
             lambda angle: rotate_x(np.deg2rad(angle)),
-            _basis).at(qubit),
+            _BASIS).at(qubit),
         )
 
     @Model.gate(duration='time_1qubit', plot_metadata={
@@ -72,7 +73,7 @@ class IdealModel(Model):
         """
         return (ParametrizedOperation(
             lambda angle: rotate_y(np.deg2rad(angle)),
-            _basis).at(qubit),
+            _BASIS).at(qubit),
         )
 
     @Model.gate(duration='time_1qubit', plot_metadata={
@@ -82,7 +83,7 @@ class IdealModel(Model):
         """
         return (ParametrizedOperation(
             lambda angle: rotate_z(np.deg2rad(angle)),
-            _basis).at(qubit),
+            _BASIS).at(qubit),
         )
 
     @Model.gate(duration='time_1qubit', plot_metadata={
@@ -106,7 +107,7 @@ class IdealModel(Model):
         """
         return (ParametrizedOperation(
             lambda angle: cphase(np.deg2rad(angle)),
-            _basis * 2).at(control_qubit, target_qubit),
+            _BASIS * 2).at(control_qubit, target_qubit),
         )
 
     @Model.gate(duration='time_2qubit', plot_metadata={
@@ -148,7 +149,7 @@ class IdealModel(Model):
                 'Unknown measurement result: {}'.format(result))
 
         return (
-            ParametrizedOperation(project, _basis_classical).at(qubit),
+            ParametrizedOperation(project, _BASIS_CLASSICAL).at(qubit),
         )
 
 
@@ -194,48 +195,50 @@ class TransmonModel(Model):
     @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_x(self, qubit):
+        """Rotation around the X-axis by a given angle. Parameters: `angle` (degrees).
+        """
         t1 = self.p('T1', qubit)
         t2 = self.p('T2', qubit)
         half_duration = 0.5*self.p('time_1qubit', qubit)
-        """Rotation around the X-axis by a given angle. Parameters: `angle` (degrees).
-        """
         return (
             self._idle(qubit, half_duration, t1, t2),
             ParametrizedOperation(
                 lambda angle: rotate_x(np.deg2rad(angle)),
-                _basis).at(qubit),
+                _BASIS).at(qubit),
             self._idle(qubit, half_duration, t1, t2),
         )
 
     @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_y(self, qubit):
-        t1 = self.p('T1', qubit)
-        t2 = self.p('T2', qubit)
-        half_duration = 0.5*self.p('time_1qubit', qubit)
         """Rotation around the Y-axis by a given angle. Parameters: `angle` (degrees).
         """
+        t1 = self.p('T1', qubit)
+        t2 = self.p('T2', qubit)
+        half_duration = 0.5 * self.p('time_1qubit', qubit)
+
         return (
             self._idle(qubit, half_duration, t1, t2),
             ParametrizedOperation(
                 lambda angle: rotate_y(np.deg2rad(angle)),
-                _basis).at(qubit),
+                _BASIS).at(qubit),
             self._idle(qubit, half_duration, t1, t2),
         )
 
     @Model.gate(duration='time_1qubit', plot_metadata={
         'style': 'box', 'label': '$X({theta})$'})
     def rotate_z(self, qubit):
+        """Rotation around the Z-axis by a given angle. Parameters: `angle` (degrees).
+        """
         t1 = self.p('T1', qubit)
         t2 = self.p('T2', qubit)
         half_duration = 0.5*self.p('time_1qubit', qubit)
-        """Rotation around the Z-axis by a given angle. Parameters: `angle` (degrees).
-        """
+
         return (
             self._idle(qubit, half_duration, t1, t2),
             ParametrizedOperation(
                 lambda angle: rotate_z(np.deg2rad(angle)),
-                _basis).at(qubit),
+                _BASIS).at(qubit),
             self._idle(qubit, half_duration, t1, t2),
         )
 
@@ -261,7 +264,7 @@ class TransmonModel(Model):
             self._idle(target_qubit, half_duration, target_q_t1, target_q_t2),
             ParametrizedOperation(
                 lambda angle: cphase(np.deg2rad(angle)),
-                _basis * 2).at(control_qubit, target_qubit),
+                _BASIS * 2).at(control_qubit, target_qubit),
             self._idle(control_qubit, half_duration, ctrl_q_t1, ctrl_q_t2),
             self._idle(target_qubit, half_duration, target_q_t1, target_q_t2),
         )
@@ -285,11 +288,14 @@ class TransmonModel(Model):
 
         return (
             self._idle(qubit, half_duration, t1, t2),
-            ParametrizedOperation(project, _basis_classical).at(qubit),
+            ParametrizedOperation(project, _BASIS_CLASSICAL).at(qubit),
             self._idle(qubit, half_duration, t1, t2),
         )
 
     def _idle(self, qubit, duration, t1, t2):
+        """
+        An idling gate.
+        """
         if np.isfinite(t1) and np.isfinite(t2):
             if t1 <= 0:
                 raise ValueError('T1 must be greater than 0')

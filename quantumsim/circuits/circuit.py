@@ -589,13 +589,14 @@ class FinalizedCircuit:
                 self.qubits)
         return self
 
-    def apply_to(self, state):
+    def __matmul__(self, state):
         """
-
         Parameters
         ----------
         state : quantumsim.State
         """
+        # double definition due to complaint from IDE (normally matmul is expected to return something?)
+
         if len(self._params) != 0:
             raise KeyError(*self._params)
         try:
@@ -605,13 +606,3 @@ class FinalizedCircuit:
                 'Qubit {} is not present in the state'
                 .format(ex.args[0].split()[0]))
         self.operation(state.pauli_vector, *indices)
-
-    def __matmul__(self, state):
-        """
-        Parameters
-        ----------
-        state : quantumsim.State
-        """
-        # double definition due to complaint from IDE (normally matmul is expected to return something?)
-
-        self.apply_to(state)

@@ -85,6 +85,9 @@ class State:
     def trace(self):
         return self.pauli_vector.trace()
 
+    def renormalize(self):
+        self.pauli_vector.renormalize()
+
     def partial_trace(self, *qubits):
         """Traces out all qubits, except provided, and returns the resulting
         state.
