@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from ..operations import ParametrizedOperation
-from ..circuits import deparametrize, FinalizedCircuit
+from ..circuits import deparametrize, FinalizedCircuit, _to_str
 from ..states import State
 
 
@@ -70,7 +70,7 @@ class Controller:
                     param: self._params[param](
                         state=self._state.partial_trace(*op_qubits),
                         rng=self._rng)
-                    for param in operation.params}
+                    for param in _to_str(operation.params)}
                 operation = deparametrize(operation, _params)
 
             operation(self._state.pauli_vector, *op_inds)
