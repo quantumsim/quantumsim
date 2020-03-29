@@ -11,7 +11,7 @@ _BASIS = bases.general(2),
 _BASIS_CLASSICAL = bases.general(2).subbasis([0, 1]),
 
 
-def _born_projection(state, rng, *, atol=1e-08):
+def _born_projection(state, rng, *, atol=1e-08, **kwargs):
     meas_probs = state.pauli_vector.diagonal()
     meas_probs[np.abs(meas_probs) < atol] = 0
     meas_probs /= np.sum(meas_probs)
