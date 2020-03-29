@@ -9,10 +9,7 @@ from ..states import State
 
 
 class Controller:
-    # TODO: Add state initialization methods
-
     def __init__(self, state, circuits, circuit_params, rng=None):
-
         if isinstance(rng, np.random.RandomState):
             self._rng = rng
         elif isinstance(rng, int):
@@ -34,7 +31,6 @@ class Controller:
         self._circuits = circuits
 
         self._params = circuit_params
-        self._outcome = xr.Dataset()
 
     @property
     def state(self):
@@ -44,11 +40,7 @@ class Controller:
     def circuits(self):
         return self._circuits
 
-    @property
-    def outcome(self):
-        return self._outcome
-
-    def apply(self, circuit_name, num_rounds=1, **params):
+    def apply(self, circuit_name, num_runs=1, **params):
         try:
             circuit = self._circuits[circuit_name](**params)
         except KeyError:
@@ -57,23 +49,50 @@ class Controller:
         unset_params = circuit.params - self._params.keys()
         if len(unset_params) != 0:
             raise KeyError(*unset_params)
-        for i in range(num_rounds):
-            self._apply_circuit(circuit)
+
+        outcomes = []
+
+        for i in range(num_runs):
+            outcome = self._apply_circuit(circuit)
+            if outcome is not None:
+                outcomes.append(outcome)
+
+        if outcomes:
+            result = xr.concat(outcomes, dim='run')
+            for param, param_val in params.items():
+                result[param] = param_val
+            return result
+        return None
 
     def _apply_circuit(self, circuit):
+        if len(circuit.params) != 0:
+            outcome = xr.DataArray(
+                dims=['param'],
+                coords={'param': list(circuit.params)})
+        else:
+            outcome = None
+
         for operation, inds in circuit.operation.units():
             op_qubits = [circuit.qubits[i] for i in inds]
             op_inds = [self._state.qubits.index(q) for q in op_qubits]
 
             if isinstance(operation, ParametrizedOperation):
-                _params = {
+                _op_params = _to_str(operation.params)
+                _eval_params = {
                     param: self._params[param](
                         state=self._state.partial_trace(*op_qubits),
-                        rng=self._rng)
-                    for param in _to_str(operation.params)}
-                operation = deparametrize(operation, _params)
+                        rng=self._rng,
+                        outcome=outcome)
+                    for param in _op_params}
+
+                operation = deparametrize(operation, _eval_params)
+
+                outcome.loc[{'param': list(_op_params)}] = list(
+                    _eval_params.values())
 
             operation(self._state.pauli_vector, *op_inds)
 
             if not isclose(self._state.trace(), 1):
                 self._state.renormalize()
+
+        return outcome
