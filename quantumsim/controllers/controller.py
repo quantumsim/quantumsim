@@ -38,9 +38,12 @@ class Controller:
 
     def apply(self, circuit_name, num_runs=1, **params):
         try:
-            circuit = self._circuits[circuit_name](**params)
+            circuit = self._circuits[circuit_name]
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
+
+        if params:
+            circuit = circuit(**params)
 
         unset_params = circuit.params - circuit._param_funcs.keys()
         if len(unset_params) != 0:
