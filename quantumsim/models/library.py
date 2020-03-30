@@ -138,7 +138,8 @@ class IdealModel(Model):
         duration='time_measure',
         plot_metadata={
             'style': 'box',
-            'label': r'$\circ\!\!\!\!\!\!\!\nearrow$'})
+            'label': r'$\circ\!\!\!\!\!\!\!\nearrow$'},
+        param_funcs={'result': _born_projection})
     def measure(self, qubit):
         """A measurement gate.
         """

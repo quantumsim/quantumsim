@@ -1,5 +1,3 @@
-from math import isclose
-
 import numpy as np
 import xarray as xr
 
@@ -9,7 +7,7 @@ from ..states import State
 
 
 class Controller:
-    def __init__(self, state, circuits, circuit_params, rng=None):
+    def __init__(self, state, circuits, rng=None, circuit_params=None):
         if isinstance(rng, np.random.RandomState):
             self._rng = rng
         elif isinstance(rng, int):
@@ -30,8 +28,6 @@ class Controller:
 
         self._circuits = circuits
 
-        self._params = circuit_params
-
     @property
     def state(self):
         return self._state
@@ -46,13 +42,13 @@ class Controller:
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
 
-        unset_params = circuit.params - self._params.keys()
+        unset_params = circuit.params - circuit._param_funcs.keys()
         if len(unset_params) != 0:
             raise KeyError(*unset_params)
 
         outcomes = []
 
-        for i in range(num_runs):
+        for _ in range(num_runs):
             outcome = self._apply_circuit(circuit)
             if outcome is not None:
                 outcomes.append(outcome)
@@ -79,7 +75,7 @@ class Controller:
             if isinstance(operation, ParametrizedOperation):
                 _op_params = _to_str(operation.params)
                 _eval_params = {
-                    param: self._params[param](
+                    param: circuit._param_funcs[param](
                         state=self._state.partial_trace(*op_qubits),
                         rng=self._rng,
                         outcome=outcome)
@@ -92,7 +88,7 @@ class Controller:
 
             operation(self._state.pauli_vector, *op_inds)
 
-            if not isclose(self._state.trace(), 1):
+            if not np.isclose(self._state.trace(), 1):
                 self._state.renormalize()
 
         return outcome

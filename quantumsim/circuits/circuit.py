@@ -98,6 +98,12 @@ class CircuitBase(ABC):
         pass
 
     @abstractmethod
+    def _param_funcs_sympified(self):
+        """The parameter functions, correspondent to this circuit, with parameters,
+        set to sympy expression"""
+        pass
+
+    @abstractmethod
     def set(self, **kwargs):
         """Either substitute a circuit parameter with a value, or rename it.
 
@@ -138,10 +144,11 @@ class CircuitBase(ABC):
             Finalized version of this circuit
         """
         op = self.operation_sympified()
+        param_funcs = self._param_funcs_sympified()
         if preprocessors:
             for func in preprocessors:
                 op = func(op)
-        return FinalizedCircuit(op, self.qubits, bases_in=bases_in)
+        return FinalizedCircuit(op, self.qubits, param_funcs=param_funcs, bases_in=bases_in)
 
 
 class Gate(CircuitBase, ABC):
@@ -208,6 +215,15 @@ class Gate(CircuitBase, ABC):
         else:
             return Operation.from_sequence(new_units)
 
+    def _param_funcs_sympified(self):
+        param_funcs = {}
+        for param, func in self._param_funcs.items():
+            if param in self._params.keys():
+                param_funcs[self._params[param]] = func
+            else:
+                param_funcs[param] = func
+        return param_funcs
+
     @property
     def gates(self):
         return self,
@@ -224,12 +240,6 @@ class Gate(CircuitBase, ABC):
     def free_parameters(self):
         return set().union(*(expr.free_symbols
                              for expr in self._params.values()))
-
-    def param_func(self, param):
-        try:
-            return self._param_funcs[param]
-        except KeyError:
-            return None
 
     # def _set_param(self, name, value):
     #     if isinstance(value, str):
@@ -445,6 +455,12 @@ class Circuit(CircuitBase, ABC):
             operations.append(gate.operation_sympified().at(*qubit_indices))
         return Operation.from_sequence(operations)
 
+    def _param_funcs_sympified(self):
+        param_funcs = {}
+        for gate in self._gates:
+            param_funcs.update(gate._param_funcs_sympified())
+        return param_funcs
+
     def set(self, **kwargs):
         for gate in self._gates:
             gate.set(**kwargs)
@@ -457,6 +473,7 @@ class TimeAgnosticGate(Gate, TimeAgnostic):
             self._qubits, self.dim_hilbert, copy(self._operation),
             self.plot_metadata)
         other._params = copy(self._params)
+        other._param_funcs = copy(self._param_funcs)
         return other
 
 
@@ -488,6 +505,7 @@ class TimeAwareGate(Gate, TimeAware):
             self._qubits, self.dim_hilbert, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
         other._params = copy(self._params)
+        other._param_funcs = copy(self._param_funcs)
         return other
 
     @property
@@ -559,7 +577,7 @@ class FinalizedCircuit:
         List of qubits in the operation
     """
 
-    def __init__(self, operation, qubits, *, bases_in=None):
+    def __init__(self, operation, qubits, *, bases_in=None, param_funcs=None):
         self.qubits = list(qubits)
         # NB: operation must have sympy expressions in it
         self._params = set()
@@ -575,6 +593,14 @@ class FinalizedCircuit:
                 units.append(unit)
         self.operation = Operation.from_sequence(units)\
                                   .compile(bases_in=bases_in)
+        if param_funcs:
+            _param_funcs = dict(
+                zip(_to_str(param_funcs.keys()), param_funcs.values()))
+            self._param_funcs = {
+                param: func
+                for param, func in _param_funcs.items() if param in self._params}
+        else:
+            self._param_funcs = dict()
 
     @property
     def params(self):
@@ -584,9 +610,14 @@ class FinalizedCircuit:
         if len(self._params) > 0:
             units = [deparametrize(op, params).at(*ix)
                      for op, ix in self.operation.units()]
-            return FinalizedCircuit(
+            circ = FinalizedCircuit(
                 Operation.from_sequence(units).compile(),
                 self.qubits)
+
+            unset_params = self._param_funcs - params.keys()
+            circ._param_funcs = {param: func for
+                                 param, func in self._param_funcs.items() if param in unset_params}
+            return circ
         return self
 
     def __matmul__(self, state):
