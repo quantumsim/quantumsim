@@ -70,11 +70,15 @@ class Controller:
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
 
+        # Extract all parameters, for which a callable expression was provided
         _cur_param_funcs = {par: params.pop(par) for par in list(
             params) if callable(params[par])}
+        # Combine with the automatically generated ones,
+        # overwriting any if the user has provided a different function
         param_funcs = {**circuit._param_funcs, **_cur_param_funcs}
 
         if params:
+            # At this points params only contains the fixed parameters
             circuit = circuit(**params)
 
         unset_params = circuit.params - param_funcs.keys()
@@ -90,6 +94,7 @@ class Controller:
 
         if outcomes:
             result = xr.concat(outcomes, dim='run')
+            # Attach all parameters that had fixed values across the repeated applications
             for param, param_val in params.items():
                 result[param] = param_val
             return result
@@ -119,10 +124,12 @@ class Controller:
             outcome = None
 
         for operation, inds in circuit.operation.units():
+            # Extract the indicies for this operation from the state
             op_qubits = [circuit.qubits[i] for i in inds]
             op_inds = [self._state.qubits.index(q) for q in op_qubits]
 
             if isinstance(operation, ParametrizedOperation):
+                # Get the free parameters of the operation and evaluate them
                 _op_params = _to_str(operation.params)
                 _eval_params = {
                     param: param_funcs[param](
@@ -130,14 +137,17 @@ class Controller:
                         rng=self._rng,
                         outcome=outcome)
                     for param in _op_params}
-
+                # sub in the operation
                 operation = deparametrize(operation, _eval_params)
-
+                # append realized value to the pre-located DataArray
                 outcome.loc[{'param': list(_op_params)}] = list(
                     _eval_params.values())
 
+            # Apply each operation, which now should have all parameters fixed
             operation(self._state.pauli_vector, *op_inds)
 
+            # If operation was not trace perserving, renormalize state.
+            # Not sure if I should add this here?
             if not np.isclose(self._state.trace(), 1):
                 self._state.renormalize()
 
