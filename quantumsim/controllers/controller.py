@@ -7,6 +7,19 @@ from ..states import State
 
 
 class Controller:
+    """
+     The controller class handles the application of circuits to a single state. It automatically parses the circuit for free parameters set by the model and handles the data output of the circuit.
+
+    Parameters
+        ----------
+        state : quantumsim.states.State
+            The initial state of the system.
+        circuits : dict
+            A dictionary of circuit name and the corresponding quantumsim.circuits.FinalizedCircuit instances.
+        rng : int or numpy.random.RandomState
+            Either an integer number to seed a RandomState instance or an already initialized instance. The RandomState is used as the random generator for the functions within the experiment
+    """
+
     def __init__(self, state, circuits, rng):
         if isinstance(rng, np.random.RandomState):
             self._rng = rng
@@ -37,6 +50,21 @@ class Controller:
         return self._circuits
 
     def apply(self, circuit_name, num_runs=1, **params):
+        """
+        apply Applies the circuit corresponding to the provided name to the internal state stored by the controller.
+
+        Parameters
+        ----------
+        circuit_name : str
+            The name of the circuit stored by the controlled
+        num_runs : int, optional
+            The number of repeated applications of the given circuit, by default 1
+
+        Returns
+        -------
+        xarray.DataArray or None
+            If the circuit had any free parmeters, return the data array containing the realized parameter value of each parameter and over the repeated runs, else it returns None
+        """
         try:
             circuit = self._circuits[circuit_name]
         except KeyError:
@@ -68,6 +96,21 @@ class Controller:
         return None
 
     def _apply_circuit(self, circuit, *, param_funcs=None):
+        """
+        _apply_circuit Sequentally applies a finalized circuit to the internal state
+
+        Parameters
+        ----------
+        circuit : quantumsim.circuits.FinalizedCircuit
+            The finalized circuit to be applied
+        param_funcs : dict, optional
+            The dictionary of free parameter names and thier corresponding callable object that implement them, by default None
+
+        Returns
+        -------
+        xarray.DataArray
+            The data array containing the values of the realized free parameter values for this circuit
+        """
         if len(circuit.params) != 0:
             outcome = xr.DataArray(
                 dims=['param'],
