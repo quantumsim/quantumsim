@@ -7,14 +7,14 @@ from ..states import State
 
 
 class Controller:
-    def __init__(self, state, circuits, rng=None, circuit_params=None):
+    def __init__(self, state, circuits, rng):
         if isinstance(rng, np.random.RandomState):
             self._rng = rng
         elif isinstance(rng, int):
             self._rng = np.random.RandomState(rng)
         else:
             raise ValueError(
-                "Please provide a seed or an instance of a np.randomRandomState")
+                "Please provide a integer seed or an instance of a np.randomRandomState")
 
         if not isinstance(state, State):
             raise ValueError("Please provide an initial state")
@@ -42,17 +42,21 @@ class Controller:
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
 
+        _cur_param_funcs = {par: params.pop(par) for par in list(
+            params) if callable(params[par])}
+        param_funcs = {**circuit._param_funcs, **_cur_param_funcs}
+
         if params:
             circuit = circuit(**params)
 
-        unset_params = circuit.params - circuit._param_funcs.keys()
+        unset_params = circuit.params - param_funcs.keys()
         if len(unset_params) != 0:
             raise KeyError(*unset_params)
 
         outcomes = []
 
         for _ in range(num_runs):
-            outcome = self._apply_circuit(circuit)
+            outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
             if outcome is not None:
                 outcomes.append(outcome)
 
@@ -63,7 +67,7 @@ class Controller:
             return result
         return None
 
-    def _apply_circuit(self, circuit):
+    def _apply_circuit(self, circuit, *, param_funcs=None):
         if len(circuit.params) != 0:
             outcome = xr.DataArray(
                 dims=['param'],
@@ -78,7 +82,7 @@ class Controller:
             if isinstance(operation, ParametrizedOperation):
                 _op_params = _to_str(operation.params)
                 _eval_params = {
-                    param: circuit._param_funcs[param](
+                    param: param_funcs[param](
                         state=self._state.partial_trace(*op_qubits),
                         rng=self._rng,
                         outcome=outcome)
