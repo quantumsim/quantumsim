@@ -1,6 +1,16 @@
 import numpy as np
 from scipy.stats import unitary_group
 
+sigma = {
+    'I': np.array([[1., 0.],
+                   [0., 1.]], dtype=complex),
+    'X': np.array([[0., 1.],
+                   [1., 0.]], dtype=complex),
+    'Y': np.array([[0., -1j],
+                   [1j, 0.]], dtype=complex),
+    'Z': np.array([[1., 0.],
+                   [0., -1.]], dtype=complex),
+}
 
 def random_hermitian_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)

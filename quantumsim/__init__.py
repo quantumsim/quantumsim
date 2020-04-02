@@ -1,15 +1,21 @@
 # noinspection PyUnresolvedReferences,PyProtectedMember
 from ._version import __version__
 from . import pauli_vectors, bases
-from .operations.operation import Operation
+from .operations import Operation
+from .setups import Setup
+from .states import State
+from .models import Model
 
 PauliVector = pauli_vectors.Default
 
 __all__ = [
     'bases',
     'pauli_vectors',
-    'PauliVector',
+    'Model',
     'Operation',
+    'PauliVector',
+    'Setup',
+    'State',
 ]
 
 

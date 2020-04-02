@@ -1,6 +1,6 @@
 import numpy as np
-from functools import lru_cache
-from quantumsim import bases, Operation
+from .. import bases
+from .operation import Operation
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
@@ -8,7 +8,6 @@ bases1_default = (bases.general(2),)
 bases2_default = bases1_default * 2
 
 
-@lru_cache(maxsize=64)
 def rotate_euler(phi, theta, lamda):
     """A perfect single qubit rotation described by three Euler angles.
 
@@ -36,7 +35,6 @@ def rotate_euler(phi, theta, lamda):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_x(angle=np.pi):
     """A perfect single qubit rotation around :math:`Ox` axis.
 
@@ -55,7 +53,6 @@ def rotate_x(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_y(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oy` axis.
 
@@ -74,7 +71,6 @@ def rotate_y(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_z(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oz` axis.
 
@@ -93,7 +89,7 @@ def rotate_z(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def phase_shift(angle=np.pi):
+def phase_shift(angle):
     matrix = np.diag([1, np.exp(1j * angle)])
     return Operation.from_kraus(matrix, bases1_default)
 
@@ -110,7 +106,6 @@ def hadamard():
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def cphase(angle=np.pi):
     """A perfect controlled phase rotation.
 
@@ -128,7 +123,6 @@ def cphase(angle=np.pi):
     return Operation.from_kraus(matrix, bases2_default)
 
 
-@lru_cache(maxsize=32)
 def iswap(angle=np.pi/2):
     """A perfect controlled phase rotation.
 
@@ -150,7 +144,6 @@ def iswap(angle=np.pi/2):
     return Operation.from_kraus(matrix, bases2_default)
 
 
-@lru_cache(maxsize=32)
 def cnot():
     matrix = np.array([[1, 0, 0, 0],
                        [0, 1, 0, 0],
@@ -159,7 +152,6 @@ def cnot():
     return Operation.from_kraus(matrix, bases2_default)
 
 
-@lru_cache(maxsize=32)
 def controlled_unitary(unitary):
     dim_hilbert = unitary.shape[0]
     if unitary.shape != (dim_hilbert, dim_hilbert):
@@ -187,7 +179,6 @@ def controlled_rotation(angle=np.pi, axis='z'):
     return controlled_unitary(matrix)
 
 
-@lru_cache(maxsize=32)
 def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
     if total_rate is not None:
         kraus = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
@@ -207,7 +198,6 @@ def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
         return Operation.from_ptm(ptm, (bases.gell_mann(2),))
 
 
-@lru_cache(maxsize=32)
 def phase_damping(total_rate=None, *, x_deph_rate=None,
                   y_deph_rate=None, z_deph_rate=None):
     if total_rate is not None:
@@ -224,21 +214,18 @@ def phase_damping(total_rate=None, *, x_deph_rate=None,
         return Operation.from_ptm(ptm, (bases.gell_mann(2),))
 
 
-@lru_cache(maxsize=64)
 def amp_phase_damping(damp_rate, deph_rate):
     amp_damp = amp_damping(damp_rate)
     phase_damp = phase_damping(deph_rate)
     return Operation.from_sequence(amp_damp.at(0), phase_damp.at(0))
 
 
-@lru_cache(maxsize=16)
 def bit_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["X"]])
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=16)
 def phase_flipping(flip_rate):
     # This is actually equivalent to the phase damping
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
@@ -246,14 +233,12 @@ def phase_flipping(flip_rate):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=16)
 def bit_phase_flipping(flip_rate):
     matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
                        np.sqrt(1 - flip_rate) * _PAULI["Y"]])
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=16)
 def depolarization(rate):
     rate = rate / 2
     sqrt = np.sqrt(rate)

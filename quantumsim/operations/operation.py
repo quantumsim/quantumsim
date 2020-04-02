@@ -1,12 +1,21 @@
 import abc
+import inspect
+import re
+
 import numpy as np
 import scipy.linalg.matfuncs
 from collections import namedtuple
-from itertools import chain
+from itertools import chain as chain_
+
+from copy import copy
 
 from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
                                plm_lindbladian_part, plm_hamiltonian_part)
 from ..bases import PauliBasis
+
+
+class OperationNotDefinedError(RuntimeError):
+    pass
 
 
 class Operation(metaclass=abc.ABCMeta):
@@ -16,12 +25,6 @@ class Operation(metaclass=abc.ABCMeta):
     :class:`quantumsim.pauli_vectors.PauliVectorBase` object and modifies it
     inline.
     """
-
-    @property
-    def _default_compiler_cls(self):
-        from .compiler import ChainCompiler
-        return ChainCompiler
-
     @property
     @abc.abstractmethod
     def dim_hilbert(self):
@@ -33,6 +36,10 @@ class Operation(metaclass=abc.ABCMeta):
     def num_qubits(self):
         """Hilbert dimensionality of qubits the operation acts onto."""
         pass
+
+    def units(self):
+        """A generator of IndexedOperations, correspondent to this operation."""
+        yield self.at(*range(self.num_qubits))
 
     @abc.abstractmethod
     def __call__(self, pauli_vector, *qubits):
@@ -84,11 +91,11 @@ class Operation(metaclass=abc.ABCMeta):
         bases_in : tuple of PauliBasis
             Input basis of the PTM
         bases_out : tuple of PauliBasis or None
-            Output bases of the PTM. If None, deraults to bases_in
+            Output bases of the PTM. If None, defaults to bases_in
 
         Returns
         -------
-        ptm : ndarray
+        ptm : array
             Pauli transfer matrix in bases specified.
         """
         self._validate_bases(bases_in=bases_in)
@@ -104,7 +111,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        ptm: ndarray
+        ptm: array-like
             Pauli transfer matrix in a form of Numpy array
         bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
@@ -119,7 +126,7 @@ class Operation(metaclass=abc.ABCMeta):
         """
         if bases_out is None:
             bases_out = bases_in
-        return _PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
+        return PTMOperation(ptm, bases_in=bases_in, bases_out=bases_out)
 
     @staticmethod
     def from_kraus(kraus, bases_in, bases_out=None):
@@ -131,7 +138,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        kraus: ndarray
+        kraus: array-like
             Pauli transfer matrix in a form of Numpy array
         bases_in : tuple of PauliBasis
             Input bases for generated PTMs. If None, default is picked.
@@ -192,7 +199,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        quantumsim.operations.operation._PTMOperation
+        quantumsim.operations.operation.PTMOperation
         """
         summands = []
         if hamiltonian is not None:
@@ -214,7 +221,7 @@ class Operation(metaclass=abc.ABCMeta):
         if not np.allclose(ptm.imag, 0):
             raise ValueError('Resulting PTM is not real-valued, check the '
                              'sanity of `hamiltonian` and `lindblad_ops`.')
-        out = _PTMOperation(ptm.real, bases_in, bases_in)
+        out = PTMOperation(ptm.real, bases_in, bases_in)
         if bases_out is not None:
             return out.set_bases(bases_out=bases_out)
         else:
@@ -228,7 +235,7 @@ class Operation(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        op0, ..., opN: Operation, _IndexedOperation or list
+        op0, ..., opN: Operation, IndexedOperation or list
             Operations to concatenate, or a single list of operations. If not
             all operations match in qubit dimensionality or in order of qubits
             to be applied to, they must be indexed
@@ -239,7 +246,7 @@ class Operation(metaclass=abc.ABCMeta):
         quantumsim.operations.operation._Chain
             Resulting operation
         """
-        if not (isinstance(operations[0], _IndexedOperation) or
+        if not (isinstance(operations[0], IndexedOperation) or
                 isinstance(operations[0], Operation)):
             if hasattr(operations[0], '__iter__'):
                 operations = operations[0]
@@ -251,7 +258,7 @@ class Operation(metaclass=abc.ABCMeta):
         op0 = operations[0]
         if isinstance(op0, Operation):
             for i, op in enumerate(operations[1:], 1):
-                if isinstance(op, _IndexedOperation):
+                if isinstance(op, IndexedOperation):
                     raise ValueError(
                         "Provide index for operation number 0 (see "
                         "`Operation.at()` method).")
@@ -272,13 +279,13 @@ class Operation(metaclass=abc.ABCMeta):
                         "Provide indices explicitly (see `Operation.at()` "
                         "method).".format(op0.num_qubits, i, op.num_qubits))
         else:
-            # op0 is certainly _IndexedOperation, we checked
+            # op0 is certainly IndexedOperation, we checked
             for i, op in enumerate(operations[1:], 1):
                 if isinstance(op, Operation):
                     raise ValueError(
                         "Provide index for operation number {} (see "
                         "`Operation.at()` method).".format(i))
-                if not isinstance(op, _IndexedOperation):
+                if not isinstance(op, IndexedOperation):
                     raise ValueError(
                         "Wrong type of operation number {}: {}"
                         .format(i, type(op)))
@@ -296,7 +303,13 @@ class Operation(metaclass=abc.ABCMeta):
 
         return _Chain(operations)
 
-    def compile(self, bases_in=None, bases_out=None, *, compiler_cls=None):
+    @property
+    def _compile(self):
+        # Need to lazily import due to circular dependency
+        from .compiler import compile_operation
+        return compile_operation
+
+    def compile(self, bases_in=None, bases_out=None):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.
 
@@ -314,21 +327,16 @@ class Operation(metaclass=abc.ABCMeta):
             Input bases.
         bases_out: None or list of quantumsim.bases.PauliBasis
             Output bases.
-        compiler_cls: none or class
-            Class of a compiler. If None, Quantumsim decides.
 
         Returns
         -------
-        quantumsim.operations.operation._Chain or
-        quantumsim.operations.operation._PTMOperation
+        quantumsim.Operation
         """
         if isinstance(self, _Chain):
             op = self
         else:
             op = Operation.from_sequence(self)
-        compiler_cls = compiler_cls or self._default_compiler_cls
-        compiler = compiler_cls(op, optimize=True)
-        return compiler.compile(bases_in, bases_out)
+        return self._compile(op, bases_in, bases_out, optimize=True)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb
@@ -342,13 +350,13 @@ class Operation(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        _IndexedOperation
+        IndexedOperation
             Intermediate representation of an operation.
         """
         if not self.num_qubits == len(indices):
             raise ValueError('Number of indices is not equal to the number of '
                              'qubits in the operation.')
-        return _IndexedOperation(self, indices)
+        return IndexedOperation(self, indices)
 
     def _validate_bases(self, **kwargs):
         for name, bases in kwargs.items():
@@ -369,10 +377,70 @@ class Operation(metaclass=abc.ABCMeta):
                         .format(self.dim_hilbert, name, b.dim_hilbert))
 
 
-_IndexedOperation = namedtuple('_IndexedOperation', ['operation', 'indices'])
+IndexedOperation = namedtuple('IndexedOperation', ['operation', 'indices'])
 
 
-class _PTMOperation(Operation):
+class Placeholder(Operation):
+    """
+    Parameters
+    ----------
+    bases_in: tuple of quantumsim.bases.PauliBasis
+        Input bases of qubits.
+    bases_out: tuple of quantumsim.bases.PauliBasis or None
+        Output bases of qubits
+
+    Returns
+    -------
+    A placeholder for an operation
+    """
+    def __init__(self, bases_in, bases_out=None):
+        self._num_qubits = len(bases_in)
+        self._dim_hilbert = bases_in[0].dim_hilbert
+        self._validate_bases(bases_in=bases_in)
+        if bases_out is None:
+            bases_out = bases_in
+        else:
+            self._validate_bases(bases_out=bases_out)
+        self._bases_in = bases_in
+        self._bases_out = bases_out
+
+    @property
+    def dim_hilbert(self):
+        return self._dim_hilbert
+
+    @property
+    def num_qubits(self):
+        return self._num_qubits
+
+    @property
+    def bases_in(self):
+        return self._bases_in
+
+    @property
+    def bases_out(self):
+        return self._bases_out
+
+    def __call__(self, pauli_vector, *qubits):
+        raise OperationNotDefinedError(
+            'Operation placeholder can not be called')
+
+    def set_bases(self, bases_in=None, bases_out=None):
+        super().set_bases(bases_in, bases_out)
+        b_in = bases_in or self.bases_in
+        b_out = bases_out or self.bases_out
+        if b_in == self.bases_in and b_out == self.bases_out:
+            return self
+        new_op = copy(self)
+        new_op._bases_in = b_in
+        new_op._bases_out = b_out
+        return new_op
+
+    def ptm(self, bases_in, bases_out=None):
+        raise OperationNotDefinedError(
+            'Operation placeholder does not have a PTM')
+
+
+class PTMOperation(Operation):
     """Generic transformation of a state.
 
     Any transformation, that should be a completely positive map, can be
@@ -384,7 +452,7 @@ class _PTMOperation(Operation):
 
     Parameters
     ----------
-    ptm : ndarray
+    ptm : array
         Pauli transfer matrix of an operation.
     bases_in : tuple of PauliBasis
         Input bases of the PTM
@@ -398,7 +466,6 @@ class _PTMOperation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
-
     def __init__(self, ptm, bases_in, bases_out):
         self._ptm = ptm
         self.bases_in = bases_in
@@ -407,7 +474,7 @@ class _PTMOperation(Operation):
         self._num_qubits = len(self.bases_in)
         self._validate_bases(bases_out=self.bases_out)
         shape = tuple(b.dim_pauli for b in
-                      chain(self.bases_out, self.bases_in))
+                      chain_(self.bases_out, self.bases_in))
         if not ptm.shape == shape:
             raise ValueError(
                 'Shape of `ptm` is not compatible with the `bases` '
@@ -449,7 +516,7 @@ class _PTMOperation(Operation):
             new_ptm = ptm_convert_basis(self._ptm,
                                         self.bases_in, self.bases_out,
                                         b_in, b_out)
-            new_op = _PTMOperation(new_ptm, b_in, b_out)
+            new_op = PTMOperation(new_ptm, b_in, b_out)
         return new_op
 
     def ptm(self, bases_in, bases_out=None):
@@ -475,7 +542,8 @@ class _PTMOperation(Operation):
         for q, b in zip(qubit_indices, self.bases_in):
             if pauli_vector.bases[q] != b:
                 op = self.set_bases(
-                    bases_in=tuple([pauli_vector.bases[q] for q in qubit_indices]))
+                    bases_in=tuple([pauli_vector.bases[q]
+                                    for q in qubit_indices]))
                 break
 
         pauli_vector.apply_ptm(op._ptm, *qubit_indices)
@@ -491,7 +559,7 @@ class _Chain(Operation):
     def __init__(self, operations):
         self._dim_hilbert = operations[0].operation.dim_hilbert
         all_indices = np.unique(
-            list(chain(*(op.indices for op in operations))))
+            list(chain_(*(op.indices for op in operations))))
         if all_indices[0] != 0 or all_indices[-1] != len(all_indices) - 1:
             raise ValueError('Indices of operations must form an ordered set '
                              'from 0 to N-1')
@@ -500,19 +568,20 @@ class _Chain(Operation):
         joined_ops = []
         for op_indices in operations:
             # Flatten the operations chain
-            if isinstance(op_indices.operation, _Chain):
-                for sub_op, sub_indices in op_indices.operation.operations:
-                    _, indices = op_indices
-                    new_indices = tuple((indices[i] for i in sub_indices))
-                    joined_ops.append(_IndexedOperation(sub_op, new_indices))
-            else:
-                joined_ops.append(op_indices)
+            for sub_op, sub_indices in op_indices.operation.units():
+                _, indices = op_indices
+                new_indices = tuple((indices[i] for i in sub_indices))
+                joined_ops.append(IndexedOperation(sub_op, new_indices))
 
-        self.operations = joined_ops
-        for op in self.operations:
+        self._units = joined_ops
+        for op in self._units:
             if isinstance(op.operation, _Chain):
                 raise RuntimeError('Chain must not contain chains; this is '
                                    'probably a bug.')
+
+    def units(self):
+        for unit in self._units:
+            yield unit
 
     @property
     def dim_hilbert(self):
@@ -528,7 +597,7 @@ class _Chain(Operation):
                              'indices provided is {}'
                              .format(self._num_qubits, len(qubit_indices)))
         results = []
-        for op, indices in self.operations:
+        for op, indices in self._units:
             result = op(pauli_vector, *(qubit_indices[i] for i in indices))
             if result is not None:
                 results.append(result)
@@ -536,18 +605,103 @@ class _Chain(Operation):
 
     def set_bases(self, bases_in=None, bases_out=None):
         super().set_bases(bases_in, bases_out)
-        compiler = self._default_compiler_cls(self, optimize=False)
-        return compiler.compile(bases_in, bases_out)
+        return self._compile(self, bases_in, bases_out, optimize=False)
 
     def ptm(self, bases_in, bases_out=None):
+        if np.any([isinstance(x.operation, Placeholder)
+                   for x in self._units]):
+            raise OperationNotDefinedError('Chain contains placeholders')
         super().ptm(bases_in, bases_out)
         bases_out = bases_out or bases_in
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
+        # noinspection PyTypeChecker
         start_ptm = Operation.from_ptm(
             np.identity(np.prod(ptm_in_shape), dtype=float)
             .reshape(ptm_in_shape*2), bases_in)
-        return self._default_compiler_cls(
-            Operation.from_sequence(start_ptm, self),
-            optimize=False) \
-            .compile(bases_in, bases_out) \
-            .ptm(bases_in, bases_out)
+        return self._compile(
+            Operation.from_sequence(start_ptm, self), bases_in, bases_out,
+            optimize=True).ptm(bases_in, bases_out)
+
+
+class ParametrizedOperation(Placeholder):
+    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
+
+    def __init__(self, operation_func, bases_in, bases_out=None):
+        """A gate without notion of timing.
+
+        Parameters
+        ----------
+        operation_func : function
+            A function, that takes a certain number of arguments
+            (gate parameters) and returns an operation.
+        bases_in : tuple of quantumsim.PauliBasis
+            Input bases, that will be taken by final, when it is calculated.
+        bases_out : tuple of quantumsim.PauliBasis or None
+            Output bases, that will be taken by final, when it is calculated.
+            If None, the same as input basis is taken.
+        """
+        super().__init__(bases_in, bases_out)
+        argspec = inspect.getfullargspec(operation_func)
+        if argspec.varargs is not None:
+            raise ValueError(
+                "`operation_func` can't accept free arguments.")
+        if argspec.varkw is not None:
+            raise ValueError(
+                "`operation_func` can't accept free keyword arguments.")
+        self._operation_func = operation_func
+        self.params = tuple(argspec.args)
+
+    @staticmethod
+    def chain_substitute(chain, **params):
+        operations = [IndexedOperation(
+            op.substitute(**params) if isinstance(op, ParametrizedOperation)
+            else op,
+            ix) for op, ix in chain.units()]
+        if len(operations) == 1:
+            return operations[0].operation
+        else:
+            return _Chain(operations)
+
+    def set_params(self, params):
+        """
+
+
+        Parameters
+        ----------
+        params: new parameters
+
+        Returns
+        -------
+        ParametrizedOperation
+            A copy with updated params
+        """
+        if len(params) != len(self.params):
+            raise ValueError("Number of parameters does not match")
+        out = copy(self)
+        out.params = params
+        return out
+
+    def __copy__(self):
+        copy_ = self.__class__(self._operation_func, self._bases_in,
+                               self._bases_out)
+        copy_.params = self.params
+        return copy_
+
+    def substitute(self, **kwargs):
+        """Replace ParametrizedOperation with a correspondent normal
+        operation.
+
+        Parameters
+        ----------
+        kwargs
+            Arguments, that are provided to `operation_func`.
+        """
+        try:
+            args = tuple(kwargs[p] if isinstance(p, str) else p
+                         for p in self.params)
+        except KeyError as exc:
+            raise OperationNotDefinedError(
+                'Arguments to the function do not define the full set, '
+                'needed to instantiate the operation') from exc
+        return self._operation_func(*args).set_bases(
+            self._bases_in, self._bases_out)

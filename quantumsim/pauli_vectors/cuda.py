@@ -404,6 +404,7 @@ class PauliVectorCuda(PauliVectorBase):
             warnings.warn(
                 "Density matrix trace is 0; likely your further computation "
                 "will fail. Have you projected DM on a state with zero weight?")
+        return tr
 
     def copy(self):
         """Return a deep copy of this Density."""

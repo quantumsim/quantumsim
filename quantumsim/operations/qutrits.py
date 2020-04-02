@@ -1,8 +1,8 @@
 import numpy as np
-from functools import lru_cache
 from scipy.linalg import expm
-from quantumsim import bases, Operation
-from quantumsim.algebra.tools import verify_kraus_unitarity
+from .. import bases
+from .operation import Operation
+from ..algebra.tools import verify_kraus_unitarity
 
 _PAULI = dict(zip(['I', 'X', 'Y', 'Z'], bases.gell_mann(2).vectors))
 
@@ -10,7 +10,6 @@ bases1_default = (bases.general(3),)
 bases2_default = bases1_default * 2
 
 
-@lru_cache(maxsize=64)
 def rotate_euler(phi, theta, lamda):
     """A perfect single qubit rotation described by three Euler angles.
 
@@ -39,7 +38,6 @@ def rotate_euler(phi, theta, lamda):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_x(angle=np.pi):
     """A perfect single qubit rotation around :math:`Ox` axis.
 
@@ -58,7 +56,6 @@ def rotate_x(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_y(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oy` axis.
 
@@ -77,7 +74,6 @@ def rotate_y(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-@lru_cache(maxsize=32)
 def rotate_z(angle=np.pi):
     """A perfect single qubit rotation around :math:`Oz` axis.
 
@@ -138,16 +134,13 @@ default_cphase_params = dict(
 )
 
 
-@lru_cache(maxsize=64)
-def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
+def cphase(angle=np.pi, *, model='legacy', **kwargs):
     """
 
     Parameters
     ----------
     angle : float
         Conditional phase of a CPhase gate, default is :math:`\\pi`.
-    integrate_idling : bool
-        Whether to return
     model : str
         Error model (currently only 'legacy' and 'NetZero' is implemented).
     **kwargs
@@ -166,18 +159,12 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
         if param not in default_cphase_params.keys():
             raise ValueError('Unknown model parameter: {}'.format(param))
 
-    int_point_time = p('int_time') - (4 * p('rise_time'))
-    if np.isfinite(p('q1_t2')) and np.isfinite(p('q1_t2_int')):
-        rise_t2 = (p('q1_t2') + p('q1_t2_int')) / 2
-    else:
-        rise_t2 = np.inf
-
     int_time = p('int_time')
     leakage_rate = p('leakage_rate')
     qstatic_deviation = int_time * np.pi * \
-        p('sensitivity') * (p('quasistatic_flux') ** 2)
+                        p('sensitivity') * (p('quasistatic_flux') ** 2)
     qstatic_interf_leakage = (0.5 - (2 * leakage_rate)) * \
-        (1 - np.cos(1.5 * qstatic_deviation))
+                             (1 - np.cos(1.5 * qstatic_deviation))
     phase_corr_error = p('phase_corr_error')
 
     rot_angle = angle + (1.5 * qstatic_deviation) + (2 * phase_corr_error)
@@ -208,35 +195,9 @@ def cphase(angle=np.pi, *, integrate_idling=False, model='legacy', **kwargs):
         cz_op = Operation.from_kraus(cz_unitary, bases2_default)
     else:
         raise ValueError('Unknown CZ model: {}'.format(model))
-
-    if integrate_idling:
-        q0_t1 = p('q0_t1')
-        q0_t2 = p('q0_t2')
-        q0_anharmonicity = p('q0_anharmonicity')
-        q1_t1 = p('q1_t1')
-        q1_t2 = p('q1_t2')
-        q1_t2_int = p('q1_t2_int')
-        q1_anharmonicity = p('q1_anharmonicity')
-        rise_time = p('rise_time')
-        phase_corr_time = p('phase_corr_time')
-        return Operation.from_sequence(
-            idle(int_time / 2, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_point_time / 2, q1_t1, q1_t2_int, q1_anharmonicity).at(1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            cz_op.at(0, 1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_point_time / 2, q1_t1, q1_t2_int, q1_anharmonicity).at(1),
-            idle(rise_time, q1_t1, rise_t2, q1_anharmonicity).at(1),
-            idle(int_time / 2, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(phase_corr_time, q0_t1, q0_t2, q0_anharmonicity).at(0),
-            idle(phase_corr_time, q1_t1, q1_t2, q1_anharmonicity).at(1)
-        )
-    else:
-        return cz_op
+    return cz_op
 
 
-@lru_cache(maxsize=32)
 def _cphase_legacy(angle=np.pi, leakage=0.):
     """A perfect controlled phase rotation.
     First qubit is low-frequency, second qubit is high-frequency (it leaks).
@@ -261,7 +222,6 @@ def _cphase_legacy(angle=np.pi, leakage=0.):
     return Operation.from_kraus(unitary, bases2_default)
 
 
-@lru_cache(maxsize=64)
 def _ideal_generator(phase_01,
                      phase_02,
                      phase_10,
@@ -276,26 +236,24 @@ def _ideal_generator(phase_01,
     return generator
 
 
-@lru_cache(maxsize=64)
 def _exchange_generator(leakage, leakage_phase,
                         leakage_mobility_rate, leakage_mobility_phase):
     generator = np.zeros((9, 9), dtype=complex)
 
     generator[2][4] = 1j * \
-        np.arcsin(np.sqrt(leakage)) * np.exp(1j * leakage_phase)
+                      np.arcsin(np.sqrt(leakage)) * np.exp(1j * leakage_phase)
     generator[4][2] = -1j * \
-        np.arcsin(np.sqrt(leakage)) * np.exp(-1j * leakage_phase)
+                      np.arcsin(np.sqrt(leakage)) * np.exp(-1j * leakage_phase)
 
     generator[5][7] = 1j * np.arcsin(np.sqrt(leakage_mobility_rate)) * \
                       np.exp(1j * leakage_mobility_phase)
     generator[7][5] = -1j * \
-        np.arcsin(np.sqrt(leakage_mobility_rate)) * \
-        np.exp(-1j * leakage_mobility_phase)
+                      np.arcsin(np.sqrt(leakage_mobility_rate)) * \
+                      np.exp(-1j * leakage_mobility_phase)
 
     return generator
 
 
-@lru_cache(maxsize=32)
 def cnot():
     dcnot = np.zeros((9, 9))
     dcnot[3, 3] = 0.5
@@ -306,55 +264,6 @@ def cnot():
     return Operation.from_kraus(unitary, bases2_default)
 
 
-@lru_cache(maxsize=64)
-def idle(duration, t1, t2, anharmonicity=0.):
-    if np.isfinite(t1) and np.isfinite(t2):
-        t_phi = 1. / (1. / t2 - 0.5 / t1)
-        if t_phi < 0:
-            raise ValueError('t2 must be less than 2*t1')
-        elif np.allclose(t_phi, 0):
-            ops_t2 = []
-        else:
-            ops_t2 = [
-                (8. / (9 * t_phi)) ** 0.5 * np.array([
-                    [1, 0, 0],
-                    [0, 0, 0],
-                    [0, 0, -1]
-                ]),
-                (2. / (9 * t_phi)) ** 0.5 * np.array([
-                    [1, 0, 0],
-                    [0, -1, 0],
-                    [0, 0, 0]
-                ]),
-                (2. / (9 * t_phi)) ** 0.5 * np.array([
-                    [0, 0, 0],
-                    [0, 1, 0],
-                    [0, 0, -1]
-                ])
-            ]
-    else:
-        ops_t2 = []
-
-    op_t1 = t1 ** -0.5 * np.array([
-        [0, 1, 0],
-        [0, 0, np.sqrt(2)],
-        [0, 0, 0]
-    ])
-    if not np.allclose(anharmonicity, 0.):
-        ham = np.array([
-            [0., 0., 0.],
-            [0., 0., 0.],
-            [0., 0., anharmonicity],
-        ])
-    else:
-        ham = None
-    return Operation.from_lindblad_form(
-        duration, (bases.general(3),),
-        hamiltonian=ham,
-        lindblad_ops=[op_t1, *ops_t2])
-
-
-@lru_cache(maxsize=32)
 def amp_damping(p0_up, p1_up, p1_down, p2_down):
     """
     A gate, that excites or relaxes a qubit with a certain probability.
@@ -382,7 +291,6 @@ def amp_damping(p0_up, p1_up, p1_down, p2_down):
     return Operation.from_ptm(ptm, basis, basis)
 
 
-@lru_cache(maxsize=32)
 def meas_butterfly(p0_up, p1_up, p1_down, p2_down):
     """
     Returns a gate, that corresponds to measurement-induced excitations.

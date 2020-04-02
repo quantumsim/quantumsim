@@ -1,5 +1,6 @@
+PyYAML
 numpy>=1.12
 scipy
-pytest
+sympy
 pytools
 matplotlib

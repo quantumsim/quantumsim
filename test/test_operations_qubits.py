@@ -6,7 +6,7 @@
 import numpy as np
 
 from quantumsim import bases, PauliVector
-from quantumsim.models import qubits as lib
+import quantumsim.operations.qubits as lib
 
 
 class TestLibrary:

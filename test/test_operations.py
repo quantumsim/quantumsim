@@ -3,17 +3,21 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
-# %%
 import pytest
 import numpy as np
+from copy import copy
+from numpy import pi
+from pytest import approx
 
+import quantumsim.operations.qubits as lib2
+import quantumsim.operations.qutrits as lib3
 from quantumsim import bases, Operation
 from quantumsim.algebra.tools import random_hermitian_matrix
+from quantumsim.operations import ParametrizedOperation
+from quantumsim.operations.operation import OperationNotDefinedError
 from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
-from quantumsim.models import qubits as lib2
-from quantumsim.models import transmons as lib3
 
-# %%
+
 class TestOperations:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
@@ -102,11 +106,11 @@ class TestOperations:
 
         circuit = Operation.from_sequence(op1.at(0), op2.at(0))
         assert circuit.num_qubits == 1
-        assert len(circuit.operations) == 2
+        assert len(circuit._units) == 2
 
         circuit = Operation.from_sequence(op1.at(1), op2.at(0))
         assert circuit.num_qubits == 2
-        assert len(circuit.operations) == 2
+        assert len(circuit._units) == 2
 
         with pytest.raises(ValueError, match=".* must form an ordered set .*"):
             Operation.from_sequence(op1.at(2), op2.at(0))
@@ -120,7 +124,7 @@ class TestOperations:
         circuit3q = Operation.from_sequence(op1.at(0), op2.at(1), op3.at(0, 1),
                           op1.at(1), op2.at(0), op3.at(0, 2))
         assert circuit3q.num_qubits == 3
-        assert len(circuit3q.operations) == 6
+        assert len(circuit3q._units) == 6
 
         with pytest.raises(ValueError, match="Number of indices is not .*"):
             Operation.from_sequence(op1.at(0), op3.at(0))
@@ -129,17 +133,17 @@ class TestOperations:
             circuit3q.at(0, 1)
 
         circuit4q = Operation.from_sequence(op3.at(0, 2), circuit3q.at(1, 2, 3))
-        assert len(circuit4q.operations) == 7
-        assert circuit4q.operations[0].indices == (0, 2)
-        for o1, o2 in zip(circuit4q.operations[1:], circuit3q.operations):
+        assert len(circuit4q._units) == 7
+        assert circuit4q._units[0].indices == (0, 2)
+        for o1, o2 in zip(circuit4q._units[1:], circuit3q._units):
             assert np.all(np.array(o1.indices) == np.array(o2.indices) + 1)
 
         circuit4q = Operation.from_sequence(
             circuit3q.at(2, 0, 3), op3.at(0, 1), op2.at(1))
-        assert len(circuit4q.operations) == 8
-        assert circuit4q.operations[0].indices == (2,)
-        assert circuit4q.operations[1].indices == (0,)
-        assert circuit4q.operations[2].indices == (2, 0)
+        assert len(circuit4q._units) == 8
+        assert circuit4q._units[0].indices == (2,)
+        assert circuit4q._units[1].indices == (0,)
+        assert circuit4q._units[2].indices == (2, 0)
 
         Operation.from_sequence(
             circuit3q.at(0, 1, 2),
@@ -207,7 +211,7 @@ class TestOperations:
         op2 = Operation.from_lindblad_form(t2, b2, b1, hamiltonian=ham,
                                            lindblad_ops=lindblad_ops)
         op = Operation.from_lindblad_form(t1+t2, b1, hamiltonian=ham,
-                                           lindblad_ops=lindblad_ops)
+                                          lindblad_ops=lindblad_ops)
         dm = random_hermitian_matrix(2, seed=3)
         state1 = PauliVector.from_dm(dm, b1)
         state2 = PauliVector.from_dm(dm, b1)
@@ -258,7 +262,7 @@ class TestOperations:
             [[0, 0],
              [0, 0.17]],
         ])
-        ops = [np.kron(op, id).reshape(2, 2, 2, 2) for op in ops1] +\
+        ops = [np.kron(op, id).reshape(2, 2, 2, 2) for op in ops1] + \
               [np.kron(id, op).reshape(2, 2, 2, 2) for op in ops2]
         op1 = Operation.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Operation.from_lindblad_form(25, b, lindblad_ops=ops2)
@@ -282,3 +286,22 @@ class TestOperations:
         op2(state1, 1)
         op(state2, 0, 1)
         assert np.allclose(state1.to_pv(), state2.to_pv())
+
+
+class TestParametrizedOperations:
+    def test_create(self):
+        op_1q = lib2.rotate_x(0.5*pi)
+        basis = (bases.general(2),)
+
+        with pytest.raises(ValueError,
+                           match=".*can't accept free arguments.*"):
+            ParametrizedOperation(lambda *args: op_1q, basis, basis)
+        with pytest.raises(ValueError,
+                           match=".*can't accept free keyword arguments.*"):
+            ParametrizedOperation(lambda **kwargs: op_1q, basis, basis)
+        with pytest.raises(OperationNotDefinedError,
+                           match="Operation placeholder does not have a PTM"):
+            ParametrizedOperation(lambda: op_1q, basis).ptm(basis)
+        with pytest.raises(OperationNotDefinedError,
+                           match="Operation placeholder can not be called"):
+            ParametrizedOperation(lambda: op_1q, basis)(PauliVector(basis))
