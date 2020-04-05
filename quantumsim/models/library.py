@@ -3,15 +3,15 @@ import numpy as np
 from .. import bases
 from ..operations.operation import ParametrizedOperation
 from ..operations.qubits import (
-    cnot, cphase, swap, hadamard, rotate_x, rotate_y, rotate_z, amp_phase_damping)
-from .model import Model
+    cnot, cphase, swap, hadamard, rotate_x, rotate_y, rotate_z)
 from ..setups import Setup
+from .model import Model
 
 _BASIS = bases.general(2),
 _BASIS_CLASSICAL = bases.general(2).subbasis([0, 1]),
 
 
-def _born_projection(state, rng, *, atol=1e-08, **kwargs):
+def _born_projection(state, rng, *, atol=1e-08):
     meas_probs = state.pauli_vector.diagonal()
     meas_probs[np.abs(meas_probs) < atol] = 0
     meas_probs /= np.sum(meas_probs)
@@ -19,36 +19,18 @@ def _born_projection(state, rng, *, atol=1e-08, **kwargs):
     return result
 
 
-def get_ideal_setup(qubits):
-    """
-    Initializes an ideal setup file for a given list of qubit.
-
-    Parameters
-    ----------
-    qubits : list or tuple
-        The list of the qubits involved in the circuit.
-
-    Returns
-    -------
-    quantumsim.Setup
-        The setup file containing the ideal gate and qubit parameters.
-    """
-    _gate_setup = [{
-        'time_1qubit': 0,
-        'time_2qubit': 0,
-        'time_measure': 0}]
-    _qubit_setup = [{'qubit': q} for q in qubits]
-    return Setup({
-        'version': '1',
-        'name': 'Ideal Setup',
-        'setup': _gate_setup + _qubit_setup})
-
-
 class IdealModel(Model):
     """
     A model for an ideal error model, where gates are
     instantaneous and perfect, while the qubits experiences no noise.
     """
+
+    def __init__(self):
+        setup = Setup({
+            'version': '1',
+            'name': 'Ideal Setup',
+            'setup': [{'time_1qubit': 0, 'time_2qubit': 0, 'time_measure': 0}]})
+        super().__init__(setup=setup)
 
     _ptm_project = [rotate_x(0).set_bases(
         (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),)
