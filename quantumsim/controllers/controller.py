@@ -1,3 +1,5 @@
+from inspect import signature
+
 import numpy as np
 import xarray as xr
 
@@ -131,12 +133,21 @@ class Controller:
             if isinstance(operation, ParametrizedOperation):
                 # Get the free parameters of the operation and evaluate them
                 _op_params = _to_str(operation.params)
-                _eval_params = {
-                    param: param_funcs[param](
-                        state=self._state.partial_trace(*op_qubits),
-                        rng=self._rng,
-                        outcome=outcome)
-                    for param in _op_params}
+                _controller_params = {
+                    'state': self._state.partial_trace(*op_qubits),
+                    'rng': self._rng,
+                    'outcome': outcome}
+
+                _eval_params = {}
+                for param in _op_params:
+                    param_func = param_funcs[param]
+                    sig = signature(param_func)
+                    func_args = {par.name: _controller_params[par.name]
+                                 for par in sig.parameters.values()
+                                 if par.kind == par.POSITIONAL_OR_KEYWORD and
+                                 par.name != 'self'}
+                    _eval_params[param] = param_func(**func_args)
+
                 # sub in the operation
                 operation = deparametrize(operation, _eval_params)
                 # append realized value to the pre-located DataArray
