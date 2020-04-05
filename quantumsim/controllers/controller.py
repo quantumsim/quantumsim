@@ -51,7 +51,7 @@ class Controller:
     def circuits(self):
         return self._circuits
 
-    def run(self, circuit_name, num_runs=1, **params):
+    def apply(self, circuit_name, num_runs=1, **params):
         """
         run Applies the circuit corresponding to the provided name to the internal state stored by the controller.
 
@@ -90,7 +90,7 @@ class Controller:
         outcomes = []
 
         for _ in range(num_runs):
-            outcome = self._run_circuit(circuit, param_funcs=param_funcs)
+            outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
             if outcome is not None:
                 outcomes.append(outcome)
 
@@ -102,7 +102,7 @@ class Controller:
             return result
         return None
 
-    def _run_circuit(self, circuit, *, param_funcs=None):
+    def _apply_circuit(self, circuit, *, param_funcs=None):
         """
         _run_circuit Sequentally applies a finalized circuit to the internal state
 
