@@ -1,27 +1,30 @@
+import re
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
-from sympy import symbols, sympify
-import re
+
 import numpy as np
+from sympy import symbols, sympify
 
 from ..operations import Operation, ParametrizedOperation
 
-param_repeat_allowed = False
-
-# TODO: implement scheduling
+PARAM_REPEAT_ALLOWED = False
 
 
 @contextmanager
 def allow_param_repeat():
-    global param_repeat_allowed
-    param_repeat_allowed = True
+    """Context manager to allow using the same named parameter in 
+    different gates of a circuit."""
+    global PARAM_REPEAT_ALLOWED  # pylint: disable=global-statement
+    PARAM_REPEAT_ALLOWED = True
     yield
-    param_repeat_allowed = False
+    PARAM_REPEAT_ALLOWED = False
 
 
-class CircuitBase(ABC):
+class GateSetMixin(ABC):
+    """Abstract class, that defines an interface for all gates manipulation."""
+
     @abstractmethod
     def __copy__(self):
         pass
@@ -71,7 +74,7 @@ class CircuitBase(ABC):
 
         Returns
         -------
-        TimeAware
+        GateSetMixin
         """
         if time_start is not None and time_end is not None:
             raise ValueError('Only one argument is accepted.')
@@ -89,15 +92,15 @@ class CircuitBase(ABC):
 
         Parameters
         ----------
-        other : TimeAware
+        other : GateSetMixin
             Another circuit.
 
         Returns
         -------
-        TimeAwareCircuit
+        Circuit
         """
-        global param_repeat_allowed
-        if not param_repeat_allowed:
+        global PARAM_REPEAT_ALLOWED  # pylint: disable=global-statement
+        if not PARAM_REPEAT_ALLOWED:
             common_params = self.free_parameters.intersection(
                 other.free_parameters)
             if len(common_params) > 0:
@@ -109,7 +112,7 @@ class CircuitBase(ABC):
                     "Rename these parameters in one of the circuits, or use "
                     "`quantumsim.circuits.allow_param_repeat` "
                     "context manager, if this is intended behaviour."
-                        .format(", ".join((str(p) for p in common_params))))
+                    .format(", ".join((str(p) for p in common_params))))
         shared_qubits = set(self.qubits).intersection(other.qubits)
         if len(shared_qubits) > 0:
             other_shifted = other.shift(time_start=max(
@@ -169,7 +172,7 @@ class CircuitBase(ABC):
                 return gate.time_end
 
 
-class Gate(CircuitBase):
+class Gate(GateSetMixin):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
     _sympify_locals = {
         'beta': symbols('beta'),
@@ -297,7 +300,7 @@ class Gate(CircuitBase):
         return out
 
 
-class Circuit(CircuitBase, ABC):
+class Circuit(GateSetMixin):
     def __init__(self, qubits, gates):
         self._gates = list(gates)
         self._qubits = list(qubits)

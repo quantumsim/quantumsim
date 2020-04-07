@@ -17,7 +17,6 @@ def c_op(circuit):
     return circuit.finalize().operation
 
 
-# noinspection PyTypeChecker
 class TestCircuitsCommon:
     def test_gate_create_no_params(self):
         angle = 1.0758
