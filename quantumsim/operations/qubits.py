@@ -201,71 +201,46 @@ def controlled_rotation(angle=np.pi, axis='z'):
     return controlled_unitary(matrix)
 
 
-def amp_damping(total_rate=None, *, exc_rate=None, damp_rate=None):
-    if total_rate is not None:
-        kraus = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
-                          [[0, np.sqrt(total_rate)], [0, 0]]])
-        return Operation.from_kraus(kraus, bases1_default)
-    else:
-        if None in (exc_rate, damp_rate):
-            raise ValueError(
-                "Either the total_rate or both the exc_rate and damp_rate "
-                "must be provided")
-        comb_rate = exc_rate + damp_rate
-        ptm = np.array([
-            [1, 0, 0, 0],
-            [0, np.sqrt((1 - comb_rate)), 0, 0],
-            [0, 0, np.sqrt((1 - comb_rate)), 0],
-            [2*damp_rate - comb_rate, 0, 0, 1 - comb_rate]])
-        return Operation.from_ptm(ptm, (bases.gell_mann(2),))
+def amp_damping(decay_prob):
+    kraus = np.array([[[1, 0], [0, np.sqrt(1 - decay_prob)]],
+                      [[0, np.sqrt(decay_prob)], [0, 0]]])
+    return Operation.from_kraus(kraus, bases1_default)
 
 
-def phase_damping(total_rate=None, *, x_deph_rate=None,
-                  y_deph_rate=None, z_deph_rate=None):
-    if total_rate is not None:
-        kraus = np.array([[[1, 0], [0, np.sqrt(1 - total_rate)]],
-                          [[0, 0], [0, np.sqrt(total_rate)]]])
-        return Operation.from_kraus(kraus, bases1_default)
-    else:
-        if None in (x_deph_rate, y_deph_rate, z_deph_rate):
-            raise ValueError(
-                "Either the total_rate or the dephasing rates along each of "
-                "the three axis must be provided")
-        ptm = np.diag(
-            [1, 1 - x_deph_rate, 1 - y_deph_rate, 1 - z_deph_rate])
-        return Operation.from_ptm(ptm, (bases.gell_mann(2),))
+def phase_damping(deph_prob):
+    kraus = np.array([[[1, 0], [0, np.sqrt(1 - deph_prob)]],
+                      [[0, 0], [0, np.sqrt(deph_prob)]]])
+    return Operation.from_kraus(kraus, bases1_default)
 
 
-def amp_phase_damping(damp_rate, deph_rate):
-    amp_damp = amp_damping(damp_rate)
-    phase_damp = phase_damping(deph_rate)
+def amp_phase_damping(decay_prob, deph_prob):
+    amp_damp = amp_damping(decay_prob)
+    phase_damp = phase_damping(deph_prob)
     return Operation.from_sequence(amp_damp.at(0), phase_damp.at(0))
 
 
-def bit_flipping(flip_rate):
-    matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
-                       np.sqrt(1 - flip_rate) * _PAULI["X"]])
+def bit_flipping(error_prob):
+    matrix = np.array([np.sqrt(1 - error_prob) * _PAULI["I"],
+                       np.sqrt(error_prob) * _PAULI["X"]])
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def phase_flipping(flip_rate):
+def phase_flipping(error_prob):
     # This is actually equivalent to the phase damping
-    matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
-                       np.sqrt(1 - flip_rate) * _PAULI["Z"]])
+    matrix = np.array([np.sqrt(1 - error_prob) * _PAULI["I"],
+                       np.sqrt(error_prob) * _PAULI["Z"]])
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def bit_phase_flipping(flip_rate):
-    matrix = np.array([np.sqrt(flip_rate) * _PAULI["I"],
-                       np.sqrt(1 - flip_rate) * _PAULI["Y"]])
+def bit_phase_flipping(error_prob):
+    matrix = np.array([np.sqrt(1 - error_prob) * _PAULI["I"],
+                       np.sqrt(error_prob) * _PAULI["Y"]])
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def depolarization(rate):
-    rate = rate / 2
-    sqrt = np.sqrt(rate)
-    matrix = np.array([np.sqrt(2 - (3 * rate)) * _PAULI["I"],
-                       sqrt * _PAULI["X"],
-                       sqrt * _PAULI["Y"],
-                       sqrt * _PAULI["Z"]])
+def depolarization(error_prob):
+    matrix = np.array([np.sqrt(1 - error_prob) * _PAULI["I"],
+                       np.sqrt(error_prob / 3) * _PAULI["X"],
+                       np.sqrt(error_prob / 3) * _PAULI["Y"],
+                       np.sqrt(error_prob / 3) * _PAULI["Z"]])
     return Operation.from_kraus(matrix, bases1_default)
