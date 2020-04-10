@@ -92,7 +92,7 @@ def rotate_z(angle=np.pi):
     return Operation.from_kraus(matrix, bases1_default)
 
 
-def phase_shift(angle=np.pi):
+def phase_shift(angle):
     matrix = np.diag([1, np.exp(1j * angle), 1])
     return Operation.from_kraus(matrix, bases1_default)
 
