@@ -106,7 +106,10 @@ class State:
         outcome = xr.DataArray(
             data=diag,
             dims=['product_state_label'],
-            coords={'product_state_label': state_labels})
+            coords={
+                'product_state_label': state_labels,
+                'qubits': self.qubits,
+                'dim_hilbert': self.pauli_vector.dim_hilbert})
 
         return outcome
 

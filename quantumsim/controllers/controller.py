@@ -1,11 +1,12 @@
+from collections.abc import Iterable
 from inspect import signature
 
 import numpy as np
 import xarray as xr
 
+from ..circuits import FinalizedCircuit, _to_str, deparametrize
+from .. import State
 from ..operations import ParametrizedOperation
-from ..circuits import deparametrize, FinalizedCircuit, _to_str
-from ..states import State
 
 
 class Controller:
@@ -22,26 +23,31 @@ class Controller:
             Either an integer number to seed a RandomState instance or an already initialized instance. The RandomState is used as the random generator for the functions within the experiment
     """
 
-    def __init__(self, state, circuits, rng):
-        if isinstance(rng, np.random.RandomState):
-            self._rng = rng
-        elif isinstance(rng, int):
-            self._rng = np.random.RandomState(rng)
-        else:
-            raise ValueError(
-                "Please provide a integer seed or an instance of a np.randomRandomState")
-
-        if not isinstance(state, State):
-            raise ValueError("Please provide an initial state")
-        self._state = state
-
+    def __init__(self, circuits, parameters=None):
         if not isinstance(circuits, dict):
-            raise ValueError("circuits should be a dictionary")
+            raise ValueError(
+                "Circuits expected to be dict instance, instead provided as {}".format(type(circuits)))
         if not all(isinstance(circ_name, str) and isinstance(circ, FinalizedCircuit)
                    for circ_name, circ in circuits.items()):
-            raise ValueError("Only names")
+            raise ValueError(
+                "The circuit dictionary should contain the names of circuits as the keys and the finalized circuits as the values.")
 
         self._circuits = circuits
+
+        qubits = set()
+        for circ in self.circuits.values():
+            qubits.update(circ.qubits)
+        self._qubits = qubits
+
+        if parameters is not None:
+            if not isinstance(parameters, dict):
+                raise ValueError(
+                    "Parameters expected to be dict instance, instead provided as {}".format(type(parameters)))
+
+        self._parameters = parameters
+
+        self._rng = None
+        self._state = None
 
     @property
     def state(self):
@@ -50,6 +56,52 @@ class Controller:
     @property
     def circuits(self):
         return self._circuits
+
+    def seed(self, seed):
+        if not isinstance(seed, int):
+            raise ValueError("The provided seed must be an intereger num")
+        self._rng = np.random.RandomState(seed)
+
+    def prepare_state(self, method=None):
+        if method is not None:
+            self._state = method(self._qubits)
+        else:
+            self._state = State(self._qubits)
+
+    def run(self, experiment, seed):
+        if not callable(experiment):
+            raise ValueError("The experiment must be a defined function")
+
+        outcomes = []
+
+        if isinstance(seed, int):
+            seed_sequence = [seed]
+        elif isinstance(seed, Iterable):
+            seed_sequence = seed
+        else:
+            raise ValueError(
+                "Seed expected to be integer or iterable sequence of integers,instead provided {}".format(type(seed)))
+
+        for seed_val in seed_sequence:
+            self.seed(seed_val)
+
+            exp_outcomes = experiment()
+
+            if exp_outcomes is not None:
+                if not isinstance(exp_outcomes, list):
+                    raise ValueError(
+                        "The outcome of the experiment should be a list of the circuit outputs")
+                if any(outcome is None for outcome in exp_outcomes):
+                    raise ValueError(
+                        "The outcome list should not contain any None")
+
+                exp_outcome_dataset = xr.merge(exp_outcomes)
+                exp_outcome_dataset['seed'] = seed_val
+                outcomes.append(exp_outcome_dataset)
+
+        if len(outcomes) > 0:
+            return xr.concat(outcomes, dim='seed')
+        return None
 
     def apply(self, circuit_name, num_runs=1, **params):
         """
@@ -72,16 +124,28 @@ class Controller:
         except KeyError:
             raise KeyError("Circuit {} not found".format(circuit_name))
 
+        if self._state is None:
+            raise ValueError(
+                "A state must be initialized before circuit application is possible")
+
         # Extract all parameters, for which a callable expression was provided
-        _cur_param_funcs = {par: params.pop(par) for par in list(
-            params) if callable(params[par])}
+
+        given_params = {**self._parameters, **params}
+
+        _cur_param_funcs = {par: given_params.pop(par) for par in list(
+            given_params) if callable(given_params[par])}
+
         # Combine with the automatically generated ones,
         # overwriting any if the user has provided a different function
         param_funcs = {**circuit._param_funcs, **_cur_param_funcs}
 
-        if params:
+        if self._rng_required(param_funcs) and self._rng is None:
+            raise ValueError(
+                "A random number generator must be initialized, please seed the controller")
+
+        if given_params:
             # At this points params only contains the fixed parameters
-            circuit = circuit(**params)
+            circuit = circuit(**given_params)
 
         unset_params = circuit.params - param_funcs.keys()
         if len(unset_params) != 0:
@@ -92,13 +156,15 @@ class Controller:
         for _ in range(num_runs):
             outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
             if outcome is not None:
-                outcomes.append(outcome)
+                outcomes.append(outcome.rename(
+                    {'param': circuit_name + '_param'}))
 
         if outcomes:
-            result = xr.concat(outcomes, dim='run')
+            result = xr.concat(outcomes, dim=circuit_name + '_run')
             # Attach all parameters that had fixed values across the repeated applications
             for param, param_val in params.items():
                 result[param] = param_val
+            result.name = circuit_name
             return result
         return None
 
@@ -111,7 +177,7 @@ class Controller:
         circuit : quantumsim.circuits.FinalizedCircuit
             The finalized circuit to be applied
         param_funcs : dict, optional
-            The dictionary of free parameter names and thier corresponding callable object that implement them, by default None
+            The dictionary of free parameter names and their corresponding callable object that implement them, by default None
 
         Returns
         -------
@@ -126,7 +192,7 @@ class Controller:
             outcome = None
 
         for operation, inds in circuit.operation.units():
-            # Extract the indicies for this operation from the state
+            # Extract the indices for this operation from the state
             op_qubits = [circuit.qubits[i] for i in inds]
             op_inds = [self._state.qubits.index(q) for q in op_qubits]
 
@@ -163,3 +229,10 @@ class Controller:
                 self._state.renormalize()
 
         return outcome
+
+    def _rng_required(self, param_funcs):
+        for func in param_funcs.values():
+            sig = signature(func)
+            if 'rng' in list(sig.parameters):
+                return True
+        return False
