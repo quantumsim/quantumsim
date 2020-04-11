@@ -1,4 +1,6 @@
 from quantumsim.algebra import sigma
+import xarray as xr
+from itertools import product
 from .. import bases
 from ..pauli_vectors import PauliVectorBase
 import numpy as np
@@ -74,7 +76,7 @@ class State:
         else:
             einsum_args.append(operator)
             einsum_args.append(list(range(2*n)))
-        einsum_args.append(self.pauli_vector.to_pv()),
+        einsum_args.append(self.pauli_vector.to_pv())
         einsum_args.append([2*n+i for i in range(n)])
         for i, basis in enumerate(self.pauli_vector.bases):
             einsum_args.append(basis.vectors)
@@ -87,6 +89,26 @@ class State:
 
     def renormalize(self):
         self.pauli_vector.renormalize()
+
+    def diagonal(self):
+        diag = self.pauli_vector.diagonal()
+
+        bases_labels = [basis.computational_subbasis().labels
+                        for basis in self.pauli_vector.bases]
+
+        def tuple_to_string(tup):
+            state = ''.join(str(x) for x in tup)
+            return state
+
+        state_labels = [tuple_to_string(label)
+                        for label in product(*bases_labels)]
+
+        outcome = xr.DataArray(
+            data=diag,
+            dims=['product_state_label'],
+            coords={'product_state_label': state_labels})
+
+        return outcome
 
     def partial_trace(self, *qubits):
         """Traces out all qubits, except provided, and returns the resulting
