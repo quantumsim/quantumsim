@@ -36,7 +36,7 @@ def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None
     ptm = operation.ptm(_bases_in, _bases_out)
 
     if truncate_levels is not None:
-        pass
+        raise NotImplementedError
 
     def tuple_to_string(tup):
         pauli_element = ''.join(str(x) for x in tup)
