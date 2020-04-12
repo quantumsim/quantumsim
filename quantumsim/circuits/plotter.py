@@ -98,11 +98,13 @@ class MatplotlibPlotter:
         if style == 'box':
             # TODO: formatting with params (it is tricky)
             # params = gate.params_set()
-            label = metadata.pop('label', r'$\mathcal{G}$')  # .format(**params)
+            # .format(**params)
+            label = metadata.pop('label', r'$\mathcal{G}$')
             params = {key: latex(val) for key, val in gate.params.items()}
             label = label.format(**params)
             return self._plot_box_with_label(
-                gate.time_start, gate.time_end, *self._qubit_range(gate.qubits),
+                gate.time_start, gate.time_end, *
+                self._qubit_range(gate.qubits),
                 label, **self._get_box_kwargs(metadata))
         elif style == 'line':
             time = gate.time_start + 0.5 * gate.duration

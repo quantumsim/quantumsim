@@ -31,8 +31,8 @@ def test_create_untimed_model():
     """)
 
     m = SampleModel(sample_setup)
-    cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
+    cnot = m.rotate_y('D0', angle=0.5 * pi) + m.cphase('D0', 'D1') + \
+        m.rotate_y('D0', angle=-0.5*pi)
 
     assert cnot.finalize().operation.ptm(basis*2, basis*2) == approx(
         Operation.from_sequence(
@@ -86,7 +86,7 @@ def test_create_timed_model():
 
     m = SampleModel(sample_setup)
     cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
+        m.rotate_y('D0', angle=-0.5*pi)
     cnot = m.finalize(cnot)
 
     assert cnot.operation.ptm(basis*2, basis*2) == approx(

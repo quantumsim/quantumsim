@@ -4,6 +4,7 @@ from copy import copy
 from itertools import chain
 from sympy import symbols, sympify
 import re
+import numpy as np
 
 from ..operations import Operation, ParametrizedOperation
 
@@ -114,6 +115,68 @@ class CircuitBase(ABC):
         """
         pass
 
+    def shift(self, time_start=None, time_end=None):
+        """
+
+        Parameters
+        ----------
+        time_start : float or None
+        time_end : float or None
+
+        Returns
+        -------
+        TimeAware
+        """
+        if time_start is not None and time_end is not None:
+            raise ValueError('Only one argument is accepted.')
+        copy_ = copy(self)
+        if time_start is not None:
+            copy_.time_start = time_start
+        elif time_end is not None:
+            copy_.time_end = time_end
+        else:
+            raise ValueError('Specify time_start or time_end')
+        return copy_
+
+    def __add__(self, other):
+        """
+
+        Parameters
+        ----------
+        other : TimeAware
+            Another circuit.
+
+        Returns
+        -------
+        TimeAwareCircuit
+        """
+        global param_repeat_allowed
+        if not param_repeat_allowed:
+            common_params = self.free_parameters.intersection(
+                other.free_parameters)
+            if len(common_params) > 0:
+                raise RuntimeError(
+                    "The following free parameters are common for the circuits "
+                    "being added, which blocks them from being set "
+                    "separately later:\n"
+                    "   {}\n"
+                    "Rename these parameters in one of the circuits, or use "
+                    "`quantumsim.circuits.allow_param_repeat` "
+                    "context manager, if this is intended behaviour."
+                    .format(", ".join((str(p) for p in common_params))))
+        shared_qubits = set(self.qubits).intersection(other.qubits)
+        if len(shared_qubits) > 0:
+            other_shifted = other.shift(time_start=max(
+                (self._qubit_time_end(q) - other._qubit_time_start(q)
+                 for q in shared_qubits)) + 2*other.time_start)
+        else:
+            other_shifted = copy(other)
+        qubits = tuple(chain(self.qubits,
+                             (q for q in other.qubits if q not in self.qubits)))
+        gates = tuple(chain((copy(g) for g in self.gates),
+                            other_shifted.gates))
+        return Circuit(qubits, gates)
+
     def __call__(self, **kwargs):
         """Convenience method to copy a circuit with parameters updated. See
         :func:`CircuitBase.set` for a description.
@@ -148,18 +211,28 @@ class CircuitBase(ABC):
         if preprocessors:
             for func in preprocessors:
                 op = func(op)
-        return FinalizedCircuit(op, self.qubits, param_funcs=param_funcs, bases_in=bases_in)
+        return FinalizedCircuit(op, self.qubits,  param_funcs=param_funcs, bases_in=bases_in)
+
+    def _qubit_time_start(self, qubit):
+        for gate in self.gates:
+            if qubit in gate.qubits:
+                return gate.time_start
+
+    def _qubit_time_end(self, qubit):
+        for gate in reversed(self.gates):
+            if qubit in gate.qubits:
+                return gate.time_end
 
 
-class Gate(CircuitBase, ABC):
+class Gate(CircuitBase):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
     _sympify_locals = {
         'beta': symbols('beta'),
         'gamma': symbols('gamma'),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation, plot_metadata=None, param_funcs=None):
-        """A gate without notion of timing.
+    def __init__(self, qubits, dim_hilbert, operation, duration=np.nan, time_start=0., plot_metadata=None, param_funcs=None):
+        """Gate
 
         Parameters
         ----------
@@ -195,8 +268,37 @@ class Gate(CircuitBase, ABC):
         self._params = {
             param: symbols(param) for param in
             self._operation_params(self._operation)}
-
+        self._duration = duration
+        self._time_start = time_start
         self._param_funcs = param_funcs or {}
+
+    def __copy__(self):
+        other = self.__class__(
+            self._qubits, self.dim_hilbert, copy(self._operation),
+            self._duration, self._time_start, self.plot_metadata)
+        other._params = copy(self._params)
+        other._param_funcs = copy(self._param_funcs)
+        return other
+
+    @property
+    def time_start(self):
+        return self._time_start
+
+    @time_start.setter
+    def time_start(self, time):
+        self._time_start = time
+
+    @property
+    def time_end(self):
+        return self._time_start + self._duration
+
+    @time_end.setter
+    def time_end(self, time):
+        self._time_start = time - self._duration
+
+    @property
+    def duration(self):
+        return self._duration
 
     def operation_sympified(self):
         new_units = []
@@ -241,23 +343,10 @@ class Gate(CircuitBase, ABC):
         return set().union(*(expr.free_symbols
                              for expr in self._params.values()))
 
-    # def _set_param(self, name, value):
-    #     if isinstance(value, str):
-    #         if self._valid_identifier_re.match(value) is None:
-    #             raise ValueError("\"{}\" is not a valid Python "
-    #                              "identifier.".format(value))
-    #         self._params.add(value)
-    #     else:
-    #         self._params_set[name] = value
-    #     self._operation = ParametrizedOperation.set_params(
-    #         self._operation, **{name: value})
-    #     self._params.remove(name)
-
     def set(self, **kwargs):
         kwargs = {key: sympify(val, locals=self._sympify_locals)
                   for key, val in kwargs.items()}
-        self._params = {k: v.subs(kwargs)
-                        for k, v in self._params.items()}
+        self._params = {k: v.subs(kwargs) for k, v in self._params.items()}
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -273,164 +362,14 @@ class Gate(CircuitBase, ABC):
         return out
 
 
-class CircuitAddMixin(ABC):
-    @property
-    @abstractmethod
-    def free_parameters(self):
-        pass
-
-    @abstractmethod
-    def __add__(self, other):
-        global param_repeat_allowed
-        if not param_repeat_allowed:
-            common_params = self.free_parameters.intersection(
-                other.free_parameters)
-            if len(common_params) > 0:
-                raise RuntimeError(
-                    "The following free parameters are common for the circuits "
-                    "being added, which blocks them from being set "
-                    "separately later:\n"
-                    "   {}\n"
-                    "Rename these parameters in one of the circuits, or use "
-                    "`quantumsim.circuits.allow_param_repeat` "
-                    "context manager, if this is intended behaviour."
-                    .format(", ".join((str(p) for p in common_params))))
-
-
-class TimeAgnostic(CircuitAddMixin, ABC):
-    @property
-    @abstractmethod
-    def qubits(self):
-        pass
-
-    @property
-    @abstractmethod
-    def gates(self):
-        pass
-
-    def __add__(self, other):
-        """
-        Merge two circuits, locating second one after first.
-
-        Parameters
-        ----------
-        other : TimeAgnostic
-            Another circuit
-
-        Returns
-        -------
-        TimeAgnosticCircuit
-            A merged circuit.
-        """
-        super().__add__(other)
-        all_gates = self.gates + other.gates
-        all_qubits = self.qubits + tuple(q for q in other.qubits
-                                         if q not in self.qubits)
-        return TimeAgnosticCircuit(all_qubits, all_gates)
-
-
-class TimeAware(CircuitAddMixin, ABC):
-    @property
-    @abstractmethod
-    def time_start(self):
-        pass
-
-    @time_start.setter
-    @abstractmethod
-    def time_start(self, time):
-        pass
-
-    @property
-    @abstractmethod
-    def time_end(self):
-        pass
-
-    @time_end.setter
-    @abstractmethod
-    def time_end(self, time):
-        pass
-
-    @property
-    @abstractmethod
-    def duration(self):
-        pass
-
-    @property
-    @abstractmethod
-    def qubits(self):
-        pass
-
-    @property
-    @abstractmethod
-    def gates(self):
-        pass
-
-    def shift(self, time_start=None, time_end=None):
-        """
-
-        Parameters
-        ----------
-        time_start : float or None
-        time_end : float or None
-
-        Returns
-        -------
-        TimeAware
-        """
-        if time_start is not None and time_end is not None:
-            raise ValueError('Only one argument is accepted.')
-        copy_ = copy(self)
-        if time_start is not None:
-            copy_.time_start = time_start
-        elif time_end is not None:
-            copy_.time_end = time_end
-        else:
-            raise ValueError('Specify time_start or time_end')
-        return copy_
-
-    def _qubit_time_start(self, qubit):
-        for gate in self.gates:
-            if qubit in gate.qubits:
-                return gate.time_start
-
-    def _qubit_time_end(self, qubit):
-        for gate in reversed(self.gates):
-            if qubit in gate.qubits:
-                return gate.time_end
-
-    def __add__(self, other):
-        """
-
-        Parameters
-        ----------
-        other : TimeAware
-            Another circuit.
-
-        Returns
-        -------
-        TimeAwareCircuit
-        """
-        super().__add__(other)
-        shared_qubits = set(self.qubits).intersection(other.qubits)
-        if len(shared_qubits) > 0:
-            other_shifted = other.shift(time_start=max(
-                (self._qubit_time_end(q) - other._qubit_time_start(q)
-                 for q in shared_qubits)) + 2*other.time_start)
-        else:
-            other_shifted = copy(other)
-        qubits = tuple(chain(self.qubits,
-                             (q for q in other.qubits if q not in self.qubits)))
-        gates = tuple(chain((copy(g) for g in self.gates),
-                            other_shifted.gates))
-        return TimeAwareCircuit(qubits, gates)
-
-
 class Circuit(CircuitBase, ABC):
     def __init__(self, qubits, gates):
         self._gates = list(gates)
         self._qubits = list(qubits)
         self._params_cache = None
         self._operation = None
+        self._time_start = min((g.time_start for g in self._gates))
+        self._time_end = max((g.time_end for g in self._gates))
 
     @property
     def qubits(self):
@@ -443,8 +382,8 @@ class Circuit(CircuitBase, ABC):
     @property
     def free_parameters(self):
         if self._params_cache is None:
-            self._params_cache = set(
-                chain(*(g.free_parameters for g in self._gates)))
+            self._params_cache = set(chain(*(g.free_parameters
+                                             for g in self._gates)))
         return self._params_cache
 
     def operation_sympified(self):
@@ -465,75 +404,6 @@ class Circuit(CircuitBase, ABC):
         for gate in self._gates:
             gate.set(**kwargs)
         self._params_cache = None
-
-
-class TimeAgnosticGate(Gate, TimeAgnostic):
-    def __copy__(self):
-        other = self.__class__(
-            self._qubits, self.dim_hilbert, copy(self._operation),
-            self.plot_metadata)
-        other._params = copy(self._params)
-        other._param_funcs = copy(self._param_funcs)
-        return other
-
-
-class TimeAgnosticCircuit(Circuit, TimeAgnostic):
-    def __copy__(self):
-        # Need a shallow copy of all included gates
-        copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
-        copy_._params_cache = self._params_cache
-        return copy_
-
-
-class TimeAwareGate(Gate, TimeAware):
-    def __init__(self, qubits, dim_hilbert, operation, duration=0., time_start=0., plot_metadata=None, param_funcs=None):
-        """TimedGate - a gate with a well-defined timing.
-
-        Parameters:
-        -----
-        duration : dictionary of floats
-            the duration of the gate on each of the qubits
-        time_start : dictionary of floats or None
-            an absolute start time on each of the qubits
-        """
-        super().__init__(qubits, dim_hilbert, operation, plot_metadata, param_funcs)
-        self._duration = duration
-        self._time_start = time_start
-
-    def __copy__(self):
-        other = self.__class__(
-            self._qubits, self.dim_hilbert, copy(self._operation),
-            self._duration, self._time_start, self.plot_metadata)
-        other._params = copy(self._params)
-        other._param_funcs = copy(self._param_funcs)
-        return other
-
-    @property
-    def time_start(self):
-        return self._time_start
-
-    @time_start.setter
-    def time_start(self, time):
-        self._time_start = time
-
-    @property
-    def time_end(self):
-        return self._time_start + self._duration
-
-    @time_end.setter
-    def time_end(self, time):
-        self._time_start = time - self._duration
-
-    @property
-    def duration(self):
-        return self._duration
-
-
-class TimeAwareCircuit(Circuit, TimeAware):
-    def __init__(self, qubits, gates):
-        super().__init__(qubits, gates)
-        self._time_start = min((g.time_start for g in self._gates))
-        self._time_end = max((g.time_end for g in self._gates))
 
     @property
     def time_start(self):
@@ -626,8 +496,6 @@ class FinalizedCircuit:
         ----------
         state : quantumsim.State
         """
-        # double definition due to complaint from IDE (normally matmul is expected to return something?)
-
         if len(self._params) != 0:
             raise KeyError(*self._params)
         try:

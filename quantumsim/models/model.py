@@ -1,10 +1,11 @@
 import abc
+from numpy import nan
 from collections import defaultdict
 
 from more_itertools import pairwise
 
 from .. import bases
-from ..circuits import TimeAgnosticGate, TimeAwareCircuit, TimeAwareGate
+from ..circuits import Gate, Circuit
 from ..operations import Operation, Placeholder
 from ..operations.operation import IndexedOperation
 
@@ -31,10 +32,10 @@ class Model(metaclass=abc.ABCMeta):
         return WaitPlaceholder(duration, self.dim).at(qubit)
 
     def waiting_gate(self, qubit, duration):
-        return TimeAwareGate(qubit, self.dim,
-                             WaitPlaceholder(duration, self.dim),
-                             duration,
-                             plot_metadata={'style': 'marker', 'label': 'x'})
+        return Gate(qubit, self.dim,
+                    WaitPlaceholder(duration, self.dim),
+                    duration,
+                    plot_metadata={'style': 'marker', 'label': 'x'})
 
     def p(self, param, *qubits):
         return self._setup.param(param, *qubits)
@@ -74,7 +75,7 @@ class Model(metaclass=abc.ABCMeta):
                 .format(type(op)))
 
     @staticmethod
-    def gate(duration=None, plot_metadata=None, param_funcs=None):
+    def gate(duration=nan, plot_metadata=None, param_funcs=None):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
@@ -85,22 +86,16 @@ class Model(metaclass=abc.ABCMeta):
                             in sequence]
                 return Operation.from_sequence(sequence, qubits)
 
-            if duration is None:
-                def wrapper(self, *qubits, **params):
-                    return TimeAgnosticGate(
-                        qubits, self.dim, make_operation(self, *qubits),
-                        plot_metadata, param_funcs)(**params)
-            else:
-                def wrapper(self, *qubits, **params):
-                    if callable(duration):
-                        _duration = duration(*qubits, self._setup)
-                    elif isinstance(duration, str):
-                        _duration = self.p(duration, *qubits)
-                    else:
-                        _duration = duration
-                    return TimeAwareGate(
-                        qubits, self.dim, make_operation(self, *qubits),
-                        _duration, 0., plot_metadata, param_funcs)(**params)
+            def wrapper(self, *qubits, **params):
+                if callable(duration):
+                    _duration = duration(*qubits, self._setup)
+                elif isinstance(duration, str):
+                    _duration = self.p(duration, *qubits)
+                else:
+                    _duration = duration
+                return Gate(
+                    qubits, self.dim, make_operation(self, *qubits),
+                    _duration, 0., plot_metadata, param_funcs)(**params)
             wrapper.__name__ = func.__name__
             return wrapper
         return gate_decorator
@@ -143,7 +138,7 @@ class Model(metaclass=abc.ABCMeta):
                                          .shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
-        return TimeAwareCircuit(circuit.qubits, gates)
+        return Circuit(circuit.qubits, gates)
 
     def finalize(self, circuit, bases_in=None):
         """

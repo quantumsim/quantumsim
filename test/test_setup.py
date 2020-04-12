@@ -11,7 +11,7 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 class TestSetup:
     def test_setup_load(self):
         _ = Setup.from_file(os.path.join(test_dir,
-                            'time_aware_setup_with_defaults.yaml'))
+                                         'time_aware_setup_with_defaults.yaml'))
 
         with pytest.raises(SetupLoadError,
                            match='Unknown setup schema version: 10'):

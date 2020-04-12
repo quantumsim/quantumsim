@@ -122,7 +122,7 @@ class TestOperations:
             Operation.from_sequence(op1.at(0), op_qutrit.at(0))
 
         circuit3q = Operation.from_sequence(op1.at(0), op2.at(1), op3.at(0, 1),
-                          op1.at(1), op2.at(0), op3.at(0, 2))
+                                            op1.at(1), op2.at(0), op3.at(0, 2))
         assert circuit3q.num_qubits == 3
         assert len(circuit3q._units) == 6
 
@@ -132,7 +132,8 @@ class TestOperations:
         with pytest.raises(ValueError, match="Number of indices is not .*"):
             circuit3q.at(0, 1)
 
-        circuit4q = Operation.from_sequence(op3.at(0, 2), circuit3q.at(1, 2, 3))
+        circuit4q = Operation.from_sequence(
+            op3.at(0, 2), circuit3q.at(1, 2, 3))
         assert len(circuit4q._units) == 7
         assert circuit4q._units[0].indices == (0, 2)
         for o1, o2 in zip(circuit4q._units[1:], circuit3q._units):
@@ -164,7 +165,7 @@ class TestOperations:
                       (lib2.rotate_x(-np.pi/2), (0,))]
 
         for op, indices in op_indices:
-            op(pv1, *indices),
+            op(pv1, *indices)
 
         circuit = Operation.from_sequence(
             *(op.at(*ix) for op, ix in op_indices))
@@ -234,11 +235,11 @@ class TestOperations:
 
     def test_lindblad_two_qubit(self):
         b = (bases.general(2),)
-        id = np.array([[1, 0], [0, 1]])
+        iden = np.array([[1, 0], [0, 1]])
         ham1 = random_hermitian_matrix(2, seed=6)
         ham2 = random_hermitian_matrix(2, seed=7)
-        ham = np.kron(ham1, id).reshape(2, 2, 2, 2) + \
-              np.kron(id, ham2).reshape(2, 2, 2, 2)
+        ham = np.kron(ham1, iden).reshape(2, 2, 2, 2) + \
+            np.kron(iden, ham2).reshape(2, 2, 2, 2)
         dm = random_hermitian_matrix(4, seed=3)
         op1 = Operation.from_lindblad_form(25, b, hamiltonian=ham1)
         op2 = Operation.from_lindblad_form(25, b, hamiltonian=ham2)
@@ -262,8 +263,8 @@ class TestOperations:
             [[0, 0],
              [0, 0.17]],
         ])
-        ops = [np.kron(op, id).reshape(2, 2, 2, 2) for op in ops1] + \
-              [np.kron(id, op).reshape(2, 2, 2, 2) for op in ops2]
+        ops = [np.kron(op, iden).reshape(2, 2, 2, 2) for op in ops1] + \
+              [np.kron(iden, op).reshape(2, 2, 2, 2) for op in ops2]
         op1 = Operation.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Operation.from_lindblad_form(25, b, lindblad_ops=ops2)
         op = Operation.from_lindblad_form(25, b*2, lindblad_ops=ops)

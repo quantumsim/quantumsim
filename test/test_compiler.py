@@ -5,7 +5,6 @@
 
 import pytest
 import numpy as np
-import warnings
 from pytest import approx
 
 from quantumsim import bases, Operation
@@ -149,7 +148,7 @@ class TestCompiler:
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm(op_angle.bases_in, op_angle.bases_out) == \
-               approx(op_2angle.ptm(op_2angle.bases_in, op_2angle.bases_out))
+            approx(op_2angle.ptm(op_2angle.bases_in, op_2angle.bases_out))
         assert pv1.to_pv() == approx(pv0.to_pv())
 
         rx_pi = lib.rotate_x(np.pi)
@@ -368,7 +367,7 @@ class TestCompiler:
             ))
         zzpc = zz_parametrized.compile(bases_in, bases_out)
         assert len(list(zzpc.units())) == 4
-        params= dict(angle1=-np.pi / 2, lr02=0.1, foo='bar')
+        params = dict(angle1=-np.pi / 2, lr02=0.1, foo='bar')
         new_units = [(op.substitute(**params)
                       if isinstance(op, ParametrizedOperation)
                       else op).at(*ix) for op, ix in zzpc.units()]
