@@ -3,4 +3,4 @@ from .library import IdealModel
 
 gates = IdealModel()
 
-__all__ = ['Model', 'WaitPlaceholder', 'gates']
+__all__ = ["Model", "WaitPlaceholder", "gates"]

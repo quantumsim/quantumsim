@@ -1,11 +1,11 @@
 import abc
-from numpy import nan
 from collections import defaultdict
 
 from more_itertools import pairwise
+from numpy import nan
 
 from .. import bases
-from ..circuits import Gate, Circuit
+from ..circuits import Circuit, Gate
 from ..operations import Operation, Placeholder
 from ..operations.operation import IndexedOperation
 
@@ -32,10 +32,13 @@ class Model(metaclass=abc.ABCMeta):
         return WaitPlaceholder(duration, self.dim).at(qubit)
 
     def waiting_gate(self, qubit, duration):
-        return Gate(qubit, self.dim,
-                    WaitPlaceholder(duration, self.dim),
-                    duration,
-                    plot_metadata={'style': 'marker', 'label': 'x'})
+        return Gate(
+            qubit,
+            self.dim,
+            WaitPlaceholder(duration, self.dim),
+            duration,
+            plot_metadata={"style": "marker", "label": "x"},
+        )
 
     def p(self, param, *qubits):
         return self._setup.param(param, *qubits)
@@ -63,7 +66,8 @@ class Model(metaclass=abc.ABCMeta):
                 raise ValueError(
                     "Can't construct an operation from a sequence: "
                     "all operations in multi-qubit gate must provide "
-                    "indices using Operation.at() method.")
+                    "indices using Operation.at() method."
+                )
             return op.at(0)
         elif isinstance(op, IndexedOperation):
             op, ix = op
@@ -71,19 +75,22 @@ class Model(metaclass=abc.ABCMeta):
             return op.at(*ix)
         else:
             raise ValueError(
-                "`op` can be only Operation or IndexedOperation, got {}"
-                .format(type(op)))
+                "`op` can be only Operation or IndexedOperation, got {}".format(
+                    type(op)
+                )
+            )
 
     @staticmethod
     def gate(duration=nan, plot_metadata=None, param_funcs=None):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
-                sequence = sequence if (isinstance(sequence, tuple) or
-                                        isinstance(sequence, list)) else \
-                    (sequence,)
-                sequence = [self._normalize_operation(op, qubits) for op
-                            in sequence]
+                sequence = (
+                    sequence
+                    if (isinstance(sequence, tuple) or isinstance(sequence, list))
+                    else (sequence,)
+                )
+                sequence = [self._normalize_operation(op, qubits) for op in sequence]
                 return Operation.from_sequence(sequence, qubits)
 
             def wrapper(self, *qubits, **params):
@@ -94,10 +101,18 @@ class Model(metaclass=abc.ABCMeta):
                 else:
                     _duration = duration
                 return Gate(
-                    qubits, self.dim, make_operation(self, *qubits),
-                    _duration, 0., plot_metadata, param_funcs)(**params)
+                    qubits,
+                    self.dim,
+                    make_operation(self, *qubits),
+                    _duration,
+                    0.0,
+                    plot_metadata,
+                    param_funcs,
+                )(**params)
+
             wrapper.__name__ = func.__name__
             return wrapper
+
         return gate_decorator
 
     def add_waiting_gates(self, circuit):
@@ -124,20 +139,22 @@ class Model(metaclass=abc.ABCMeta):
             duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration)
-                        .shift(time_start=time_start))
+                    self.waiting_gate(qubit, duration).shift(time_start=time_start)
+                )
             duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration)
-                        .shift(time_end=time_end))
+                    self.waiting_gate(qubit, duration).shift(time_end=time_end)
+                )
             for gate1, gate2 in pairwise(gates):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
-                    waiting_gates.append(self.waiting_gate(qubit, duration)
-                                         .shift(time_start=gate1.time_end))
-        gates = sorted(circuit.gates + waiting_gates,
-                       key=lambda g: g.time_start)
+                    waiting_gates.append(
+                        self.waiting_gate(qubit, duration).shift(
+                            time_start=gate1.time_end
+                        )
+                    )
+        gates = sorted(circuit.gates + waiting_gates, key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
 
     def finalize(self, circuit, bases_in=None):
