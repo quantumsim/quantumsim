@@ -4,14 +4,17 @@ from inspect import signature
 import numpy as np
 import xarray as xr
 
-from ..circuits import FinalizedCircuit, _to_str, deparametrize
 from .. import State
+from ..circuits import FinalizedCircuit, _to_str, deparametrize
 from ..operations import ParametrizedOperation
 
 
 class Controller:
     """
-     The controller class handles the application of circuits to a single state. It automatically parses the circuit for free parameters set by the model and handles the data output of the circuit.
+     Experiment controller
+
+     The controller handles the application of circuits to a single state.
+     It automatically parses the circuit for free parameters set by the model and handles the data output of the circuit.
 
     Parameters
         ----------
@@ -26,11 +29,17 @@ class Controller:
     def __init__(self, circuits, parameters=None):
         if not isinstance(circuits, dict):
             raise ValueError(
-                "Circuits expected to be dict instance, instead provided as {}".format(type(circuits)))
-        if not all(isinstance(circ_name, str) and isinstance(circ, FinalizedCircuit)
-                   for circ_name, circ in circuits.items()):
+                "Circuits expected to be dict instance, instead provided as {}".format(
+                    type(circuits)
+                )
+            )
+        if not all(
+            isinstance(circ_name, str) and isinstance(circ, FinalizedCircuit)
+            for circ_name, circ in circuits.items()
+        ):
             raise ValueError(
-                "The circuit dictionary should contain the names of circuits as the keys and the finalized circuits as the values.")
+                "The circuit dictionary should contain the names of circuits as the keys and the finalized circuits as the values."
+            )
 
         self._circuits = circuits
 
@@ -42,7 +51,10 @@ class Controller:
         if parameters is not None:
             if not isinstance(parameters, dict):
                 raise ValueError(
-                    "Parameters expected to be dict instance, instead provided as {}".format(type(parameters)))
+                    "Parameters expected to be dict instance, instead provided as {}".format(
+                        type(parameters)
+                    )
+                )
 
         self._parameters = parameters
 
@@ -80,7 +92,10 @@ class Controller:
             seed_sequence = seed
         else:
             raise ValueError(
-                "Seed expected to be integer or iterable sequence of integers,instead provided {}".format(type(seed)))
+                "Seed expected to be integer or iterable sequence of integers,instead provided {}".format(
+                    type(seed)
+                )
+            )
 
         for seed_val in seed_sequence:
             self.seed(seed_val)
@@ -90,22 +105,22 @@ class Controller:
             if exp_outcomes is not None:
                 if not isinstance(exp_outcomes, list):
                     raise ValueError(
-                        "The outcome of the experiment should be a list of the circuit outputs")
+                        "The outcome of the experiment should be a list of the circuit outputs"
+                    )
                 if any(outcome is None for outcome in exp_outcomes):
-                    raise ValueError(
-                        "The outcome list should not contain any None")
+                    raise ValueError("The outcome list should not contain any None")
 
                 exp_outcome_dataset = xr.merge(exp_outcomes)
-                exp_outcome_dataset['seed'] = seed_val
+                exp_outcome_dataset["seed"] = seed_val
                 outcomes.append(exp_outcome_dataset)
 
         if len(outcomes) > 0:
-            return xr.concat(outcomes, dim='seed')
+            return xr.concat(outcomes, dim="seed")
         return None
 
     def apply(self, circuit_name, num_runs=1, **params):
         """
-        run Applies the circuit corresponding to the provided name to the internal state stored by the controller.
+        Apply the circuit corresponding to the provided name to the internal state stored by the controller.
 
         Parameters
         ----------
@@ -126,14 +141,18 @@ class Controller:
 
         if self._state is None:
             raise ValueError(
-                "A state must be initialized before circuit application is possible")
+                "A state must be initialized before circuit application is possible"
+            )
 
         # Extract all parameters, for which a callable expression was provided
 
         given_params = {**self._parameters, **params}
 
-        _cur_param_funcs = {par: given_params.pop(par) for par in list(
-            given_params) if callable(given_params[par])}
+        _cur_param_funcs = {
+            par: given_params.pop(par)
+            for par in list(given_params)
+            if callable(given_params[par])
+        }
 
         # Combine with the automatically generated ones,
         # overwriting any if the user has provided a different function
@@ -141,7 +160,8 @@ class Controller:
 
         if self._rng_required(param_funcs) and self._rng is None:
             raise ValueError(
-                "A random number generator must be initialized, please seed the controller")
+                "A random number generator must be initialized, please seed the controller"
+            )
 
         if given_params:
             # At this points params only contains the fixed parameters
@@ -156,12 +176,11 @@ class Controller:
         for _ in range(num_runs):
             outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
             if outcome is not None:
-                outcomes.append(outcome.rename(
-                    {'param': circuit_name + '_param'}))
+                outcomes.append(outcome.rename({"param": circuit_name + "_param"}))
 
         if outcomes:
-            result = xr.concat(outcomes, dim=circuit_name + '_run')
-            # Attach all parameters that had fixed values across the repeated applications
+            result = xr.concat(outcomes, dim=circuit_name + "_run")
+            # Add fixed parameters
             for param, param_val in params.items():
                 result[param] = param_val
             result.name = circuit_name
@@ -186,8 +205,8 @@ class Controller:
         """
         if len(circuit.params) != 0:
             outcome = xr.DataArray(
-                dims=['param'],
-                coords={'param': list(circuit.params)})
+                dims=["param"], coords={"param": list(circuit.params)}
+            )
         else:
             outcome = None
 
@@ -200,25 +219,26 @@ class Controller:
                 # Get the free parameters of the operation and evaluate them
                 _op_params = _to_str(operation.params)
                 _controller_params = {
-                    'state': self._state.partial_trace(*op_qubits),
-                    'rng': self._rng,
-                    'outcome': outcome}
+                    "state": self._state.partial_trace(*op_qubits),
+                    "rng": self._rng,
+                    "outcome": outcome,
+                }
 
                 _eval_params = {}
                 for param in _op_params:
                     param_func = param_funcs[param]
                     sig = signature(param_func)
-                    func_args = {par.name: _controller_params[par.name]
-                                 for par in sig.parameters.values()
-                                 if par.kind == par.POSITIONAL_OR_KEYWORD and
-                                 par.name != 'self'}
+                    func_args = {
+                        par.name: _controller_params[par.name]
+                        for par in sig.parameters.values()
+                        if par.kind == par.POSITIONAL_OR_KEYWORD and par.name != "self"
+                    }
                     _eval_params[param] = param_func(**func_args)
 
                 # sub in the operation
                 operation = deparametrize(operation, _eval_params)
                 # append realized value to the pre-located DataArray
-                outcome.loc[{'param': list(_op_params)}] = list(
-                    _eval_params.values())
+                outcome.loc[{"param": list(_op_params)}] = list(_eval_params.values())
 
             # Apply each operation, which now should have all parameters fixed
             operation(self._state.pauli_vector, *op_inds)
@@ -233,6 +253,6 @@ class Controller:
     def _rng_required(self, param_funcs):
         for func in param_funcs.values():
             sig = signature(func)
-            if 'rng' in list(sig.parameters):
+            if "rng" in list(sig.parameters):
                 return True
         return False
