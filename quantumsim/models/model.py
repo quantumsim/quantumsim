@@ -104,9 +104,9 @@ class Model(metaclass=abc.ABCMeta):
                     qubits,
                     self.dim,
                     make_operation(self, *qubits),
-                    _duration,
-                    plot_metadata,
-                    param_funcs,
+                    duration=_duration,
+                    plot_metadata=plot_metadata,
+                    param_funcs=param_funcs,
                 )(**params)
 
             wrapper.__name__ = func.__name__
