@@ -31,12 +31,13 @@ class Model(metaclass=abc.ABCMeta):
     def wait(self, qubit, duration):
         return WaitPlaceholder(duration, self.dim).at(qubit)
 
-    def waiting_gate(self, qubit, duration):
+    def waiting_gate(self, qubit, duration, time_start=0.0):
         return Gate(
             qubit,
             self.dim,
             WaitPlaceholder(duration, self.dim),
             duration,
+            time_start,
             plot_metadata={"style": "marker", "label": "x"},
         )
 
@@ -93,7 +94,7 @@ class Model(metaclass=abc.ABCMeta):
                 sequence = [self._normalize_operation(op, qubits) for op in sequence]
                 return Operation.from_sequence(sequence, qubits)
 
-            def wrapper(self, *qubits, **params):
+            def wrapper(self, *qubits, time_start=0.0, **params):
                 if callable(duration):
                     _duration = duration(*qubits, self._setup)
                 elif isinstance(duration, str):
@@ -105,7 +106,7 @@ class Model(metaclass=abc.ABCMeta):
                     self.dim,
                     make_operation(self, *qubits),
                     _duration,
-                    0.0,
+                    time_start,
                     plot_metadata,
                     param_funcs,
                 )(**params)
@@ -120,7 +121,7 @@ class Model(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        circuit : quantumsim.circuits.TimeAware
+        circuit : quantumsim.circuits.Circuit
 
         Returns
         -------
