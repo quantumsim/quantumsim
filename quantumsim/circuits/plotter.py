@@ -85,7 +85,7 @@ class MatplotlibPlotter:
 
         Parameters
         ----------
-        gate : quantumsim.circuits.Gate
+        gate : quantumsim.circuits.PlotUnitMixin
 
         Returns
         -------

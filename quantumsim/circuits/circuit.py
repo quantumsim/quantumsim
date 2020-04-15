@@ -14,7 +14,7 @@ PARAM_REPEAT_ALLOWED = False
 
 @contextmanager
 def allow_param_repeat():
-    """Context manager to allow using the same named parameter in 
+    """Context manager to allow using the same named parameter in
     different gates of a circuit."""
     global PARAM_REPEAT_ALLOWED  # pylint: disable=global-statement
     PARAM_REPEAT_ALLOWED = True
@@ -38,7 +38,7 @@ class GateSetMixin(ABC):
     @property
     @abstractmethod
     def gates(self):
-        """Qubit names, associated with this circuit."""
+        """Gates of this circuit."""
         pass
 
     @property
@@ -172,7 +172,20 @@ class GateSetMixin(ABC):
                 return gate.time_end
 
 
-class Gate(GateSetMixin):
+class CircuitUnitMixin(ABC):
+    def __init__(self):
+        self.plot_metadata = {}
+
+    @property
+    @abstractmethod
+    def params(self):
+        """Returns all parameters for this circuit, in a form of dictionary,
+        mapping from a parameter name to the parameter value or a Sympy
+        expression, used to represent it."""
+        pass
+
+
+class Gate(GateSetMixin, CircuitUnitMixin):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
     _sympify_locals = {
         'beta': symbols('beta'),
@@ -195,6 +208,7 @@ class Gate(GateSetMixin):
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
         """
+        super(Gate, self).__init__()
         self.dim_hilbert = dim_hilbert
         if isinstance(qubits, str):
             self._qubits = (qubits,)
@@ -213,7 +227,8 @@ class Gate(GateSetMixin):
         if len(self._qubits) != operation.num_qubits:
             raise ValueError('Number of qubits in operation does not match '
                              'one in `qubits`.')
-        self.plot_metadata = plot_metadata or {}
+        if plot_metadata:
+            self.plot_metadata = plot_metadata
         self._params = {
             param: symbols(param) for param in
             self._operation_params(self._operation)}
