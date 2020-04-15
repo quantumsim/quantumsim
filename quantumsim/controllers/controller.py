@@ -56,7 +56,7 @@ class Controller:
                     )
                 )
 
-        self._parameters = parameters
+        self._parameters = parameters or {}
 
         self._rng = None
         self._state = None

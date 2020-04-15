@@ -8,6 +8,7 @@ from .. import bases
 from ..circuits import Circuit, Gate
 from ..operations import Operation, Placeholder
 from ..operations.operation import IndexedOperation
+from .channel import Channel
 
 
 class WaitPlaceholder(Placeholder):
@@ -28,15 +29,14 @@ class Model(metaclass=abc.ABCMeta):
     def __init__(self, setup):
         self._setup = setup
 
-    def waiting_gate(self, qubit, duration, channel=None):
-        if channel:
-            op = channel.noise_op(duration, params=self._setup.qubit_params(qubit))
-        else:
-            op = WaitPlaceholder(duration, self.dim)
+    def wait(self, qubit, duration):
+        return WaitPlaceholder(duration, self.dim).at(qubit)
+
+    def waiting_gate(self, qubit, duration, channel):
         return Gate(
             qubit,
             self.dim,
-            op,
+            channel.noise_op(qubit, duration),
             duration,
             plot_metadata={"style": "marker", "label": "x"},
         )
@@ -135,6 +135,14 @@ class Model(metaclass=abc.ABCMeta):
         time_end = circuit.time_end
         margin = 1e-1
         waiting_gates = []
+
+        if channel is not None:
+            if not isinstance(channel, Channel):
+                raise ValueError("channel must a Channel instance")
+        else:
+            channel = Channel.from_operator(
+                lambda qubit, duration: WaitPlaceholder(duration, self.dim)
+            )
 
         for qubit, gates in gates_dict.items():
             duration = gates[0].time_start - time_start
