@@ -2,82 +2,67 @@ from numpy import pi
 from pytest import approx
 
 from quantumsim import Model, Setup, bases, Operation
-from quantumsim.models.model import WaitPlaceholder
 from quantumsim.operations import ParametrizedOperation
+from quantumsim.circuits import FinalizedCircuit
+from quantumsim.models import WaitingGate
 
-import quantumsim.operations.qubits as lib
+import quantumsim.models.perfect.qubits as lib
 
 
 def test_create_untimed_model():
-    basis = (bases.general(2),)
-
     class SampleModel(Model):
         dim = 2
 
         @Model.gate()
         def rotate_y(self, qubit):
-            return (
-                ParametrizedOperation(lib.rotate_y, basis),
-            )
+            return lib.rotate_y(qubit)
 
         @Model.gate()
-        def cphase(self, qubit_static, qubit_fluxed):
-            return (
-                lib.cphase(pi).at(qubit_static, qubit_fluxed),
-            )
+        def cz(self, qubit_static, qubit_fluxed):
+            # FIXME must be `..., angle=pi)`
+            return lib.cphase(qubit_static, qubit_fluxed)(angle=pi)
 
     sample_setup = Setup("""
     setup: []
     """)
-
     m = SampleModel(sample_setup)
-    cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
 
-    assert cnot.finalize().operation.ptm(basis*2, basis*2) == approx(
-        Operation.from_sequence(
-            lib.rotate_y(0.5*pi).at(0),
-            lib.cphase(pi).at(0, 1),
-            lib.rotate_y(-0.5*pi).at(0),
-        ).ptm(basis*2, basis*2))
+    assert len(m.rotate_y('D0').free_parameters) == 1
+    assert len(m.rotate_y('D0', theta=0.5*pi).free_parameters) == 0
+
+    cnot = m.rotate_y('D0', theta=0.5*pi) + m.cz('D0', 'D1') + \
+           m.rotate_y('D0', theta=-0.5*pi)
 
 
 def test_create_timed_model():
-    basis = (bases.general(2),)
-
     class SampleModel(Model):
         dim = 2
 
         @Model.gate(duration=20)
         def rotate_y(self, qubit):
-            return (
-                self.wait(qubit, 10),
-                ParametrizedOperation(lib.rotate_y, basis),
-                self.wait(qubit, 10),
-            )
+            return (self.wait(qubit, 10) +
+                    lib.rotate_x(qubit) +
+                    self.wait(qubit, 10))
 
         @Model.gate(duration='t_twoqubit')
         def cphase(self, qubit_static, qubit_fluxed):
-            return (
-                self.wait(qubit_static, 0.5*self.p('t_twoqubit')),
-                self.wait(qubit_fluxed, 0.5*self.p('t_twoqubit')),
-                lib.cphase(pi).at(qubit_static, qubit_fluxed),
-                self.wait(qubit_static, 0.5*self.p('t_twoqubit')),
-                self.wait(qubit_fluxed, 0.5*self.p('t_twoqubit')),
-            )
+            return (self.wait(qubit_static, 0.5*self.p('t_twoqubit')) +
+                    self.wait(qubit_fluxed, 0.5*self.p('t_twoqubit')) +
+                    # FIXME should be `..., angle=pi)`
+                    lib.cphase(qubit_static, qubit_fluxed) +
+                    self.wait(qubit_static, 0.5*self.p('t_twoqubit')) +
+                    self.wait(qubit_fluxed, 0.5*self.p('t_twoqubit')))
 
         @Model.gate(duration=lambda qubit, setup: 600 if qubit == 'D0' else 400)
         def strange_duration_gate(self, qubit):
-            return lib.rotate_y(pi)
+            return lib.rotate_y(qubit, theta=pi)
 
-        @staticmethod
-        def _filter_wait_placeholders(operation):
-            return Operation.from_sequence([
-                unit for unit in operation.units()
-                if not isinstance(unit.operation, WaitPlaceholder)])
+        def finalize(self, circuit, *, bases_in=None):
+            # Filter out waiting gates
+            # In real life this will be replacing them to idling operators
+            gates = [g for g in circuit.operations() if not isinstance(g, WaitingGate)]
+            return FinalizedCircuit(circuit.qubits, gates, bases_in=bases_in)
 
-        def finalize(self, circuit, bases_in=None):
-            return circuit.finalize([self._filter_wait_placeholders], bases_in)
 
     sample_setup = Setup("""
     setup:
@@ -85,18 +70,10 @@ def test_create_timed_model():
     """)
 
     m = SampleModel(sample_setup)
-    cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
+    cnot = m.rotate_y('D0', theta=0.5*pi) + m.cphase('D0', 'D1') + \
+           m.rotate_y('D0', theta=-0.5*pi)
+    assert len(list(cnot.operations())) == 11
     cnot = m.finalize(cnot)
+    assert len(list(cnot.operation.units())) == 3
+    assert len(list(cnot(angle=pi).operation.units())) == 1
 
-    assert cnot.operation.ptm(basis*2, basis*2) == approx(
-        Operation.from_sequence(
-            lib.rotate_y(0.5*pi).at(0),
-            lib.cphase(pi).at(0, 1),
-            lib.rotate_y(-0.5*pi).at(0),
-        ).ptm(basis*2, basis*2))
-
-    gate1 = m.strange_duration_gate('D0')
-    assert gate1.duration == 600
-    gate2 = m.strange_duration_gate('D1')
-    assert gate2.duration == 400

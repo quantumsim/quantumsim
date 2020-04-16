@@ -1,13 +1,14 @@
-assmport re
+import re
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from copy import copy
+from copy import copy, deepcopy
 from itertools import chain
 
 import numpy as np
 from sympy import symbols, sympify
 
-from ..operations import Operation, ParametrizedOperation
+from ..operations.operation import Operation, ParametrizedOperation
+from ..operations.operation import _Chain
 
 PARAM_REPEAT_ALLOWED = False
 
@@ -20,6 +21,24 @@ def allow_param_repeat():
     PARAM_REPEAT_ALLOWED = True
     yield
     PARAM_REPEAT_ALLOWED = False
+
+
+def sympy_to_native(symbol):
+    try:
+        if symbol.is_Integer:
+            return int(symbol)
+        if symbol.is_Float:
+            return float(symbol)
+        if symbol.is_Complex:
+            return complex(symbol)
+        return symbol
+    except Exception as ex:
+        raise RuntimeError(
+            "Could not convert sympy symbol to native type."
+            "It may be due to misinterpretation of some symbols by sympy."
+            "Try to use sympy expressions as gate parameters' values "
+            "explicitly."
+        ) from ex
 
 
 class GateSetMixin(ABC):
@@ -50,12 +69,6 @@ class GateSetMixin(ABC):
     @abstractmethod
     def free_parameters(self):
         """Return set of parameters, accepted by this circuit."""
-        pass
-
-    @abstractmethod
-    def operation_sympified(self):
-        """An operation, correspondent to this circuit, with parameters,
-        set to sympy expression"""
         pass
 
     @abstractmethod
@@ -160,11 +173,7 @@ class GateSetMixin(ABC):
         FinalizedCircuit
             Finalized version of this circuit
         """
-        op = self.operation_sympified()
-        if preprocessors:
-            for func in preprocessors:
-                op = func(op)
-        return FinalizedCircuit(op, self.qubits, bases_in=bases_in)
+        return FinalizedCircuit(self.qubits, self.operations(), bases_in=bases_in)
 
     def _qubit_time_start(self, qubit):
         for gate in self.gates:
@@ -178,16 +187,9 @@ class GateSetMixin(ABC):
 
 
 class CircuitUnitMixin(ABC):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.plot_metadata = {}
-
-    @property
-    @abstractmethod
-    def params(self):
-        """Returns all parameters for this circuit, in a form of dictionary,
-        mapping from a parameter name to the parameter value or a Sympy
-        expression, used to represent it."""
-        pass
 
 
 class Gate(GateSetMixin, CircuitUnitMixin):
@@ -241,7 +243,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         self._time_start = time_start
 
     def __copy__(self):
-        other = self.__class__(
+        other = Gate(
             self._qubits, self.dim_hilbert, copy(self._operation),
             self._duration, self._time_start, self.plot_metadata)
         other._params = copy(self._params)
@@ -268,21 +270,19 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         return self._duration
 
     def operation_sympified(self):
-        new_units = []
-        for unit in self._operation.units():
-            op, ix = unit
-            if isinstance(op, ParametrizedOperation):
-                new_op = copy(op)
-                new_op.params = tuple(
-                    self._params[p] if p in self._params.keys() else p
-                    for p in op.params)
-                new_units.append(new_op.at(*ix))
-            else:
-                new_units.append(unit)
-        if len(new_units) == 1:
-            return new_units[0].operation
+        assert not isinstance(self._operation, _Chain), "need to refactor, sorry"
+        if isinstance(self._operation, ParametrizedOperation):
+            new_op = copy(self._operation)
+            new_op.params = tuple(
+                self._params[p] if p in self._params.keys() else p
+                for p in self._operation.params)
+            if len(self.free_parameters) == 0:
+                # We can convert to a normal operation
+                op_params = tuple(sympy_to_native(p) for p in new_op.params)
+                new_op = new_op.set_params(op_params).substitute()
+            return new_op.at(*self.qubits)
         else:
-            return Operation.from_sequence(new_units)
+            return self._operation.at(*self.qubits)
 
     @property
     def qubits(self):
@@ -332,6 +332,11 @@ class Circuit(GateSetMixin):
         self._time_start = min((g.time_start for g in self._gates))
         self._time_end = max((g.time_end for g in self._gates))
 
+    def __copy__(self):
+        other = Circuit(self.qubits, (copy(gate) for gate in self._gates))
+        other._params_cache = self._params_cache
+        return other
+
     @property
     def qubits(self):
         return self._qubits
@@ -346,14 +351,6 @@ class Circuit(GateSetMixin):
             self._params_cache = set(chain(*(g.free_parameters
                                              for g in self._gates)))
         return self._params_cache
-
-    def operation_sympified(self):
-        operations = []
-        for gate in self._gates:
-            qubit_indices = tuple(self._qubits.index(qubit) for qubit in
-                                  gate.qubits)
-            operations.append(gate.operation_sympified().at(*qubit_indices))
-        return Operation.from_sequence(operations)
 
     def set(self, **kwargs):
         for gate in self._gates:
@@ -385,23 +382,19 @@ class Circuit(GateSetMixin):
     def duration(self):
         return self._time_end - self._time_start
 
-    def __copy__(self):
-        # Need a shallow copy of all included gates
-        copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
-        copy_._params_cache = self._params_cache
-        return copy_
 
-
-class Box(Circuit, CircuitUnitMixin):
+class Box(CircuitUnitMixin, Circuit):
     """Several gates, united in one for logical purposes."""
-    def __init__(self, circuit, plot_metadata=None):
-        super().__init__(circuit.qubits, circuit.gates)
+    def __init__(self, qubits, gates, plot_metadata=None):
+        super().__init__(qubits, gates)
         if plot_metadata:
             self.plot_metadata = plot_metadata
 
-    @property
-    def gates(self):
-        return self,
+    def __copy__(self):
+        other = Box(self._qubits, (copy(gate) for gate in self._gates))
+        other._params_cache = self._params_cache
+        other.plot_metadata = deepcopy(self.plot_metadata)
+        return other
 
 
 class FinalizedCircuit:
@@ -413,21 +406,21 @@ class FinalizedCircuit:
     qubits : list of str
         List of qubits in the operation
     """
-    def __init__(self, operation, qubits, *, bases_in=None):
+    def __init__(self, qubits, gates, *, bases_in=None):
         self.qubits = list(qubits)
+        operations = [gate.operation_sympified() for gate in gates]
         # NB: operation must have sympy expressions in it
         self._params = set()
         units = []
-        for unit in operation.units():
-            op, ix = unit
-            params = self._op_params(op)
-            if len(params) == 0:
-                units.append(self._deparametrize(op).at(*ix))
-            else:
-                self._params.update(params)
-                units.append(unit)
-        self.operation = Operation.from_sequence(units)\
-                                  .compile(bases_in=bases_in)
+        for op, ix in operations:
+            self._params.update(self._op_params(op))
+            new_ix = [self.qubits.index(qubit) for qubit in ix]
+            units.append(op.at(*new_ix))
+        if len(operations) > 0:
+            self.operation = Operation.from_sequence(units) \
+                                      .compile(bases_in=bases_in)
+        else:
+            self.operation = None
 
     @staticmethod
     def _op_params(op):
@@ -435,24 +428,6 @@ class FinalizedCircuit:
             return set()
         # All parameters must be sympy expressions at this point
         return set(map(str, chain(*(p.free_symbols for p in op.params))))
-
-    @staticmethod
-    def _sympy_to_native(symbol):
-        try:
-            if symbol.is_Integer:
-                return int(symbol)
-            if symbol.is_Float:
-                return float(symbol)
-            if symbol.is_Complex:
-                return complex(symbol)
-            return symbol
-        except Exception as ex:
-            raise RuntimeError(
-                "Could not convert sympy symbol to native type."
-                "It may be due to misinterpretation of some symbols by sympy."
-                "Try to use sympy expressions as gate parameters' values "
-                "explicitly."
-            ) from ex
 
     @classmethod
     def _deparametrize(cls, op, params=None):
@@ -475,7 +450,7 @@ class FinalizedCircuit:
         op_params = op.params
         if params:
             op_params = (p.subs(params) for p in op_params)
-        op_params = tuple(cls._sympy_to_native(p) for p in op_params)
+        op_params = tuple(sympy_to_native(p) for p in op_params)
         return op.set_params(op_params).substitute()
 
     def __call__(self, **params):
@@ -485,9 +460,9 @@ class FinalizedCircuit:
                 raise KeyError(*unset_params)
             units = [self._deparametrize(op, params).at(*ix)
                      for op, ix in self.operation.units()]
-            return FinalizedCircuit(
-                Operation.from_sequence(units).compile(),
-                self.qubits)
+            out = FinalizedCircuit(self.qubits, [])
+            out.operation = Operation.from_sequence(units).compile()
+            return out
         else:
             return self
 
