@@ -122,7 +122,7 @@ class Controller:
         self._outcomes = defaultdict(list)
         return dataset
 
-    def run(self, run_experiment, seed):
+    def run(self, run_experiment, seed, **parameters):
         if not callable(run_experiment):
             raise ValueError("The experiment must be a defined function")
 
@@ -140,7 +140,7 @@ class Controller:
         datasets = []
         for seed_val in seed_sequence:
             self._rng = np.random.RandomState(seed_val)
-            run_experiment()
+            run_experiment(**parameters)
             dataset = self._dataset()
             if dataset:
                 dataset["seed"] = seed_val
@@ -152,7 +152,7 @@ class Controller:
             return datasets.pop(0)
         return None
 
-    def apply(self, circuit_name, **parameters):
+    def apply(self, circuit_name, seed=None, **parameters):
         """
         Apply the circuit corresponding to the provided name to the internal state stored by the controller.
 
@@ -194,9 +194,15 @@ class Controller:
         param_funcs = {**circuit._param_funcs, **set_param_funcs}
 
         if self._rng_required(param_funcs) and self._rng is None:
-            raise ValueError(
-                "A random number generator must be initialized, please seed the controller"
-            )
+            # Only go into loop if seed is required and _rng not initialized by the run method
+            if seed is not None:
+                if not isinstance(seed, int):
+                    raise ValueError("seed must be an integer")
+                self._rng = np.random.RandomState(seed)
+            else:
+                raise ValueError(
+                    "A random number generator must be initialized, please seed the controller"
+                )
 
         if set_params:
             # At this points params only contains the fixed parameters
