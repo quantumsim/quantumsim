@@ -38,8 +38,13 @@ class GateSetMixin(ABC):
     @property
     @abstractmethod
     def gates(self):
-        """Gates of this circuit."""
+        """Gates (logical units) of this circuit."""
         pass
+
+    def operations(self):
+        """Generator of operations (Mathematical units) of this circuit."""
+        for gate in self.gates:
+            yield from gate.operations()
 
     @property
     @abstractmethod
@@ -280,12 +285,15 @@ class Gate(GateSetMixin, CircuitUnitMixin):
             return Operation.from_sequence(new_units)
 
     @property
+    def qubits(self):
+        return self._qubits
+
+    @property
     def gates(self):
         return self,
 
-    @property
-    def qubits(self):
-        return self._qubits
+    def operations(self):
+        yield self
 
     @property
     def params(self):
@@ -309,7 +317,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
     @staticmethod
     def _operation_params(op):
         out = set()
-        for op, ix in op.units():
+        for op, _ in op.units():
             if isinstance(op, ParametrizedOperation):
                 out.update(filter(lambda p: isinstance(p, str), op.params))
         return out
@@ -390,6 +398,10 @@ class Box(Circuit, CircuitUnitMixin):
         super().__init__(circuit.qubits, circuit.gates)
         if plot_metadata:
             self.plot_metadata = plot_metadata
+
+    @property
+    def gates(self):
+        return self,
 
 
 class FinalizedCircuit:
