@@ -1,4 +1,4 @@
-import re
+assmport re
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
@@ -382,6 +382,14 @@ class Circuit(GateSetMixin):
         copy_ = self.__class__(self._qubits, (copy(g) for g in self._gates))
         copy_._params_cache = self._params_cache
         return copy_
+
+
+class Box(Circuit, CircuitUnitMixin):
+    """Several gates, united in one for logical purposes."""
+    def __init__(self, circuit, plot_metadata=None):
+        super().__init__(circuit.qubits, circuit.gates)
+        if plot_metadata:
+            self.plot_metadata = plot_metadata
 
 
 class FinalizedCircuit:
