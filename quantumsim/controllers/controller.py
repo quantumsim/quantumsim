@@ -1,5 +1,8 @@
+import warnings
+from collections import defaultdict
 from collections.abc import Iterable
 from inspect import signature
+from itertools import count
 
 import numpy as np
 import xarray as xr
@@ -61,6 +64,8 @@ class Controller:
         self._rng = None
         self._state = None
 
+        self._outcomes = defaultdict(list)
+
     @property
     def state(self):
         return self._state
@@ -69,22 +74,57 @@ class Controller:
     def circuits(self):
         return self._circuits
 
-    def seed(self, seed):
-        if not isinstance(seed, int):
-            raise ValueError("The provided seed must be an intereger num")
-        self._rng = np.random.RandomState(seed)
-
     def prepare_state(self, method=None):
         if method is not None:
             self._state = method(self._qubits)
         else:
             self._state = State(self._qubits)
 
-    def run(self, experiment, seed):
-        if not callable(experiment):
-            raise ValueError("The experiment must be a defined function")
+    def to_dataset(self, array):
+        if array is not None:
+            self._outcomes[array.name].append(array)
 
-        outcomes = []
+    def _dataset(self):
+        if len(self._outcomes) == 0:
+            return None
+
+        dataset = xr.Dataset()
+
+        for circ_name in list(self._outcomes):
+            circ_outcomes = self._outcomes.pop(circ_name)
+
+            grouped_outcomes = defaultdict(list)
+            _placeholder_key = count()
+            for out in circ_outcomes:
+                unique_coords = [coord for coord in out.coords if coord != "param"]
+                if any(unique_coords):
+                    grouped_outcomes[unique_coords.pop(0)].append(out)
+                    if len(unique_coords) > 0:
+                        warnings.warn(
+                            "Outcomes have multiple coordinates in common, joining along the first possible coordinate"
+                        )
+                else:
+                    grouped_outcomes[next(_placeholder_key)].append(out)
+
+            _suffix = count(1)
+            for dim, grouped_arrays in grouped_outcomes.items():
+                if isinstance(dim, str):
+                    data_array = xr.concat(grouped_arrays, dim=dim)
+                else:
+                    # This is the case of a placaehold outcome inserted by us
+                    data_array = grouped_arrays[0]
+
+                if circ_name not in dataset:
+                    dataset[circ_name] = data_array
+                else:
+                    dataset[circ_name + "_" + str(next(_suffix))] = data_array
+
+        self._outcomes = defaultdict(list)
+        return dataset
+
+    def run(self, run_experiment, seed):
+        if not callable(run_experiment):
+            raise ValueError("The experiment must be a defined function")
 
         if isinstance(seed, int):
             seed_sequence = [seed]
@@ -97,28 +137,22 @@ class Controller:
                 )
             )
 
+        datasets = []
         for seed_val in seed_sequence:
-            self.seed(seed_val)
+            self._rng = np.random.RandomState(seed_val)
+            run_experiment()
+            dataset = self._dataset()
+            if dataset:
+                dataset["seed"] = seed_val
+                datasets.append(dataset)
 
-            exp_outcomes = experiment()
-
-            if exp_outcomes is not None:
-                if not isinstance(exp_outcomes, list):
-                    raise ValueError(
-                        "The outcome of the experiment should be a list of the circuit outputs"
-                    )
-                if any(outcome is None for outcome in exp_outcomes):
-                    raise ValueError("The outcome list should not contain any None")
-
-                exp_outcome_dataset = xr.merge(exp_outcomes)
-                exp_outcome_dataset["seed"] = seed_val
-                outcomes.append(exp_outcome_dataset)
-
-        if len(outcomes) > 0:
-            return xr.concat(outcomes, dim="seed")
+        if len(seed_sequence) > 1:
+            return xr.concat(datasets, dim="seed")
+        elif len(seed_sequence) == 1:
+            return datasets.pop(0)
         return None
 
-    def apply(self, circuit_name, num_runs=1, **params):
+    def apply(self, circuit_name, **parameters):
         """
         Apply the circuit corresponding to the provided name to the internal state stored by the controller.
 
@@ -145,47 +179,40 @@ class Controller:
             )
 
         # Extract all parameters, for which a callable expression was provided
+        da_params = parameters.keys() - circuit.params
 
-        given_params = {**self._parameters, **params}
+        set_params = {**self._parameters, **parameters}
 
-        _cur_param_funcs = {
-            par: given_params.pop(par)
-            for par in list(given_params)
-            if callable(given_params[par])
+        set_param_funcs = {
+            par: set_params.pop(par)
+            for par in list(set_params)
+            if callable(set_params[par])
         }
 
         # Combine with the automatically generated ones,
         # overwriting any if the user has provided a different function
-        param_funcs = {**circuit._param_funcs, **_cur_param_funcs}
+        param_funcs = {**circuit._param_funcs, **set_param_funcs}
 
         if self._rng_required(param_funcs) and self._rng is None:
             raise ValueError(
                 "A random number generator must be initialized, please seed the controller"
             )
 
-        if given_params:
+        if set_params:
             # At this points params only contains the fixed parameters
-            circuit = circuit(**given_params)
+            circuit = circuit(**set_params)
 
         unset_params = circuit.params - param_funcs.keys()
         if len(unset_params) != 0:
             raise KeyError(*unset_params)
 
-        outcomes = []
+        outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
 
-        for _ in range(num_runs):
-            outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
-            if outcome is not None:
-                outcomes.append(outcome.rename({"param": circuit_name + "_param"}))
-
-        if outcomes:
-            result = xr.concat(outcomes, dim=circuit_name + "_run")
-            # Add fixed parameters
-            for param, param_val in params.items():
-                result[param] = param_val
-            result.name = circuit_name
-            return result
-        return None
+        if outcome is not None:
+            for param in da_params:
+                outcome[param] = parameters[param]
+            outcome.name = circuit_name
+        return outcome
 
     def _apply_circuit(self, circuit, *, param_funcs=None):
         """
