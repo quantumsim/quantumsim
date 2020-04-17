@@ -98,7 +98,7 @@ class MatplotlibPlotter:
         if style == 'box':
             # TODO: formatting with params (it is tricky)
             # params = gate.params_set()
-            label = metadata.pop('label', r'$\mathcal{G}$')  # .format(**params)
+            label = metadata.pop('label', r'$\mathcal{{G}}$')  # .format(**params)
             params = {key: latex(val) for key, val in gate.params.items()}
             label = label.format(**params)
             return self._plot_box_with_label(
