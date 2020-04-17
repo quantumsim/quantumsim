@@ -31,6 +31,24 @@ class WaitingGate(Gate):
         other.metadata = deepcopy(self.metadata)
         return other
 
+    def split(self, time):
+        if time < self.time_start or time > self.time_end:
+            raise ValueError("time must be between gate's time_start and time_end")
+        return (WaitingGate(self._qubits[0],
+                            time - self.time_start,
+                            self.dim_hilbert,
+                            self.time_start,
+                            deepcopy(self.plot_metadata),
+                            **self.metadata),
+                WaitingGate(self._qubits[0],
+                            self.time_end - time,
+                            self.dim_hilbert,
+                            time,
+                            deepcopy(self.plot_metadata),
+                            **self.metadata))
+
+
+
 
 class Model(metaclass=abc.ABCMeta):
     """
