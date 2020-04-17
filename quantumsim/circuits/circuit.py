@@ -71,8 +71,7 @@ class GateSetMixin(ABC):
 
     def operations(self):
         """Generator of operations (Mathematical units) of this circuit."""
-        for gate in self.gates:
-            yield from gate.operations()
+        pass
 
     @property
     @abstractmethod
@@ -199,6 +198,16 @@ class CircuitUnitMixin(ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.plot_metadata = {}
+
+    @property
+    @abstractmethod
+    def params(self):
+        """Return a mapping between parameters, used in the definition of this unit,
+        and values (numbers, Sympy symbols, etc.), used for its visualizing.
+        """
+        # FIXME: probably parameters should be handled on a Mixin level,
+        # and not on a Gate level.
+        pass
 
 
 class Gate(GateSetMixin, CircuitUnitMixin):
@@ -354,6 +363,10 @@ class Circuit(GateSetMixin):
     def gates(self):
         return self._gates
 
+    def operations(self):
+        for gate in self._gates:
+            yield from gate.operations()
+
     @property
     def free_parameters(self):
         if self._params_cache is None:
@@ -408,6 +421,13 @@ class Box(CircuitUnitMixin, Circuit):
     @property
     def gates(self):
         return self,
+
+    @property
+    def params(self):
+        out = {}
+        for p in self.operations():
+            out.update(p.params)
+        return out
 
 class FinalizedCircuit:
     """
