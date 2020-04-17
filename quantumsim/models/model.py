@@ -12,13 +12,17 @@ from ..operations.operation import IndexedOperation
 
 
 class WaitingGate(Gate):
-    def __init__(self, qubit, duration, dim_hilbert, time_start=0, **metadata):
+    def __init__(self, qubit, duration, dim_hilbert, time_start=0, plot_metadata=None,
+                 **metadata):
         super().__init__(qubits=[qubit],
                          dim_hilbert=dim_hilbert,
                          operation=Placeholder((bases.general(dim_hilbert,),)),
                          duration=duration,
                          time_start=time_start,
-                         plot_metadata={"style": "marker", "marker": "x"})
+                         plot_metadata=plot_metadata or {
+                             "style": "box",
+                             "label": r"$\mathcal{{W}}$"
+                         })
         self.metadata = metadata
 
     def __copy__(self):
