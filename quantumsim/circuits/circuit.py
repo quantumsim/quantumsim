@@ -5,6 +5,7 @@ from copy import copy, deepcopy
 from itertools import chain
 
 import numpy as np
+from pytools import flatten
 from sympy import symbols, sympify
 
 from ..operations.operation import Operation, ParametrizedOperation
@@ -364,8 +365,8 @@ class Circuit(GateSetMixin):
         return self._gates
 
     def operations(self):
-        for gate in self._gates:
-            yield from gate.operations()
+        operations = flatten((gate.operations() for gate in self._gates))
+        yield from sorted(operations, key=lambda op: op.time_start)
 
     @property
     def free_parameters(self):
@@ -440,7 +441,8 @@ class FinalizedCircuit:
     """
     def __init__(self, qubits, gates, *, bases_in=None):
         self.qubits = list(qubits)
-        operations = [gate.operation_sympified() for gate in gates]
+        self.gates = list(gates)
+        operations = [gate.operation_sympified() for gate in self.gates]
         # NB: operation must have sympy expressions in it
         self._params = set()
         units = []
