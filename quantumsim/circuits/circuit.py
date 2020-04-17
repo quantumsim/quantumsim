@@ -23,22 +23,31 @@ def allow_param_repeat():
     PARAM_REPEAT_ALLOWED = False
 
 
-def sympy_to_native(symbol):
+def sympy_to_native(expr):
     try:
-        if symbol.is_Integer:
-            return int(symbol)
-        if symbol.is_Float:
-            return float(symbol)
-        if symbol.is_Complex:
-            return complex(symbol)
-        return symbol
+        # Must be complex for sure
+        c = complex(expr)
     except Exception as ex:
         raise RuntimeError(
-            "Could not convert sympy symbol to native type."
-            "It may be due to misinterpretation of some symbols by sympy."
+            "Could not convert sympy symbol to native type. "
+            "It may be due to misinterpretation of some symbols by sympy. "
             "Try to use sympy expressions as gate parameters' values "
             "explicitly."
         ) from ex
+    try:
+        f = float(expr)
+    except TypeError:
+        f = np.nan
+    if not np.allclose(c, f):
+        return c
+    try:
+        c = int(expr)
+    except TypeError:
+        c = np.nan
+    i = int(expr)
+    if not np.allclose(i, f):
+        return f
+    return i
 
 
 class GateSetMixin(ABC):
