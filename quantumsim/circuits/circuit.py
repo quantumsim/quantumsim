@@ -199,7 +199,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         'gamma': symbols('gamma'),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation, duration=np.nan,
+    def __init__(self, qubits, dim_hilbert, operation, duration=0,
                  time_start=0., plot_metadata=None):
         """Gate
 

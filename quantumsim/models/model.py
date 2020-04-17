@@ -78,7 +78,7 @@ class Model(metaclass=abc.ABCMeta):
                 .format(type(op)))
 
     @staticmethod
-    def gate(duration=np.nan, plot_metadata=None):
+    def gate(duration=0, plot_metadata=None):
         def gate_decorator(func):
             def wrapper(self, *qubits, **params):
                 if callable(duration):
