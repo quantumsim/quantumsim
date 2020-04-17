@@ -405,6 +405,9 @@ class Box(CircuitUnitMixin, Circuit):
         other.plot_metadata = deepcopy(self.plot_metadata)
         return other
 
+    @property
+    def gates(self):
+        return self,
 
 class FinalizedCircuit:
     """
