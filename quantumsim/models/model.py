@@ -26,8 +26,9 @@ class Model(metaclass=abc.ABCMeta):
         Seed for initializing an internal random number generator.
     """
 
-    def __init__(self, setup):
+    def __init__(self, setup, dim=None):
         self._setup = setup
+        self._dim = dim
 
     def wait(self, qubit, duration):
         return WaitPlaceholder(duration, self.dim).at(qubit)
@@ -45,9 +46,8 @@ class Model(metaclass=abc.ABCMeta):
         return self._setup.param(param, *qubits)
 
     @property
-    @abc.abstractmethod
     def dim(self):
-        pass
+        return self._dim
 
     @staticmethod
     def _normalize_operation(op, qubits):
@@ -86,12 +86,10 @@ class Model(metaclass=abc.ABCMeta):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
-                sequence = (
-                    sequence
-                    if (isinstance(sequence, tuple) or isinstance(sequence, list))
-                    else (sequence,)
-                )
-                sequence = [self._normalize_operation(op, qubits) for op in sequence]
+                sequence = (sequence if (isinstance(sequence, tuple) or isinstance(sequence, list))
+                            else (sequence,))
+                sequence = [self._normalize_operation(op, qubits)
+                            for op in sequence]
                 return Operation.from_sequence(sequence, qubits)
 
             def wrapper(self, *qubits, **params):
@@ -101,14 +99,12 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = self.p(duration, *qubits)
                 else:
                     _duration = duration
-                return Gate(
-                    qubits,
-                    self.dim,
-                    make_operation(self, *qubits),
-                    duration=_duration,
-                    plot_metadata=plot_metadata,
-                    param_funcs=param_funcs,
-                )(**params)
+                return Gate(qubits,
+                            self.dim,
+                            make_operation(self, *qubits),
+                            duration=_duration,
+                            plot_metadata=plot_metadata,
+                            param_funcs=param_funcs)(**params)
 
             wrapper.__name__ = func.__name__
             return wrapper
@@ -148,24 +144,18 @@ class Model(metaclass=abc.ABCMeta):
             duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration, channel).shift(
-                        time_start=time_start
-                    )
-                )
+                    self.waiting_gate(qubit, duration, channel).shift(time_start=time_start))
             duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration, channel).shift(time_end=time_end)
-                )
+                    self.waiting_gate(qubit, duration, channel).shift(time_end=time_end))
             for gate1, gate2 in pairwise(gates):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
                     waiting_gates.append(
-                        self.waiting_gate(qubit, duration, channel).shift(
-                            time_start=gate1.time_end
-                        )
-                    )
-        gates = sorted(circuit.gates + waiting_gates, key=lambda g: g.time_start)
+                        self.waiting_gate(qubit, duration, channel).shift(time_start=gate1.time_end))
+        gates = sorted(circuit.gates + waiting_gates,
+                       key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
 
     def finalize(self, circuit, bases_in=None):
