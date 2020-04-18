@@ -1,4 +1,3 @@
-import warnings
 from collections import defaultdict
 from collections.abc import Iterable
 from inspect import signature
@@ -74,15 +73,13 @@ class Controller:
     def circuits(self):
         return self._circuits
 
-    def prepare_state(self, method=None):
-        if method is not None:
-            self._state = method(self._qubits)
-        else:
-            self._state = State(self._qubits)
+    def prepare_state(self, dim=2):
+        self._state = State(self._qubits, dim=dim)
 
-    def to_dataset(self, array):
+    def to_dataset(self, array, concat_dim=None):
         if array is not None:
-            self._outcomes[array.name].append(array)
+            self._outcomes[array.name].append(
+                array.assign_attrs(concat_dim=concat_dim))
 
     def _dataset(self):
         if len(self._outcomes) == 0:
@@ -96,15 +93,9 @@ class Controller:
             grouped_outcomes = defaultdict(list)
             _placeholder_key = count()
             for out in circ_outcomes:
-                unique_coords = [coord for coord in out.coords if coord != "param"]
-                if any(unique_coords):
-                    grouped_outcomes[unique_coords.pop(0)].append(out)
-                    if len(unique_coords) > 0:
-                        warnings.warn(
-                            "Outcomes have multiple coordinates in common, joining along the first possible coordinate"
-                        )
-                else:
-                    grouped_outcomes[next(_placeholder_key)].append(out)
+                concat_dim = out.concat_dim or next(_placeholder_key)
+                del out.attrs['concat_dim']
+                grouped_outcomes[concat_dim].append(out)
 
             _suffix = count(1)
             for dim, grouped_arrays in grouped_outcomes.items():
@@ -179,15 +170,10 @@ class Controller:
             )
 
         # Extract all parameters, for which a callable expression was provided
-        da_params = parameters.keys() - circuit.params
-
         set_params = {**self._parameters, **parameters}
 
-        set_param_funcs = {
-            par: set_params.pop(par)
-            for par in list(set_params)
-            if callable(set_params[par])
-        }
+        set_param_funcs = {par: set_params.pop(par)
+                           for par in list(set_params) if callable(set_params[par])}
 
         # Combine with the automatically generated ones,
         # overwriting any if the user has provided a different function
@@ -197,12 +183,10 @@ class Controller:
             # Only go into loop if seed is required and _rng not initialized by the run method
             if seed is not None:
                 if not isinstance(seed, int):
-                    raise ValueError("seed must be an integer")
+                    raise ValueError("seed must be an int")
                 self._rng = np.random.RandomState(seed)
             else:
-                raise ValueError(
-                    "A random number generator must be initialized, please seed the controller"
-                )
+                raise ValueError("Provide a seed please")
 
         if set_params:
             # At this points params only contains the fixed parameters
@@ -215,8 +199,6 @@ class Controller:
         outcome = self._apply_circuit(circuit, param_funcs=param_funcs)
 
         if outcome is not None:
-            for param in da_params:
-                outcome[param] = parameters[param]
             outcome.name = circuit_name
         return outcome
 
@@ -271,15 +253,16 @@ class Controller:
                 # sub in the operation
                 operation = deparametrize(operation, _eval_params)
                 # append realized value to the pre-located DataArray
-                outcome.loc[{"param": list(_op_params)}] = list(_eval_params.values())
+                outcome.loc[{"param": list(_op_params)}] = list(
+                    _eval_params.values())
 
             # Apply each operation, which now should have all parameters fixed
             operation(self._state.pauli_vector, *op_inds)
 
             # If operation was not trace perserving, renormalize state.
             # Not sure if I should add this here?
-            if not np.isclose(self._state.trace(), 1):
-                self._state.renormalize()
+            # if not np.isclose(self._state.trace(), 1):
+            #    self._state.renormalize()
 
         return outcome
 
