@@ -114,8 +114,7 @@ class State:
         outcome = xr.DataArray(
             data=diag,
             dims=["state_label"],
-            coords={"state_label": state_labels},
-            attrs={"qubits": self.qubits, "dim_hilbert": self.pauli_vector.dim_hilbert})
+            coords={"state_label": state_labels})
         outcome.name = "state_diags"
         return outcome
 
@@ -137,8 +136,7 @@ class State:
             data=density_mat,
             dims=["row_state_label", "col_state_label"],
             coords={"row_state_label": state_labels,
-                    "col_state_label": state_labels},
-            attrs={"qubits": self.qubits, "dim_hilbert": self.pauli_vector.dim_hilbert})
+                    "col_state_label": state_labels})
         outcome.name = "state_density_mat"
         return outcome
 
