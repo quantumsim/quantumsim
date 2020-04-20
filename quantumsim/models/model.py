@@ -8,7 +8,6 @@ from .. import bases
 from ..circuits import Circuit, Gate
 from ..operations import Operation, Placeholder
 from ..operations.operation import IndexedOperation
-from .channel import Channel
 
 
 class WaitPlaceholder(Placeholder):
@@ -30,14 +29,11 @@ class Model(metaclass=abc.ABCMeta):
         self._setup = setup
         self._dim = dim
 
-    def wait(self, qubit, duration):
-        return WaitPlaceholder(duration, self.dim).at(qubit)
-
-    def waiting_gate(self, qubit, duration, channel):
+    def waiting_gate(self, qubit, duration):
         return Gate(
             qubit,
             self.dim,
-            channel.noise_op(qubit, duration),
+            WaitPlaceholder(duration, self.dim),
             duration,
             plot_metadata={"style": "marker", "label": "x"},
         )
@@ -111,7 +107,7 @@ class Model(metaclass=abc.ABCMeta):
 
         return gate_decorator
 
-    def add_waiting_gates(self, circuit, channel=None):
+    def add_waiting_gates(self, circuit):
         """Insert missing waiting placeholders.
 
         Parameters
@@ -132,28 +128,20 @@ class Model(metaclass=abc.ABCMeta):
         margin = 1e-1
         waiting_gates = []
 
-        if channel is not None:
-            if not isinstance(channel, Channel):
-                raise ValueError("channel must a Channel instance")
-        else:
-            channel = Channel.from_operator(
-                lambda qubit, duration: WaitPlaceholder(duration, self.dim)
-            )
-
         for qubit, gates in gates_dict.items():
             duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration, channel).shift(time_start=time_start))
+                    self.waiting_gate(qubit, duration).shift(time_start=time_start))
             duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration, channel).shift(time_end=time_end))
+                    self.waiting_gate(qubit, duration).shift(time_end=time_end))
             for gate1, gate2 in pairwise(gates):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
                     waiting_gates.append(
-                        self.waiting_gate(qubit, duration, channel).shift(time_start=gate1.time_end))
+                        self.waiting_gate(qubit, duration).shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
