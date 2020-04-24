@@ -81,7 +81,8 @@ class Controller:
             self._outcomes[array.name].append(
                 array.assign_attrs(concat_dim=concat_dim))
 
-    def _dataset(self):
+    @property
+    def dataset(self):
         if len(self._outcomes) == 0:
             return None
 
@@ -110,7 +111,6 @@ class Controller:
                 else:
                     dataset[circ_name + "_" + str(next(_suffix))] = data_array
 
-        self._outcomes = defaultdict(list)
         return dataset
 
     def run(self, run_experiment, seed, **parameters):
@@ -132,7 +132,7 @@ class Controller:
         for seed_val in seed_sequence:
             self._rng = np.random.RandomState(seed_val)
             run_experiment(**parameters)
-            dataset = self._dataset()
+            dataset = self.dataset
             if dataset:
                 dataset["seed"] = seed_val
                 datasets.append(dataset)
