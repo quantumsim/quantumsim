@@ -29,40 +29,31 @@ class Controller:
     """
 
     def __init__(self, circuits, parameters=None):
-        if not circuits or not isinstance(circuits, dict):
+        if not isinstance(circuits, dict):
+            raise TypeError(
+                "Circuits expected to be dict instance, instead provided as {}".format(type(circuits)))
+        if not circuits:
             raise ValueError(
-                "Circuits expected to be dict instance, instead provided as {}".format(
-                    type(circuits)
-                )
-            )
-        if not all(
-            isinstance(circ_name, str) and isinstance(circ, FinalizedCircuit)
-            for circ_name, circ in circuits.items()
-        ):
-            raise ValueError(
-                "The circuit dictionary should contain the names of circuits as the keys and the finalized circuits as the values."
-            )
+                "At least one circuit is expected, received empty dictionary instead")
+        if not all(isinstance(circ_name, str) and isinstance(circ, FinalizedCircuit)
+                   for circ_name, circ in circuits.items()):
+            raise TypeError(
+                "The circuits dictionary should be made up of quantumsim.FinalizedCircuit instance and string as their keys.")
 
         self._circuits = circuits
 
-        qubits = set()
-        for circ in self.circuits.values():
-            qubits.update(circ.qubits)
-        self._qubits = qubits
+        self._qubits = set([qubit for circ in circuits.values()
+                            for qubit in circ.qubits])
 
         if parameters is not None:
             if not isinstance(parameters, dict):
-                raise ValueError(
-                    "Parameters expected to be dict instance, instead provided as {}".format(
-                        type(parameters)
-                    )
-                )
+                raise TypeError(
+                    "Parameters expected to be dict instance, instead provided as {}".format(type(parameters)))
 
         self._parameters = parameters or {}
 
         self._rng = None
         self._state = None
-
         self._outcomes = defaultdict(list)
 
     @property
@@ -73,6 +64,12 @@ class Controller:
     def circuits(self):
         return self._circuits
 
+    def set_rng(self, seed):
+        if not isinstance(seed, int):
+            raise TypeError(
+                "Seed expected as int, provided as {} instead".format(type(seed)))
+        self._rng = np.random.RandomState(seed)
+
     def prepare_state(self, dim=2):
         self._state = State(self._qubits, dim=dim)
 
@@ -81,21 +78,17 @@ class Controller:
             self._outcomes[array.name].append(
                 array.assign_attrs(concat_dim=concat_dim))
 
-    @property
-    def dataset(self):
+    def get_dataset(self, clear_cache=False):
         if len(self._outcomes) == 0:
             return None
 
         dataset = xr.Dataset()
 
-        for circ_name in list(self._outcomes):
-            circ_outcomes = self._outcomes.pop(circ_name)
-
+        for circ_name, circ_outcomes in self._outcomes.items():
             grouped_outcomes = defaultdict(list)
             _placeholder_key = count()
             for out in circ_outcomes:
                 concat_dim = out.concat_dim or next(_placeholder_key)
-                del out.attrs['concat_dim']
                 grouped_outcomes[concat_dim].append(out)
 
             _suffix = count(1)
@@ -111,6 +104,8 @@ class Controller:
                 else:
                     dataset[circ_name + "_" + str(next(_suffix))] = data_array
 
+        if clear_cache:
+            self._outcomes = defaultdict(list)
         return dataset
 
     def run(self, run_experiment, seed, **parameters):
@@ -123,16 +118,13 @@ class Controller:
             seed_sequence = seed
         else:
             raise ValueError(
-                "Seed expected to be integer or iterable sequence of integers,instead provided {}".format(
-                    type(seed)
-                )
-            )
+                "Seed expected to be integer or iterable sequence of integers,instead provided {}".format(type(seed)))
 
         datasets = []
         for seed_val in seed_sequence:
-            self._rng = np.random.RandomState(seed_val)
+            self.set_rng(seed_val)
             run_experiment(**parameters)
-            dataset = self.dataset
+            dataset = self.get_dataset(clear_cache=True)
             if dataset:
                 dataset["seed"] = seed_val
                 datasets.append(dataset)
@@ -143,7 +135,7 @@ class Controller:
             return datasets.pop(0)
         return None
 
-    def apply(self, circuit_name, seed=None, **parameters):
+    def apply(self, circuit_name, **parameters):
         """
         Apply the circuit corresponding to the provided name to the internal state stored by the controller.
 
@@ -169,6 +161,8 @@ class Controller:
                 "A state must be initialized before circuit application is possible"
             )
 
+        array_coords = parameters.keys() - circuit.params
+
         # Extract all parameters, for which a callable expression was provided
         set_params = {**self._parameters, **parameters}
 
@@ -180,13 +174,8 @@ class Controller:
         param_funcs = {**circuit._param_funcs, **set_param_funcs}
 
         if self._rng_required(param_funcs) and self._rng is None:
-            # Only go into loop if seed is required and _rng not initialized by the run method
-            if seed is not None:
-                if not isinstance(seed, int):
-                    raise ValueError("seed must be an int")
-                self._rng = np.random.RandomState(seed)
-            else:
-                raise ValueError("Provide a seed please")
+            raise AttributeError(
+                "Circuit requires a random number generator, but one was not initialized")
 
         if set_params:
             # At this points params only contains the fixed parameters
@@ -200,6 +189,9 @@ class Controller:
 
         if outcome is not None:
             outcome.name = circuit_name
+            for param in array_coords:
+                outcome[param] = parameters[param]
+
         return outcome
 
     def _apply_circuit(self, circuit, *, param_funcs=None):
