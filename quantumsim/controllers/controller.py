@@ -29,7 +29,7 @@ class Controller:
     """
 
     def __init__(self, circuits, parameters=None):
-        if not isinstance(circuits, dict):
+        if not circuits or not isinstance(circuits, dict):
             raise ValueError(
                 "Circuits expected to be dict instance, instead provided as {}".format(
                     type(circuits)
