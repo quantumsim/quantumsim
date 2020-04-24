@@ -75,6 +75,11 @@ class Controller:
 
     def to_dataset(self, array, concat_dim=None):
         if array is not None:
+            if not isinstance(array, (xr.DataArray, xr.Dataset)):
+                raise TypeError(
+                    "array expected as xarray.DataArray or xarray.Dataset instance, instead given {}".format(type(array)))
+            if array.name is None:
+                raise ValueError("array must be named")
             self._outcomes[array.name].append(
                 array.assign_attrs(concat_dim=concat_dim))
 

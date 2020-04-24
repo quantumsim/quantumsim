@@ -29,6 +29,9 @@ class Model(metaclass=abc.ABCMeta):
         self._setup = setup
         self._dim = dim
 
+    def wait(self, qubit, duration):
+        return WaitPlaceholder(duration, self.dim).at(qubit)
+
     def waiting_gate(self, qubit, duration):
         return Gate(
             qubit,
