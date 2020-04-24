@@ -18,8 +18,10 @@ _BASIS = (bases.general(2),)
 _BASIS_CLASSICAL = (bases.general(2).subbasis([0, 1]),)
 
 
-def _born_projection(state, rng, *, atol=1e-08):
-    meas_probs = state.pauli_vector.diagonal()
+def _born_projection(inds, state, rng, *, atol=1e-08):
+    if len(inds) > 1:
+        raise ValueError("Measure should only act on a single qubit")
+    meas_probs = state.pauli_vector.meas_prob(*inds)
     meas_probs[np.abs(meas_probs) < atol] = 0
     meas_probs /= np.sum(meas_probs)
     result = rng.choice(len(meas_probs), p=meas_probs)
@@ -42,12 +44,9 @@ class IdealModel(Model):
         )
         super().__init__(setup=setup)
 
-    _ptm_project = [
-        rotate_x(0).set_bases(
-            (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),)
-        )
-        for i in range(2)
-    ]
+    _ptm_project = [rotate_x(0).set_bases(
+        (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),))
+        for i in range(2)]
 
     dim = 2
 
@@ -146,7 +145,8 @@ class IdealModel(Model):
 
     @Model.gate(
         duration="time_measure",
-        plot_metadata={"style": "box", "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
+        plot_metadata={"style": "box",
+                       "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
         param_funcs={"result": _born_projection},
     )
     def measure(self, qubit):
