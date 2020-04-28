@@ -335,7 +335,8 @@ class Gate(GateSetMixin, CircuitUnitMixin):
     def set(self, **kwargs):
         kwargs = {key: sympify(val, locals=self._sympify_locals)
                   for key, val in kwargs.items()}
-        self._params = {k: v.subs(kwargs) for k, v in self._params.items()}
+        self._params = {k: v.subs(kwargs, simultaneous=True)
+                        for k, v in self._params.items()}
 
     def __call__(self, **kwargs):
         new_gate = copy(self)
@@ -495,7 +496,7 @@ class FinalizedCircuit:
             return op
         op_params = op.params
         if params:
-            op_params = (p.subs(params) for p in op_params)
+            op_params = (p.subs(params, simultaneous=True) for p in op_params)
         op_params = tuple(sympy_to_native(p) for p in op_params)
         return op.set_params(op_params).substitute()
 
