@@ -100,7 +100,7 @@ class Model(metaclass=abc.ABCMeta):
                 .format(type(op)))
 
     @staticmethod
-    def gate(duration=0, plot_metadata=None):
+    def gate(duration=0, plot_metadata=None, repr_=None):
         def gate_decorator(func):
             def wrapper(self, *qubits, **params):
                 if callable(duration):
@@ -111,7 +111,7 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = duration
                 circuit = func(self, *qubits)
                 circuit.set(**params)
-                return Box(circuit.qubits, circuit.gates, plot_metadata)
+                return Box(circuit.qubits, circuit.gates, plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper

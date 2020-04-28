@@ -199,6 +199,7 @@ class CircuitUnitMixin(ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.plot_metadata = {}
+        self._repr = "gate"
 
     @property
     @abstractmethod
@@ -210,6 +211,12 @@ class CircuitUnitMixin(ABC):
         # and not on a Gate level.
         pass
 
+    def __repr__(self):
+        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+
+    def __str__(self):
+        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+
 
 class Gate(GateSetMixin, CircuitUnitMixin):
     _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
@@ -219,7 +226,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
     }
 
     def __init__(self, qubits, dim_hilbert, operation, duration=0,
-                 time_start=0., plot_metadata=None):
+                 time_start=0., plot_metadata=None, repr_=None):
         """Gate
 
         Parameters
@@ -255,6 +262,8 @@ class Gate(GateSetMixin, CircuitUnitMixin):
                              'one in `qubits`.')
         if plot_metadata:
             self.plot_metadata = plot_metadata
+        if repr_:
+            self._repr = repr_
         self._params = {
             param: symbols(param) for param in
             self._operation_params(self._operation)}
@@ -264,7 +273,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
     def __copy__(self):
         other = Gate(
             self._qubits, self.dim_hilbert, copy(self._operation),
-            self._duration, self._time_start, self.plot_metadata)
+            self._duration, self._time_start, self.plot_metadata, self._repr)
         other._params = copy(self._params)
         return other
 
@@ -408,15 +417,18 @@ class Circuit(GateSetMixin):
 
 class Box(CircuitUnitMixin, Circuit):
     """Several gates, united in one for logical purposes."""
-    def __init__(self, qubits, gates, plot_metadata=None):
+    def __init__(self, qubits, gates, plot_metadata=None, repr_=None):
         super().__init__(qubits, gates)
         if plot_metadata:
             self.plot_metadata = plot_metadata
+        if repr_:
+            self._repr = repr_
 
     def __copy__(self):
-        other = Box(self._qubits, (copy(gate) for gate in self._gates))
+        other = Box(self._qubits, (copy(gate) for gate in self._gates),
+                    plot_metadata=deepcopy(self.plot_metadata),
+                    repr_=self._repr)
         other._params_cache = self._params_cache
-        other.plot_metadata = deepcopy(self.plot_metadata)
         return other
 
     @property

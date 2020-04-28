@@ -16,21 +16,26 @@ def rotate_euler(qubit):
                     basis,
                 ),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$R_{{{phi}}}({theta})$"})
+                plot_metadata={"style": "box", "label": "$R_({phi}, {theta}, {lamda})$"},
+                repr_="RotEuler({phi}, {theta}, {lamda})")
 
 def rotate_x(qubit):
     return Gate(qubit,
                 DIM,
                 ParametrizedOperation(lambda theta: ops.rotate_x(theta), basis),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$X({theta})$"})
+                plot_metadata={"style": "box", "label": "$X({theta})$"},
+                repr_="X({theta})")
+
 
 def rotate_y(qubit):
     return Gate(qubit,
                 DIM,
                 ParametrizedOperation(lambda theta: ops.rotate_y(theta), basis),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$Y({theta})$"})
+                plot_metadata={"style": "box", "label": "$Y({theta})$"},
+                repr_="Y({theta})")
+
 
 def cphase(qubit1, qubit2):
     return Gate([qubit1, qubit2],
@@ -43,4 +48,5 @@ def cphase(qubit1, qubit2):
                         {"style": "marker", "label": "o"},
                         {"style": "marker", "label": "o"},
                     ],
-                })
+                },
+                repr_="CPhase({angle})")

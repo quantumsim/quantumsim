@@ -16,21 +16,26 @@ def rotate_euler(qubit):
                     basis,
                 ),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$R_{{{phi}}}({theta})$"})
+                plot_metadata={"style": "box", "label": "$R({phi}, {theta}, {lamda})$"},
+                repr_="RotEuler({phi}, {theta}, {lamda})")
 
 def rotate_x(qubit):
     return Gate(qubit,
                 DIM,
                 ParametrizedOperation(lambda theta: ops.rotate_x(theta), basis),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$X({theta})$"})
+                plot_metadata={"style": "box", "label": "$X({theta})$"},
+                repr_="X({theta})")
+
 
 def rotate_y(qubit):
     return Gate(qubit,
                 DIM,
                 ParametrizedOperation(lambda theta: ops.rotate_y(theta), basis),
                 duration=0,
-                plot_metadata={"style": "box", "label": "$Y({theta})$"})
+                plot_metadata={"style": "box", "label": "$Y({theta})$"},
+                repr_="Y({theta})")
+
 
 # TODO: would be nice to make display in the units of pi. Probably this requires
 # to make plot_metadata accept functions
