@@ -439,7 +439,7 @@ class FinalizedCircuit:
     qubits : list of str
         List of qubits in the operation
     """
-    def __init__(self, qubits, gates, *, bases_in=None):
+    def __init__(self, qubits, gates, *, bases_in=None, sv_cutoff=1e-5):
         self.qubits = list(qubits)
         self.gates = list(gates)
         operations = [gate.operation_sympified() for gate in self.gates]
@@ -452,7 +452,7 @@ class FinalizedCircuit:
             units.append(op.at(*new_ix))
         if len(operations) > 0:
             self.operation = Operation.from_sequence(units) \
-                                      .compile(bases_in=bases_in)
+                                      .compile(bases_in=bases_in, sv_cutoff=sv_cutoff)
         else:
             self.operation = None
 
