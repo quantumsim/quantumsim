@@ -40,7 +40,7 @@ class State:
     def copy(self):
         return State(self.qubits, pauli_vector=self.pauli_vector.copy())
 
-    def exp_value(self, operator):
+    def exp_value(self, operator, sigma_dict=None):
         """
 
         Parameters
@@ -51,6 +51,10 @@ class State:
             If string provided, computes an expectation value of the
             correspondent Pauli. Must have the same length, as the number of
             qubits in the state.
+        sigma_dict: dict or None
+            A dictionary of Pauli matrices or other operators, that are containded in
+            `operator` and denoted by a single symbol.
+            Default is `quantumsim.algebra.sigma`.
 
         Returns
         -------
@@ -58,16 +62,16 @@ class State:
             Expectation value for each of the measurement operators, defined in
         """
         einsum_args = []
+        sigma_dict = sigma_dict or sigma
         n = self.pauli_vector.n_qubits
         if isinstance(operator, str):
             if n != len(operator):
                 raise ValueError("operator string must have the same length "
                                  "as number of qubits in the state")
             try:
-                sigmas = [sigma[ch.upper()] for ch in operator]
+                sigmas = [sigma_dict[ch.upper()] for ch in operator]
             except KeyError as ex:
-                raise ValueError("operator string must contain only I, X, "
-                                 "Y or Z") from ex
+                raise ValueError("sigma_dict does not contain a key specified") from ex
             for i, s in enumerate(sigmas):
                 einsum_args.append(s)
                 einsum_args.append([i, n+i])
@@ -79,7 +83,6 @@ class State:
         for i, basis in enumerate(self.pauli_vector.bases):
             einsum_args.append(basis.vectors)
             einsum_args.append([2*n+i, n+i, i])
-        print(einsum_args)
         return np.einsum(*einsum_args, optimize=True)
 
     def trace(self):
