@@ -472,7 +472,36 @@ class FluxPulse(Gate):
         x = self.time
         y = coords[self.involved_qubits[0]]
 
-        ax.scatter((x,), (y,), color='k', marker='x')
+        ax.scatter((x,), (y,), color='k', marker='s')
+
+        ax.annotate(
+            self.label, (x, y), xytext=(
+                x, y + 0.3), textcoords='data', ha='center')
+
+
+class ParkPulse(Gate):
+    def __init__(self, bit, time, int_time=None, **kwargs):
+        """A Park gate acting at time `time` between bit0 and bit1 (it is
+        symmetric).
+
+        Other arguments: conditional_bit
+        """
+        if int_time is not None:
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
+        else:
+            super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.method_name = "park_pulse"
+        self.method_params = {}
+        self.label = r"$%g\,\mathrm{ns}$" % int_time
+
+    def plot_gate(self, ax, coords):
+        x = self.time
+        y = coords[self.involved_qubits[0]]
+
+        ax.scatter((x,), (y,), color='k', marker='H')
 
         ax.annotate(
             self.label, (x, y), xytext=(
@@ -603,6 +632,7 @@ class CPhase(Gate):
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
 
+
 class LSwap(Gate):
 
     def __init__(self, bit0, bit1, time, int_time=None, **kwargs):
@@ -635,8 +665,8 @@ class LSwap(Gate):
         ydata = (coords[bit0], coords[bit1])
         line = mp.lines.Line2D(xdata, ydata, color='k')
         ax.add_line(line)
-        
-        
+
+
 class CNOT(TwoPTMGate):
 
     def __init__(self, bit0, bit1, time, **kwargs):
