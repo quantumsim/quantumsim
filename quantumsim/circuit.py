@@ -486,16 +486,19 @@ class ParkPulse(Gate):
 
         Other arguments: conditional_bit
         """
+        assert int_time is not None
         if int_time is not None:
             time_start = time - (int_time / 2)
             time_end = time + (int_time / 2)
             super().__init__(time, time_start=time_start, time_end=time_end, **kwargs)
         else:
-            super().__init__(time, **kwargs)
+            raise ValueError("Give the int time")
+            #super().__init__(time, **kwargs)
         self.involved_qubits.append(bit)
         self.method_name = "park_pulse"
         self.method_params = {}
         self.label = r"$%g\,\mathrm{ns}$" % int_time
+        self.park_time = int_time
 
     def plot_gate(self, ax, coords):
         x = self.time
