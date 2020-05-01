@@ -113,7 +113,7 @@ class TestController:
 
         assert isinstance(out, xr.DataArray)
         assert out.shape == (2,)
-        assert list(out.param.values) == ['ang', 'res']
+        assert list(out.param.values) == ['res', 'ang']
 
     def test_to_dataset(self):
         circ = (gates.rotate_x('Q0') + gates.cnot('Q0', 'Q1')).finalize()
