@@ -88,7 +88,6 @@ class State:
         for i, basis in enumerate(self.pauli_vector.bases):
             einsum_args.append(basis.vectors)
             einsum_args.append([2 * n + i, n + i, i])
-        print(einsum_args)
         return np.einsum(*einsum_args, optimize=True)
 
     def trace(self):
