@@ -101,7 +101,7 @@ class State:
     def diagonal(self):
         diag = self.pauli_vector.diagonal()
 
-        bases_labels = (basis.computational_subbasis().labels
+        bases_labels = (basis.superbasis.computational_subbasis().labels
                         for basis in self.pauli_vector.bases)
 
         def tuple_to_string(tup):
@@ -122,7 +122,7 @@ class State:
     def density_matrix(self):
         density_mat = self.pauli_vector.to_dm()
 
-        bases_labels = (basis.computational_subbasis().labels
+        bases_labels = (basis.superbasis.computational_subbasis().labels
                         for basis in self.pauli_vector.bases)
 
         def tuple_to_string(tup):
