@@ -18,7 +18,7 @@ _BASIS = (bases.general(2),)
 _BASIS_CLASSICAL = (bases.general(2).subbasis([0, 1]),)
 
 
-def _born_projection(inds, state, rng, *, atol=1e-08):
+def _born_projection(state, rng, *, atol=1e-08):
     if len(state.qubits) != 1:
         raise ValueError("Measure should only act on a single qubit")
     meas_probs = state.pauli_vector.meas_prob(0)
