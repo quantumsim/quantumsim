@@ -231,8 +231,7 @@ class Controller:
                 # Get the free parameters of the operation and evaluate them
                 _op_params = _to_str(operation.params)
                 _controller_params = {
-                    "inds": op_inds,
-                    "state": self._state,
+                    "state": self._state.partial_trace(*op_qubits),
                     "rng": self._rng,
                     "outcome": outcome,
                 }
