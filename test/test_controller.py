@@ -63,6 +63,9 @@ class TestController:
         c.set_rng(42)
         assert isinstance(c._rng, np.random.RandomState)
 
+    def test_apply_circuit(self):
+        pass
+
     def test_apply(self):
         circ = (gates.rotate_x('Q0') + gates.cnot('Q0', 'Q1')).finalize()
         rng_circ = (gates.measure('Q0')).finalize()
@@ -113,7 +116,7 @@ class TestController:
 
         assert isinstance(out, xr.DataArray)
         assert out.shape == (2,)
-        assert list(out.param.values) == ['res', 'ang']
+        assert all(p in out.param for p in ['res', 'ang'])
 
     def test_to_dataset(self):
         circ = (gates.rotate_x('Q0') + gates.cnot('Q0', 'Q1')).finalize()
@@ -144,10 +147,33 @@ class TestController:
         assert c._outcomes['test'][1].concat_dim == 'dim'
 
     def test_get_dataset(self):
-        pass
+        circ = (gates.rotate_x('Q0') + gates.cnot('Q0', 'Q1')).finalize()
+        rng_circ = (gates.measure('Q0')).finalize()
+
+        c = Controller(dict(
+            test=circ,
+            rng_test=rng_circ))
+
+        c.prepare_state()
+        c.set_rng(42)
+
+        ds = c.get_dataset()
+        assert ds is None
+
+        c.to_dataset(c.apply('test', angle=90))
+        ds = c.get_dataset()
+        assert ds is None
+
+        c.to_dataset(c.apply('rng_test'))
+        ds = c.get_dataset()
+        assert ds is not None
+        assert isinstance(ds, xr.Dataset)
+        data_vars = list(ds.data_vars)
+        assert len(data_vars) == 1
+        assert 'rng_test' in data_vars
+        coords = list(ds.coords)
+        assert len(coords) == 1
+        assert 'param' in coords
 
     def test_run(self):
-        pass
-
-    def test_apply_circuit(self):
         pass
