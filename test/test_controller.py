@@ -77,7 +77,7 @@ class TestController:
         out = c._apply_circuit(circ)
         assert out is None
         meas_ps = c.state.pauli_vector.meas_prob(0)
-        assert all(np.allclose(prob, 0.5) for prob in meas_ps)
+        assert all(prob == approx(0.5) for prob in meas_ps)
 
         out = c._apply_circuit(rng_circ,
                                param_funcs={'result': lambda state: 1})
@@ -89,8 +89,8 @@ class TestController:
         assert 'result' in out.param
         c.state.renormalize()
         meas_ps = c.state.pauli_vector.meas_prob(0)
-        assert np.allclose(meas_ps[0], 0)
-        assert np.allclose(meas_ps[1], 1)
+        assert meas_ps[0] == approx(0)
+        assert meas_ps[1] == approx(1)
 
     def test_apply(self):
         circ = (gates.rotate_x('Q0') + gates.cnot('Q0', 'Q1')).finalize()
