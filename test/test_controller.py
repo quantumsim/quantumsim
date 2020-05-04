@@ -202,4 +202,41 @@ class TestController:
         assert 'param' in coords
 
     def test_run(self):
-        pass
+        circ = (gates.rotate_x('Q0', angle=180) +
+                gates.measure('Q0', result='meas_out') +
+                gates.rotate_x('Q0', angle='cond_angle')).finalize()
+
+        class SampleController(Controller):
+            def sample_exp(self):
+                self.prepare_state()
+
+                for cycle in range(2):
+                    self.to_dataset(self.apply(
+                        'circ', cycle=cycle), concat_dim='cycle')
+
+        controller = SampleController(
+            circuits={
+                'circ': circ,
+            },
+            parameters={
+                'cond_angle': lambda outcome: 180 if outcome.sel(param='meas_out') == 1 else 0,
+            }
+        )
+
+        outcome = controller.run(controller.sample_exp, seed=range(3))
+        assert outcome is not None
+        assert isinstance(outcome, xr.Dataset)
+
+        assert len(outcome) == 1
+        assert 'circ' in outcome
+
+        assert len(outcome.coords) == 3
+        assert all(cord in outcome.coords for cord in [
+                   'cycle', 'param', 'seed'])
+
+        assert len(outcome.param) == 2
+        assert all(par in outcome.param for par in ['meas_out', 'cond_angle'])
+        assert all(outcome.cycle == range(2))
+        assert all(outcome.seed == range(3))
+        assert np.all([outcome.circ.sel(param='meas_out') == 1])
+        assert np.all([outcome.circ.sel(param='cond_angle') == 180.0])
