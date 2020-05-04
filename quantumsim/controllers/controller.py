@@ -20,12 +20,10 @@ class Controller:
 
     Parameters
         ----------
-        state : quantumsim.states.State
-            The initial state of the system.
         circuits : dict
             A dictionary of circuit name and the corresponding quantumsim.circuits.FinalizedCircuit instances.
-        rng : int or numpy.random.RandomState
-            Either an integer number to seed a RandomState instance or an already initialized instance. The RandomState is used as the random generator for the functions within the experiment
+        parameters : dict
+            A dictionary of free parameter names and the corresponding methods or values that define these parameters. If a parameter is defined by a method, it can depend on the current state stored in the controller, the outcomes of the currently execuited circuit or the random number generator of the controller via the state, outcome and rng arguements.
     """
 
     def __init__(self, circuits, parameters=None):
@@ -58,22 +56,65 @@ class Controller:
 
     @property
     def state(self):
+        """
+        The state stored within the controller
+
+        Returns
+        -------
+        quantumsim.State
+            The State object, which containts the density matrix, stored within the controlled at that point in time.
+        """
         return self._state
 
     @property
     def circuits(self):
+        """
+        The circuits stored within the controller.
+
+        Returns
+        -------
+        dict
+            The dictionary of circuit labels and the corrsponding circuits contained within the controller.
+        """
         return self._circuits
 
     def set_rng(self, seed):
+        """
+        Initialized the random number generator of the controlled for a given seed. More specifically, an
+        instance of the np.random.RandomState is initialized.
+
+        Parameters
+        ----------
+        seed : int
+            The seed used to initialized the random number generator.
+        """
         if not isinstance(seed, int):
             raise TypeError(
                 "Seed expected as int, provided as {} instead".format(type(seed)))
         self._rng = np.random.RandomState(seed)
 
     def prepare_state(self, dim=2):
+        """
+        Prepares the state stored within the controller. The list of qubits involved in the experiment are inferred from the stored circuits.
+
+        Parameters
+        ----------
+        dim : int, optional
+            The hilbert dimesionality of each qubit, by default 2
+        """
         self._state = State(self._qubits, dim=dim)
 
     def to_dataset(self, array, concat_dim=None):
+        """
+        Stores an outcome, in the form of a data array, to the outcomes caches within the controller, which can then be merged to a final dataset.
+
+        Parameters
+        ----------
+        array : xr.DataArray
+            The data array storing a specific outcome of an experiment
+        concat_dim : str or None
+            If not None, the array is concatenated to the other stored arrays, who share this dimension and have been specified to be concatenated along it.
+        """
         if array is not None:
             if not isinstance(array, (xr.DataArray, xr.Dataset)):
                 raise TypeError(
@@ -84,6 +125,20 @@ class Controller:
                 array.assign_attrs(concat_dim=concat_dim))
 
     def get_dataset(self, clear_cache=False):
+        """
+        Returns the dataset currently stored in the controller.
+
+        Parameters
+        ----------
+        clear_cache : bool, optional
+            Whether to clear the cache storing the circuit outcomes, by default False
+
+        Returns
+        -------
+        xr.Dataset or None
+            If there are any outcomes stored, returns the dataset corresponding to the outcome. The dataset
+            containts the circuit name and corresponding parameters. Outcomes, for which a conacatination dimension was specified, are joined along that dimension. If a circuit is called multiple times and not concatenated along a dimension, the repetitions are indexed corresponding to the order of application.
+        """
         if len(self._outcomes) == 0:
             return None
 
@@ -114,6 +169,21 @@ class Controller:
         return dataset
 
     def run(self, run_experiment, seed, **parameters):
+        """
+        Runs an experiment defined by the controller.
+
+        Parameters
+        ----------
+        run_experiment : method
+            The quantum expierment, involving state preparation and circuit application. The outcome corresponding to the application of circuits with free parameters, information about the state or any other information are added via the controller.to_dataset method to a common dataset.
+        seed : int or list
+            The seed of list of seed used for initializing the random number generator. If a list of seed is provided, the experiment is repeated for each seed.
+
+        Returns
+        -------
+        xr.Dataset or None
+            If any of the circuits involved in the experiment had any free parmeters, return the dataset containing the realized parameter value of each parameter and over the repeated runs along with the seed and any externally defined parameter values, else it returns None.
+        """
         if not callable(run_experiment):
             raise ValueError("The experiment must be a defined function")
 
@@ -148,8 +218,6 @@ class Controller:
         ----------
         circuit_name : str
             The name of the circuit stored by the controlled
-        num_runs : int, optional
-            The number of repeated applications of the given circuit, by default 1
 
         Returns
         -------
@@ -201,7 +269,7 @@ class Controller:
 
     def _apply_circuit(self, circuit, *, param_funcs=None):
         """
-        _run_circuit Sequentally applies a finalized circuit to the internal state
+        Applies a finalized circuit to the internal state. If the circuit contains parameterized operations whose parameters remain to be evaluated, it applies the circuit sequentually and evaluates the corresponding parameters.
 
         Parameters
         ----------
@@ -265,6 +333,19 @@ class Controller:
         return outcome
 
     def _rng_required(self, param_funcs):
+        """
+        Checks if any of the free parameters that need to be evaluated depend on a random number generator instance. Only paraeters whose value is determined by a method that is to be evaluated by the controller are expected.
+
+        Parameters
+        ----------
+        param_funcs : dict
+            The dictionary of free parameter labels and the corresponding methods that implement them.
+
+        Returns
+        -------
+        bool
+            Whether any of the parameters requires a random number generator to be evaluated.
+        """
         for func in param_funcs.values():
             sig = signature(func)
             if "rng" in list(sig.parameters):
