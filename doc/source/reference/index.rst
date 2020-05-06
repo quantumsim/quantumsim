@@ -14,8 +14,7 @@ Low-level interface
 
    quantumsim.bases
    quantumsim.pauli_vectors
-   quantumsim.operations
-   quantumsim.models
+   quantumsim.controllers
 
 
 Backends

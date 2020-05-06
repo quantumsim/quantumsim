@@ -19,11 +19,11 @@ class Controller:
      It automatically parses the circuit for free parameters set by the model and handles the data output of the circuit.
 
     Parameters
-        ----------
-        circuits : dict
-            A dictionary of circuit name and the corresponding quantumsim.circuits.FinalizedCircuit instances.
-        parameters : dict
-            A dictionary of free parameter names and the corresponding methods or values that define these parameters. If a parameter is defined by a method, it can depend on the current state stored in the controller, the outcomes of the currently execuited circuit or the random number generator of the controller via the state, outcome and rng arguements.
+    ----------
+    circuits : dict
+        A dictionary of circuit name and the corresponding quantumsim.circuits.FinalizedCircuit instances.
+    parameters : dict
+        A dictionary of free parameter names and the corresponding methods or values that define these parameters. If a parameter is defined by a method, it can depend on the current state stored in the controller, the outcomes of the currently execuited circuit or the random number generator of the controller via the state, outcome and rng arguements.
     """
 
     def __init__(self, circuits, parameters=None):
