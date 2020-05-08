@@ -122,7 +122,7 @@ class Operation(metaclass=abc.ABCMeta):
         Returns
         -------
         Transformation
-            Resulting operation
+kkj            Resulting operation
         """
         if bases_out is None:
             bases_out = bases_in

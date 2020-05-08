@@ -8,8 +8,8 @@ class State:
     """
     Parameters
     ----------
-    qubits : list of str
-        Names of qubits in state
+    qubits : list of hashable
+        Tags of qubits in state
     dim : int
         Hilbert dimensionality of a single-qubit subspace
     pauli_vector_class : class or None
