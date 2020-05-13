@@ -93,27 +93,6 @@ class TestOperations:
         assert op1.bases_in == op2.bases_in
         assert op1.bases_out == op2.bases_out
 
-    def test_ptm(self):
-        # Some random gate sequence
-        circuit = (lib2.rotate_x(0)(theta=np.pi/2) +
-                   lib2.rotate_y(1)(theta=0.3333) +
-                   lib2.cphase(0, 2)(angle=np.pi) +
-                   lib2.cphase(1, 2)(angle=np.pi) +
-                   lib2.rotate_x(1)(theta=-np.pi/2))
-
-        b = (bases.general(2),) * 3
-        ptm = circuit.ptm(b, b)
-        assert isinstance(ptm, np.ndarray)
-
-        op_3q = Gate.from_ptm(ptm, b)
-        dm = random_hermitian_matrix(8, seed=93)
-        state1 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
-        state2 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
-
-        circuit @ state1
-        op_3q @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
-
     def test_lindblad_singlequbit(self):
         ham = random_hermitian_matrix(2, seed=56)
         lindblad_ops = np.array([
@@ -206,3 +185,25 @@ class TestOperations:
         op2 @ state1
         op @ state2
         assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+
+    def test_ptm(self):
+        # Some random gate sequence
+        circuit = (lib2.rotate_x(0)(theta=np.pi/2) +
+                   lib2.rotate_y(1)(theta=0.3333) +
+                   lib2.cphase(0, 2)(angle=np.pi) +
+                   lib2.cphase(1, 2)(angle=np.pi) +
+                   lib2.rotate_x(1)(theta=-np.pi/2))
+
+        b = (bases.general(2),) * 3
+        ptm = circuit.ptm(b, b)
+        assert isinstance(ptm, np.ndarray)
+
+        op_3q = Gate.from_ptm(ptm, b)
+        dm = random_hermitian_matrix(8, seed=93)
+        state1 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
+        state2 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
+
+        circuit @ state1
+        op_3q @ state2
+        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+

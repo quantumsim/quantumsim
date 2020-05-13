@@ -9,6 +9,7 @@ from quantumsim import bases, PauliVector
 import quantumsim.operations.qubits as lib
 
 
+
 class TestLibrary:
     def test_rotate_x(self):
         qubit_basis = (bases.general(2),)

@@ -1,8 +1,6 @@
 from numpy import pi
-from pytest import approx
 
-from quantumsim import Model, Setup, bases, Operation
-from quantumsim.operations import ParametrizedOperation
+from quantumsim import Model, Setup
 from quantumsim.circuits import FinalizedCircuit
 from quantumsim.models import WaitingGate
 

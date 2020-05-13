@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from more_itertools import pairwise
 
 from ..circuits import Gate, Circuit, Box
-from ..operations import Operation, Placeholder
+from ..operations import Operation
 from .. import bases
 
 from ..operations.operation import IndexedOperation
@@ -16,7 +16,8 @@ class WaitingGate(Gate):
                  **metadata):
         super().__init__(qubits=[qubit],
                          dim_hilbert=dim_hilbert,
-                         operation=Placeholder((bases.general(dim_hilbert,),)),
+                         operation_func=lambda: (None, bases.general(dim_hilbert),
+                                                 bases.general(dim_hilbert)),
                          duration=duration,
                          time_start=time_start,
                          plot_metadata=plot_metadata or {

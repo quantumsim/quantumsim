@@ -1,5 +1,7 @@
+import inspect
 import re
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from contextlib import contextmanager
 from copy import copy, deepcopy
 from itertools import chain
@@ -18,7 +20,6 @@ from ..operations.operation import Operation, ParametrizedOperation, \
 from ..operations.operation import _Chain
 
 PARAM_REPEAT_ALLOWED = False
-
 
 
 @contextmanager
@@ -103,6 +104,12 @@ class GateSetMixin(ABC):
     @time_end.setter
     @abstractmethod
     def time_end(self, time):
+        pass
+
+    @property
+    @abstractmethod
+    def duration(self):
+        """Duration of the circuit."""
         pass
 
     @property
@@ -326,18 +333,19 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         'gamma': symbols('gamma'),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation, duration=0., time_start=0.,
-                 plot_metadata=None, repr_=None):
+    def __init__(self, qubits, dim_hilbert, operation_func, duration=0., time_start=0.,
+                 plot_metadata=None, repr_=None, bases_in=None, bases_out=None):
         """Gate
 
         Parameters
         ----------
-        qubits : str or list of str
-            Names of the involved qubits
+        qubits : list of hashable or hashable
+            Tags of the involved qubits
         dim_hilbert : int
             Hilbert dimensionality of the correspondent operations
-        operation : quantumsim.Operation
-            Operation, that corresponds to this gate.
+        operation_func : callable
+            A function, that returns a tuple of `(ptm, bases_in, bases_out)`,
+            where PTM is a Pauli transfer matrix in basis `bases_in`, `bases_out`.
         duration: float
             Duration of the operation.
         time_start: float
@@ -350,6 +358,14 @@ class Gate(GateSetMixin, CircuitUnitMixin):
             and `Gate.__str__`. Can contain Python formatting syntax, then parameters
             are picked from the Gate parameters when displayed.
             If `None`, defaults to `"gate"`.
+        bases_in: tuple of quantumsim.bases.PauliBasis or None
+            Input bases for the operation. Used to force reduce the basis set to a
+            subset of full basis, for example for the purpose of constructing
+            a dephasing operation. If None, assumed to be default full basis.
+        bases_out: tuple of quantumsim.bases.PauliBasis or None
+            Input bases for the operation. Used to force reduce the basis set to a
+            subset of full basis, for example for the purpose of constructing
+            a dephasing operation. If None, assumed to be the same as `bases_in`.
         """
         super(Gate, self).__init__()
         self._dim_hilbert = dim_hilbert
@@ -358,23 +374,37 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         else:
             self._qubits = (qubits,)
 
-        self._operation = operation
-        if len(self._qubits) != operation.num_qubits:
-            raise ValueError('Number of qubits in operation does not match '
-                             'one in `qubits`.')
+        argspec = inspect.getfullargspec(operation_func)
+        if argspec.varargs is not None:
+            raise ValueError(
+                "`operation_func` can't accept free arguments.")
+        if argspec.varkw is not None:
+            raise ValueError(
+                "`operation_func` can't accept free keyword arguments.")
+        self._operation_func = operation_func
+        # OrderedDict is mostly to emphacise that order is important here,
+        # since Python 3.7 dict is guaranteed to be ordered
+        self._params = OrderedDict(((param, symbols(param)) for param in argspec.args))
+
         if plot_metadata:
             self.plot_metadata = plot_metadata
         if repr_:
             self._repr = repr_
-        self._params = {
-            param: symbols(param) for param in
-            self._operation_params(self._operation)}
         self._duration = duration
         self._time_start = time_start
 
+        # Shim layer: we still construct an operation internally
+        def op(*args):
+            return Operation.from_ptm(*self._operation_func(*args))
+
+        op.__signature__ = inspect.signature(self._operation_func)
+        bases_in = bases_in or (bases.general(self._dim_hilbert),) * len(self.qubits)
+        bases_out = bases_out or bases_in
+        self._operation = ParametrizedOperation(op, bases_in, bases_out)
+
     def __copy__(self):
         other = Gate(
-            self._qubits, self.dim_hilbert, copy(self._operation),
+            self._qubits, self.dim_hilbert, self._operation_func,
             self._duration, self._time_start, self.plot_metadata, self._repr)
         other._params = copy(self._params)
         return other
@@ -452,9 +482,8 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         num_qubits = len(bases_in)
         if qubits is None:
             qubits = list(range(num_qubits))
-        operation = Operation.from_ptm(ptm, bases_in, bases_out)
-        return Gate(qubits, operation.dim_hilbert, operation, duration, time_start,
-                    plot_metadata, repr_)
+        return Gate(qubits, bases_in[0].dim_hilbert, lambda: (ptm, bases_in, bases_out),
+                    duration, time_start, plot_metadata, repr_, bases_in, bases_out)
 
     @classmethod
     def from_kraus(cls, kraus, bases_in=2, bases_out=None, *, qubits=None,
@@ -465,8 +494,10 @@ class Gate(GateSetMixin, CircuitUnitMixin):
 
         Parameters
         ----------
-        kraus: array-like
-            Pauli transfer matrix in a form of Numpy array
+        kraus: array-like or function
+            Pauli transfer matrix in a form of Numpy array. If a function is
+            provided, it must return a Kraus and its parameters are treated as gate's
+            named parameters.
         bases_in : tuple of PauliBasis or int
             Input bases for generated PTMs. If `int` is provided, it is treated as a
             Hilbert space dimensionality, and default basis is picked accordingly to it.
@@ -630,14 +661,6 @@ class Gate(GateSetMixin, CircuitUnitMixin):
         new_gate.set(**kwargs)
         return new_gate
 
-    @staticmethod
-    def _operation_params(op):
-        out = set()
-        for op, _ in op.units():
-            if isinstance(op, ParametrizedOperation):
-                out.update(filter(lambda p: isinstance(p, str), op.params))
-        return out
-
     @classmethod
     def _default_bases(cls, kraus_size, dim_hilbert):
         num_qubits = int(log(kraus_size, dim_hilbert))
@@ -680,7 +703,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
 
     def ptm(self, bases_in, bases_out=None):
         try:
-            return self._operation.ptm(bases_in, bases_out)
+            return self.operation_sympified().operation.ptm(bases_in, bases_out)
         except OperationNotDefinedError as ex:
             raise PTMNotDefinedError from ex
 
@@ -703,6 +726,7 @@ class Gate(GateSetMixin, CircuitUnitMixin):
             self.operation_sympified().operation(state.pauli_vector, *indices)
         except OperationNotDefinedError as ex:
             raise PTMNotDefinedError from ex
+
 
 class Circuit(GateSetMixin):
     @property
@@ -773,9 +797,13 @@ class Circuit(GateSetMixin):
         return self._time_end - self._time_start
 
     def ptm(self, bases_in, bases_out=None):
+        def qtoi(op_ix):
+            op, ix = op_ix
+            return op.at(*(self._qubits.index(q) for q in ix))
+
         try:
             return Operation.from_sequence(
-                list(op.operation_sympified() for op in self.operations()))\
+                list(qtoi(op.operation_sympified()) for op in self.operations()))\
                 .ptm(bases_in, bases_out)
         except OperationNotDefinedError as ex:
             raise PTMNotDefinedError from ex
