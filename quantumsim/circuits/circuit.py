@@ -193,9 +193,6 @@ class CircuitBase(ABC):
         copy_.set(**kwargs)
         return copy_
 
-    def order(self):
-        raise NotImplementedError
-
     def finalize(self, preprocessors=None, bases_in=None):
         """
         Returns an optimized version of the circuit, that can be used to
@@ -437,6 +434,9 @@ class Circuit(CircuitBase, ABC):
         for gate in self._gates:
             gate.set(**kwargs)
         self._params_cache = None
+
+    def order(self):
+        raise NotImplementedError
 
     @property
     def time_start(self):

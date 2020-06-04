@@ -1,4 +1,7 @@
-def partial_greedy_toposort(partial_orders, targets=set()):
+from collections.abc import Iterable
+
+
+def partial_greedy_toposort(partial_orders, targets=None):
     """Given a list of partial orders `[p1, p2, ...]` of hashable items
     pi = [a_i0, a_i1, ...], representing the constraints
 
@@ -22,22 +25,27 @@ def partial_greedy_toposort(partial_orders, targets=set()):
     partial_order: lists of lists of items
         Represents partial sequences targets: list of indices into
         partial_order, signifying which lists are targets
+    targets: set
+        The set of targets, which determine the overlaps that are minimized in the algortithm
     """
-
-    targets = set(targets)
+    if targets:
+        if not isinstance(targets, Iterable):
+            raise ValueError(
+                "Targets expected as as iterable, got {} instead".type(targets))
+        targets = set(targets)
+    else:
+        targets = set()
 
     # drop out empty lists
-    partial_orders = [po for po in partial_orders if po]
+    partial_orders = [order for order in partial_orders if order]
 
-    order_dicts = []
-    for n, p in enumerate(partial_orders):
-        order_dict = {i: j for i, j in zip(p[1:], p)}
-        order_dicts.append(order_dict)
+    order_dicts = [{i: j for i, j in zip(order[1:], order)}
+                   for order in partial_orders]
 
     trees = []
-    for n, p in enumerate(partial_orders):
+    for n, order in enumerate(partial_orders):
         tree = []
-        to_do = [(None, p[-1])]
+        to_do = [(None, order[-1])]
         while to_do:
             n, x = to_do.pop()
             tree.append((n, x))
