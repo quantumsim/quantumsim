@@ -30,6 +30,14 @@ def partial_greedy_toposort(partial_orders, targets=None):
         The set of targets, which determine the overlaps that are minimized
         in the algortithm
     """
+    if not isinstance(partial_orders, Iterable):
+        raise ValueError(
+            "Partial expected as as iterable"
+            "got {} instead".type(targets))
+    if not all([isinstance(order, Iterable) for order in partial_orders]):
+        raise ValueError(
+            "Each element in partial order expected"
+            "to be iterable")
     if targets:
         if not isinstance(targets, Iterable):
             raise ValueError(
