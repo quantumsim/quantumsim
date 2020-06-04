@@ -10,8 +10,6 @@ from ..operations import Operation, ParametrizedOperation
 
 param_repeat_allowed = False
 
-# TODO: implement scheduling
-
 
 def _to_str(op_params):
     return set(map(str, chain(*(p.free_symbols for p in op_params))))
@@ -434,9 +432,6 @@ class Circuit(CircuitBase, ABC):
         for gate in self._gates:
             gate.set(**kwargs)
         self._params_cache = None
-
-    def order(self):
-        raise NotImplementedError
 
     @property
     def time_start(self):
