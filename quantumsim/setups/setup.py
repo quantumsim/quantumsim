@@ -27,9 +27,11 @@ class Setup:
         self._gates = defaultdict(dict)
 
         self.name = setup_dict.get("name", "")
+        self.dim = setup_dict.get('dim', 3)
         version = setup_dict.get("version", "1")
         if version != "1" and version != 1:
-            raise SetupLoadError("Unknown setup schema version: {}".format(version))
+            raise SetupLoadError(
+                "Unknown setup schema version: {}".format(version))
         self._load_setup_v1(setup_dict)
 
     def _load_setup_v1(self, setup_dict):
@@ -48,7 +50,8 @@ class Setup:
                     if qubits
                     else "Default qubit parameters"
                 )
-                raise SetupLoadError(what + " defined repeatedly in the setup.")
+                raise SetupLoadError(
+                    what + " defined repeatedly in the setup.")
             self._qubits[qubits] = params_dict
 
     @classmethod
