@@ -2,7 +2,33 @@ from collections.abc import Iterable
 from .circuit import Circuit
 
 
-def partial_greedy_toposort(partial_orders, targets=None):
+def _toposort(trees):
+    result = []
+    all_used = set()
+
+    while trees != []:
+        trees.sort(key=lambda xy: len(all_used | xy[1]), reverse=True)
+        smallest = trees.pop()
+        all_used |= smallest[1]
+        smallest = smallest[0]
+        smallest.reverse()
+        smallest = [x for n, x in smallest]
+
+        new_trees = []
+        for l, i in trees:
+            l2 = [(n, x) for n, x in l if x not in smallest]
+            new_trees.append((l2, i))
+
+        trees = new_trees
+
+        for s in smallest:
+            if s not in result:
+                result.append(s)
+
+    return result
+
+
+def partial_greedy_toposort(partial_order_set, target_set=None):
     """Given a list of partial orders `[p1, p2, ...]` of hashable items
     pi = [a_i0, a_i1, ...], representing the constraints
 
@@ -30,66 +56,45 @@ def partial_greedy_toposort(partial_orders, targets=None):
         The set of targets, which determine the overlaps that are minimized
         in the algortithm
     """
-    if not isinstance(partial_orders, Iterable):
+    if not isinstance(partial_order_set, Iterable):
         raise ValueError(
             "Partial expected as as iterable"
-            "got {} instead".type(targets))
-    if not all([isinstance(order, Iterable) for order in partial_orders]):
+            "got {} instead".type(target_set))
+    if not all([isinstance(order, Iterable) for order in partial_order_set]):
         raise ValueError(
             "Each element in partial order expected"
             "to be iterable")
-    if targets:
-        if not isinstance(targets, Iterable):
+    if target_set:
+        if not isinstance(target_set, set):
             raise ValueError(
                 "Targets expected as as iterable"
-                "got {} instead".type(targets))
-        targets = set(targets)
+                "got {} instead".type(target_set))
     else:
-        targets = set()
+        target_set = set()
 
-    # drop out empty lists
-    partial_orders = [order for order in partial_orders if order]
+    # drop out empty elements
+    partial_order_set = [order for order in partial_order_set if order]
 
     order_dicts = [{i: j for i, j in zip(order[1:], order)}
-                   for order in partial_orders]
+                   for order in partial_order_set]
 
     trees = []
-    for n, order in enumerate(partial_orders):
+    for set_elem in partial_order_set:
         tree = []
-        to_do = [(None, order[-1])]
-        while to_do:
-            n, x = to_do.pop()
-            tree.append((n, x))
-            for n2, o2 in enumerate(order_dicts):
-                x2 = o2.get(x)
-                if x2 is not None:
-                    to_do.append((n2, x2))
+        queue_stack = [(None, set_elem[-1])]
+        while queue_stack:
+            cur_ind, cur_elem = queue_stack.pop()
+            tree.append((cur_ind, cur_elem))
+            for dict_ind, order_dict in enumerate(order_dicts):
+                next_elem = order_dict.get(cur_elem)
+                if next_elem is not None:
+                    queue_stack.append((dict_ind, next_elem))
 
-        lists_used = {n for n, x in tree if n in targets}
+        lists_used = {_ind for _ind, _elem in tree if _elem in target_set}
         trees.append((tree, lists_used))
 
-    result = []
-    all_used = set()
-    while trees != []:
-        trees.sort(key=lambda xy: len(all_used | xy[1]), reverse=True)
-        smallest = trees.pop()
-        all_used |= smallest[1]
-        smallest = smallest[0]
-        smallest.reverse()
-        smallest = [x for n, x in smallest]
-
-        new_trees = []
-        for l, i in trees:
-            l2 = [(n, x) for n, x in l if x not in smallest]
-            new_trees.append((l2, i))
-
-        trees = new_trees
-
-        for s in smallest:
-            if s not in result:
-                result.append(s)
-
-    return result
+    ordered_set = _toposort(trees)
+    return ordered_set
 
 
 def _reduces_bases(gate, qubit):
