@@ -14,6 +14,6 @@ __all__ = ['Gate',
            'FinalizedCircuit',
            'allow_param_repeat',
            'deparametrize',
-           _to_str,
+           '_to_str',
            'plot',
            'order']
