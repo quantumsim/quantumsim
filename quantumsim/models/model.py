@@ -48,6 +48,10 @@ class Model(metaclass=abc.ABCMeta):
     def dim(self):
         return self._dim
 
+    @property
+    def setup(self):
+        return self._setup
+
     @staticmethod
     def _normalize_operation(op, qubits):
         """

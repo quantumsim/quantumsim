@@ -1,7 +1,10 @@
-import yaml
 from collections import defaultdict
-
 from copy import copy
+
+import numpy as np
+import xarray as xr
+import yaml
+from toolz import merge
 
 
 class SetupLoadError(RuntimeError):
@@ -58,6 +61,34 @@ class Setup:
     def from_file(cls, filename):
         with open(filename, "r") as f:
             return cls(f)
+
+    def to_dataset(self):
+        qubit_set = set()
+        common_params = {}
+        specific_params = defaultdict(set)
+
+        for qubits, params in self._qubits.items():
+            if qubits == tuple():
+                common_params.update(params)
+            else:
+                qubit_set.update(qubits)
+                for param in params.keys():
+                    specific_params[param].update(qubits)
+
+        qubit_params = {param: (
+            'qubit', [self.param(param, qubit)
+                      if qubit in specific_params[param] else np.nan
+                      for qubit in qubit_set])
+            for param in specific_params.keys()}
+
+        dataset = xr.Dataset(
+            coords=merge(
+                {'qubit': list(qubit_set)},
+                qubit_params,
+                common_params)
+        )
+
+        return dataset
 
     def param(self, param, *qubits):
         try:
