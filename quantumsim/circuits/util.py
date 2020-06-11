@@ -9,12 +9,14 @@ def _toposort(trees):
     Parameters
     ----------
     trees : list
-        A list of tuples of the tree branches and the list of targets indicies within the branch.
+        A list of tuples of the tree branches and the list of
+        targets indicies within the branch.
 
     Returns
     -------
     list
-        The sorted list of all branch indicies according to the topological sort.
+        The sorted list of all branch indicies
+            according to the topological sort.
     """
     result = []
     all_used = set()
@@ -126,7 +128,8 @@ def _reduces_bases(gate, qubit):
 
     Returns
     -------
-    True if the operation reduces the Pauli size of the basis on that qubit else False
+    True if the operation reduces the Pauli size of the
+    basis on that qubit else False
     """
     op = gate.operation_sympified()
     qubit_ind = gate.qubits.index(qubit)
