@@ -3,6 +3,19 @@ from .circuit import Circuit
 
 
 def _toposort(trees):
+    """
+    Topological sorting of the trees of partial orders
+
+    Parameters
+    ----------
+    trees : list
+        A list of tuples of the tree branches and the list of targets indicies within the branch.
+
+    Returns
+    -------
+    list
+        The sorted list of all branch indicies according to the topological sort.
+    """
     result = []
     all_used = set()
 
@@ -59,7 +72,7 @@ def partial_greedy_toposort(partial_order_set, target_set=None):
     if not isinstance(partial_order_set, Iterable):
         raise ValueError(
             "Partial expected as as iterable"
-            "got {} instead".type(target_set))
+            "got {} instead".format(type(target_set)))
     if not all([isinstance(order, Iterable) for order in partial_order_set]):
         raise ValueError(
             "Each element in partial order expected"
@@ -68,7 +81,7 @@ def partial_greedy_toposort(partial_order_set, target_set=None):
         if not isinstance(target_set, set):
             raise ValueError(
                 "Targets expected as as iterable"
-                "got {} instead".type(target_set))
+                "got {} instead".format(type(target_set)))
     else:
         target_set = set()
 
@@ -90,7 +103,7 @@ def partial_greedy_toposort(partial_order_set, target_set=None):
                 if next_elem is not None:
                     queue_stack.append((dict_ind, next_elem))
 
-        lists_used = {_ind for _ind, _elem in tree if _elem in target_set}
+        lists_used = {_ind for _ind, _ in tree if _ind in target_set}
         trees.append((tree, lists_used))
 
     ordered_set = _toposort(trees)
@@ -98,13 +111,52 @@ def partial_greedy_toposort(partial_order_set, target_set=None):
 
 
 def _reduces_bases(gate, qubit):
-    qubit_ind = gate.qubits.index('Z')
+    """
+    Checks if the operation that the gate implements
+    leads to a reduction in the Pauli dimensionality
+    of the outgoing Pauli basis vectors on the specified qubit.
+
+
+    Parameters
+    ----------
+    gate : quantumsim.circut.Gate
+        The gate that is checked for dimension-reducing operations.
+    qubit : str
+        The qubit on which the basis is checked for reduction.
+
+    Returns
+    -------
+    True if the operation reduces the Pauli size of the basis on that qubit else False
+    """
     op = gate.operation_sympified()
-    basis_out = op.bases_out[qubit_ind]
-    return basis_out != basis_out.superbasis
+    qubit_ind = gate.qubits.index(qubit)
+    for unit_op, unit_inds in op.units():
+        if qubit_ind in unit_inds:
+            basis_out = unit_op.bases_out[unit_inds.index(qubit_ind)]
+            if basis_out.dim_pauli != basis_out.superbasis.dim_pauli:
+                return True
+    return False
 
 
 def order(circuit):
+    """
+    Reorders the gates defined in the circuit, such that they are applied in
+    temporal order. If any freedom exists when choosing the order of
+    commuting gates, the order is chosen such that gates leading to a reduction
+    of the size of the pauli basis vector  are applied "as soon as possible".
+
+    Parameters
+    ----------
+    circuit : quantumsim.circuits.Circuit
+        An unfinalized quantumsim cirucit instance.
+
+    Returns
+    -------
+    quantumsim.circuits.Circuit
+        A circuit instance with the topologoically sorted gates via
+        a greedy algroithm, which priortizes the application of
+        basis-size reducing gates.
+    """
     if not isinstance(circuit, Circuit):
         raise ValueError(
             "circuit expected to be an instance of"
@@ -115,17 +167,17 @@ def order(circuit):
     gate_dict = {ind: gate for ind, gate in enumerate(sorted_gates)}
 
     partial_order_inds = []
-    target_inds = []
+    target_inds = set()
 
     for qubit_ind, qubit in enumerate(circuit.qubits):
-        qubit_gates_dict = {ind: gate for ind, gate in gate_dict.items()
-                            if qubit in gate.qubits}
-        if any(_reduces_bases(gate) for gate in qubit_gates_dict.values()):
-            target_inds.append(qubit_ind)
-        partial_order_inds.append(qubit_gates_dict.keys())
+        _q_gates = {ind: gate for ind, gate in gate_dict.items()
+                    if qubit in gate.qubits}
+        if any(_reduces_bases(gate, qubit) for gate in _q_gates.values()):
+            target_inds.add(qubit_ind)
+        partial_order_inds.append(list(_q_gates.keys()))
 
     ordered_inds = partial_greedy_toposort(
-        partial_order_inds, targets=target_inds)
+        partial_order_inds, target_set=target_inds)
 
     ordered_gates = [gate_dict[ind] for ind in ordered_inds]
-    return Circuit(circuit.gates, ordered_gates)
+    return Circuit(circuit.qubits, ordered_gates)
