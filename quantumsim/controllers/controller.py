@@ -242,6 +242,10 @@ class Controller:
         set_param_funcs = {par: set_params.pop(par)
                            for par in list(set_params) if callable(set_params[par])}
 
+        if set_params:
+            # At this points params only contains the fixed parameters
+            circuit = circuit(**set_params)
+
         # Combine with the automatically generated ones,
         # overwriting any if the user has provided a different function
         param_funcs = {**circuit._param_funcs, **set_param_funcs}
@@ -249,10 +253,6 @@ class Controller:
         if self._rng_required(param_funcs) and self._rng is None:
             raise AttributeError(
                 "Circuit requires a random number generator, but one was not initialized")
-
-        if set_params:
-            # At this points params only contains the fixed parameters
-            circuit = circuit(**set_params)
 
         unset_params = circuit.params - param_funcs.keys()
         if len(unset_params) != 0:
