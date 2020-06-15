@@ -7,9 +7,10 @@ stages:
 
 build html documentation:
   stage: build
+  before_script:
+    - python3 setup.py install
   script:
-  - python3 setup.py install
-  - cd doc && make html
+    - cd doc && make html
   artifacts:
     paths:
     - doc/build/html
@@ -18,8 +19,8 @@ build html documentation:
 build distribution packages:
   stage: build
   script:
-  - python3 setup.py check --strict
-  - python3 setup.py sdist bdist_wheel
+    - python3 setup.py check --strict
+    - python3 setup.py sdist bdist_wheel
   artifacts:
     paths:
     - dist
@@ -30,9 +31,10 @@ run tests:
   needs:
     - job: build distribution packages
       artifacts: true
+  before_script:
+    - pip install dist/quantumsim-*-py3-none-any.whl
   script:
-  - pip install dist/quantumsim-*-py3-none-any.whl
-  - py.test --cov=quantumsim --cov-report=xml
+    - py.test --cov=quantumsim --cov-report=xml
   artifacts:
     paths:
     - coverage.xml
@@ -42,8 +44,10 @@ check for broken links in doc:
   needs:
     - job: build html documentation
       artifacts: true
+  before_script:
+    - python3 setup.py install
   script:
-  - cd doc && make linkcheck
+    - cd doc && make linkcheck
   allow_failure: true
 
 pages:
