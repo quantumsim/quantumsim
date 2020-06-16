@@ -24,7 +24,6 @@ class Model(metaclass=abc.ABCMeta):
     seed : int
         Seed for initializing an internal random number generator.
     """
-
     def __init__(self, setup, dim=None):
         self._setup = setup
         self._dim = dim
@@ -85,7 +84,8 @@ class Model(metaclass=abc.ABCMeta):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
-                sequence = (sequence if (isinstance(sequence, tuple) or isinstance(sequence, list))
+                sequence = (sequence if (isinstance(sequence, tuple) or
+                                         isinstance(sequence, list))
                             else (sequence,))
                 sequence = [self._normalize_operation(op, qubits)
                             for op in sequence]
@@ -144,7 +144,8 @@ class Model(metaclass=abc.ABCMeta):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
                     waiting_gates.append(
-                        self.waiting_gate(qubit, duration).shift(time_start=gate1.time_end))
+                        self.waiting_gate(qubit, duration)
+                            .shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)

@@ -27,7 +27,8 @@ def process_fidelity(operation, target_operation, truncate_dimensions=False):
     ptm = operation.ptm(bases_in, bases_out)
     target_ptm = target_operation.ptm(bases_in, bases_out)
 
-    # NOTE: The formula implemented here is the np.trace(target_ptm.T @ ptm)/(dim**2), as given in arXiv:1202.5344
+    # NOTE: The formula implemented here is the np.trace(target_ptm.T @ ptm)/(dim**2),
+    # as given in arXiv:1202.5344
     process_fid = np.einsum("ji, ij", target_ptm, ptm)/(dim**2)
     return process_fid
 
@@ -41,7 +42,8 @@ def average_fidelity(operation, target_operation, truncate_dimensions=False):
     process_fid = process_fidelity(
         operation, target_operation, truncate_dimensions)
 
-    # NOTE: The formula implemented here is given in arXiv:1202.5344, see arXiv:quant-ph/0205035v2 as well.
+    # NOTE: The formula implemented here is given in arXiv:1202.5344,
+    # see arXiv:quant-ph/0205035v2 as well.
     fid = (dim*process_fid + 1)/(dim + 1)
     return fid
 

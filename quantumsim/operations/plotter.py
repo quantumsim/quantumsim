@@ -1,7 +1,8 @@
 from itertools import product
 
 
-def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None, colorbar=True):
+def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None,
+         colorbar=True):
     """
     Parameters
     ----------

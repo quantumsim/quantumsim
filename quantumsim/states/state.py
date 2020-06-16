@@ -67,27 +67,25 @@ class State:
         n = self.pauli_vector.n_qubits
         if isinstance(operator, str):
             if n != len(operator):
-                raise ValueError(
-                    "operator string must have the same length "
-                    "as number of qubits in the state"
-                )
+                raise ValueError("Operator string must have the same length as "
+                                 "a number of qubits in the state")
             try:
                 sigmas = [sigma[ch.upper()] for ch in operator]
             except KeyError as ex:
                 raise ValueError(
-                    "operator string must contain only I, X, " "Y or Z"
+                    "Operator string must contain only I, X, Y or Z"
                 ) from ex
             for i, s in enumerate(sigmas):
                 einsum_args.append(s)
-                einsum_args.append([i, n + i])
+                einsum_args.append([i, n+i])
         else:
             einsum_args.append(operator)
-            einsum_args.append(list(range(2 * n)))
+            einsum_args.append(list(range(2*n)))
         einsum_args.append(self.pauli_vector.to_pv())
-        einsum_args.append([2 * n + i for i in range(n)])
+        einsum_args.append([2*n+i for i in range(n)])
         for i, basis in enumerate(self.pauli_vector.bases):
             einsum_args.append(basis.vectors)
-            einsum_args.append([2 * n + i, n + i, i])
+            einsum_args.append([2*n+i, n+i, i])
         return np.einsum(*einsum_args, optimize=True)
 
     def trace(self):
@@ -148,4 +146,5 @@ class State:
         q0, q1, ... : str
             Names of qubits to preserve in the state.
         """
-        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(*[self.qubits.index(q) for q in qubits]),)
+        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(
+            *[self.qubits.index(q) for q in qubits]))

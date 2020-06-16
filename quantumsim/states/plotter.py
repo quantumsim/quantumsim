@@ -2,7 +2,8 @@ import numpy as np
 from itertools import product
 
 
-def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None, phase_limits=None):
+def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None,
+         phase_limits=None):
     """
     Plots the density matrix as a complext 3D histogram.
 
@@ -15,7 +16,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None
     truncate_levels : None or int
         If not None, all the states higher than provided are discarded and a
         identity is added to the state instead, so that total trace is
-        preserved. This should emulate behaviour of tomografy in the presence
+        preserved. This should emulate behaviour of tomography in the presence
         of leakage.
     colorbar : bool, optional
         If True, a colorbar is created and drawn to the figure axes, by default True
@@ -25,8 +26,9 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None
         If None, the lower limit is set to 0, while the upper one to 1.
     phase_limits : list or tuple or None
         A list or tuple of two float numbers, corresponding to the lower and upper
-        limit of phase-axis (the colorbar), in this case corresponding to the complex phase of the state.
-        If None, the lower limit is set to :math:`-\\pi`, while the upper one to :math:`\\pi`.
+        limit of phase-axis (the colorbar), in this case corresponding to the complex
+        phase of the state. If `None`, the lower limit is set to :math:`-\\pi`,
+        while the upper one to :math:`\\pi`.
 
     Returns
     -------

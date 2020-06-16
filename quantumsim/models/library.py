@@ -124,7 +124,8 @@ class IdealModel(Model):
         },
     )
     def cnot(self, control_qubit, target_qubit):
-        """Conditional NOT on the target qubit depending on the state of the control qubit. Parameters: `angle` (degrees).
+        """Conditional NOT on the target qubit depending on the state of the control
+        qubit. Parameters: `angle` (degrees).
         """
         return (cnot().at(control_qubit, target_qubit),)
 
