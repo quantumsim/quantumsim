@@ -2,8 +2,8 @@ import numpy as np
 from itertools import product
 
 
-def plot(state, *, ax=None, truncate_levels=None,
-         add_colorbar=True, amp_limits=None, phase_limits=None):
+def plot(state, *, ax=None, truncate_levels=None, add_colorbar=True,
+         amp_limits=None, phase_limits=None, cmap_name='plasma'):
     """
     Plots the density matrix as a complext 3D histogram.
 
@@ -43,6 +43,11 @@ def plot(state, *, ax=None, truncate_levels=None,
     else:
         fig = None
 
+    if cmap_name not in plt.colormaps():
+        raise ValueError(
+            "The given colormap name is not valid, please provide the name of"
+            " one of the standard built-in colormaps in matplotlib")
+
     n_qubits = len(state.qubits)
     pv = state.pauli_vector
     _rho = pv.to_dm()
@@ -75,7 +80,7 @@ def plot(state, *, ax=None, truncate_levels=None,
         phase_limits = (-np.pi, np.pi)
 
     norm = Normalize(*phase_limits)
-    cmap = plt.get_cmap('plasma')
+    cmap = plt.get_cmap(cmap_name)
     colors = cmap(norm(np.angle(rho.flatten())))
 
     if amp_limits and isinstance(amp_limits, (list, tuple)):
