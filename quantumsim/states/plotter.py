@@ -2,7 +2,7 @@ import numpy as np
 from itertools import product
 
 
-def plot(state, *, ax=None, truncate_levels=None, add_colorbar=True,
+def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
          amp_limits=None, phase_limits=None, cmap_name='plasma'):
     """
     Plots the density matrix as a complext 3D histogram.
@@ -36,7 +36,7 @@ def plot(state, *, ax=None, truncate_levels=None, add_colorbar=True,
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
-    from matplotlib import colorbar
+    from matplotlib import colorbar as _colorbar
 
     if ax is None:
         fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
@@ -112,9 +112,9 @@ def plot(state, *, ax=None, truncate_levels=None, add_colorbar=True,
 
     ax.set_zlabel('Amplitude')
 
-    if add_colorbar:
-        cax, _ = colorbar.make_axes(ax)
-        cb = colorbar.ColorbarBase(cax, cmap=cmap, norm=norm)
+    if colorbar:
+        cax, _ = _colorbar.make_axes(ax)
+        cb = _colorbar.ColorbarBase(cax, cmap=cmap, norm=norm)
         cb.set_ticks((-np.pi, 0, np.pi))
         cb.set_ticklabels((r'$-\pi$', r'$0$', r'$\pi$'))
         cb.set_label('Phase')
