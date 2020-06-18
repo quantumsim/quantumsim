@@ -248,6 +248,7 @@ class Gate(CircuitBase):
         time_start=0.0,
         plot_metadata=None,
         param_funcs=None,
+        repr_=None
     ):
         """Gate
 
@@ -286,6 +287,7 @@ class Gate(CircuitBase):
                 "Number of qubits in operation does not match " "one in `qubits`."
             )
         self.plot_metadata = plot_metadata or {}
+        self._repr = repr_ or 'gate'
         self._params = {
             param: symbols(param) for param in self._operation_params(self._operation)
         }
@@ -301,10 +303,17 @@ class Gate(CircuitBase):
             self._duration,
             self._time_start,
             self.plot_metadata,
+            repr_=self._repr
         )
         other._params = copy(self._params)
         other._param_funcs = copy(self._param_funcs)
         return other
+
+    def __repr__(self):
+        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+
+    def __str__(self):
+        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
 
     @property
     def time_start(self):
