@@ -2,8 +2,8 @@ import numpy as np
 from itertools import product
 
 
-def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None,
-         phase_limits=None):
+def plot(state, *, ax=None, truncate_levels=None,
+         add_colorbar=True, amp_limits=None, phase_limits=None):
     """
     Plots the density matrix as a complext 3D histogram.
 
@@ -18,7 +18,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None
         identity is added to the state instead, so that total trace is
         preserved. This should emulate behaviour of tomography in the presence
         of leakage.
-    colorbar : bool, optional
+    add_colorbar : bool, optional
         If True, a colorbar is created and drawn to the figure axes, by default True
     amp_limits : list or tuple or None
         A list or tuple of two float numbers, corresponding to the lower and upper
@@ -107,7 +107,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True, amp_limits=None
 
     ax.set_zlabel('Amplitude')
 
-    if colorbar:
+    if add_colorbar:
         cax, _ = colorbar.make_axes(ax)
         cb = colorbar.ColorbarBase(cax, cmap=cmap, norm=norm)
         cb.set_ticks((-np.pi, 0, np.pi))
