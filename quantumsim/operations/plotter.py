@@ -1,8 +1,8 @@
 from itertools import product
 
 
-def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None,
-         colorbar=True):
+def plot(operation, bases_in=None, bases_out=None, ax=None,
+         truncate_levels=None, colorbar=True):
     """
     Parameters
     ----------
@@ -21,7 +21,7 @@ def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None
     fig : matplotlib.figure.Figure or None
     """
     import matplotlib.pyplot as plt
-    from matplotlib import colorbar
+    from matplotlib import colorbar as _colorbar
 
     if ax is None:
         fig, ax = plt.subplots(constrained_layout=True)
@@ -64,8 +64,8 @@ def plot(operation, bases_in=None, bases_out=None, ax=None, truncate_levels=None
     ax.set_xlabel("Output basis")
 
     if colorbar:
-        cax, _ = colorbar.make_axes(ax)
-        cbar = colorbar.Colorbar(cax, img)
+        cax, _ = _colorbar.make_axes(ax)
+        cbar = _colorbar.Colorbar(cax, img)
         cbar.set_ticks((-1, 0, 1))
         cbar.ax.set_ylabel("Amplitude", rotation=270)
 
