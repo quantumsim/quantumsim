@@ -1,3 +1,8 @@
+from itertools import product
+
+import numpy as np
+import xarray as xr
+
 from quantumsim.algebra import sigma
 from .. import bases
 from ..pauli_vectors import PauliVectorBase
@@ -17,8 +22,7 @@ class State:
         :class:`quantumsim.pauli_vectors.pauli_vector.PauliVectorBase`.
     """
 
-    def __init__(self, qubits, *, dim=2, pauli_vector_class=None,
-                 pauli_vector=None):
+    def __init__(self, qubits, *, dim=2, pauli_vector_class=None, pauli_vector=None):
         self.qubits = list(qubits)
         if pauli_vector is not None:
             self.pauli_vector = pauli_vector
@@ -66,8 +70,8 @@ class State:
         n = self.pauli_vector.n_qubits
         if isinstance(operator, str):
             if n != len(operator):
-                raise ValueError("operator string must have the same length "
-                                 "as number of qubits in the state")
+                raise ValueError("Operator string must have the same length as "
+                                 "a number of qubits in the state")
             try:
                 sigmas = [sigma_dict[ch.upper()] for ch in operator]
             except KeyError as ex:
@@ -78,7 +82,7 @@ class State:
         else:
             einsum_args.append(operator)
             einsum_args.append(list(range(2*n)))
-        einsum_args.append(self.pauli_vector.to_pv()),
+        einsum_args.append(self.pauli_vector.to_pv())
         einsum_args.append([2*n+i for i in range(n)])
         for i, basis in enumerate(self.pauli_vector.bases):
             einsum_args.append(basis.vectors)
@@ -87,6 +91,52 @@ class State:
 
     def trace(self):
         return self.pauli_vector.trace()
+
+    def renormalize(self):
+        self.pauli_vector.renormalize()
+
+    @property
+    def diagonal(self):
+        diag = self.pauli_vector.diagonal()
+
+        bases_labels = (basis.superbasis.computational_subbasis().labels
+                        for basis in self.pauli_vector.bases)
+
+        def tuple_to_string(tup):
+            state = "".join(str(x) for x in tup)
+            return state
+
+        state_labels = [tuple_to_string(label)
+                        for label in product(*bases_labels)]
+
+        outcome = xr.DataArray(
+            data=diag,
+            dims=["state_label"],
+            coords={"state_label": state_labels})
+        outcome.name = "state_diags"
+        return outcome
+
+    @property
+    def density_matrix(self):
+        density_mat = self.pauli_vector.to_dm()
+
+        bases_labels = (basis.superbasis.computational_subbasis().labels
+                        for basis in self.pauli_vector.bases)
+
+        def tuple_to_string(tup):
+            state = "".join(str(x) for x in tup)
+            return state
+
+        state_labels = [tuple_to_string(label)
+                        for label in product(*bases_labels)]
+
+        outcome = xr.DataArray(
+            data=density_mat,
+            dims=["row_state_label", "col_state_label"],
+            coords={"row_state_label": state_labels,
+                    "col_state_label": state_labels})
+        outcome.name = "state_density_mat"
+        return outcome
 
     def partial_trace(self, *qubits):
         """Traces out all qubits, except provided, and returns the resulting
@@ -97,5 +147,5 @@ class State:
         q0, q1, ... : str
             Names of qubits to preserve in the state.
         """
-        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(*[
-            self.qubits.index(q) for q in qubits]))
+        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(
+            *[self.qubits.index(q) for q in qubits]))

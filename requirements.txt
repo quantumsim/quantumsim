@@ -4,3 +4,4 @@ scipy
 sympy
 pytools
 matplotlib
+xarray

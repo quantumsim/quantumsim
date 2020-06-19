@@ -3,7 +3,7 @@ import inspect
 import re
 
 import numpy as np
-import scipy.linalg.matfuncs
+from scipy.linalg import expm
 from collections import namedtuple
 from itertools import chain as chain_
 
@@ -11,7 +11,6 @@ from copy import copy
 
 from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
                                plm_lindbladian_part, plm_hamiltonian_part)
-from ..bases import PauliBasis
 
 
 class OperationNotDefinedError(RuntimeError):
@@ -101,7 +100,6 @@ class Operation(metaclass=abc.ABCMeta):
         self._validate_bases(bases_in=bases_in)
         if bases_out is not None:
             self._validate_bases(bases_out=bases_out)
-
 
     @staticmethod
     def from_ptm(ptm, bases_in, bases_out=None):
@@ -216,8 +214,7 @@ kkj            Resulting operation
                              "provided.")
         plm = np.sum(summands, axis=0) * time
         dim = np.prod(plm.shape[:len(plm.shape) // 2])
-        ptm = scipy.linalg.matfuncs.expm(plm.reshape((dim, dim)))\
-            .reshape(plm.shape)
+        ptm = expm(plm.reshape((dim, dim))).reshape(plm.shape)
         if not np.allclose(ptm.imag, 0):
             raise ValueError('Resulting PTM is not real-valued, check the '
                              'sanity of `hamiltonian` and `lindblad_ops`.')
@@ -393,6 +390,7 @@ class Placeholder(Operation):
     -------
     A placeholder for an operation
     """
+
     def __init__(self, bases_in, bases_out=None):
         self._num_qubits = len(bases_in)
         self._dim_hilbert = bases_in[0].dim_hilbert
@@ -466,6 +464,7 @@ class PTMOperation(Operation):
     .. [2] D. Greenbaum, "Introduction to Quantum Gate Set Tomography",
        arXiv:1509.02921 (2000).
     """
+
     def __init__(self, ptm, bases_in, bases_out):
         self._ptm = ptm
         self.bases_in = bases_in

@@ -12,6 +12,7 @@ sigma = {
                    [0., -1.]], dtype=complex),
 }
 
+
 def random_hermitian_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)
     # noinspection PyArgumentList
@@ -33,3 +34,11 @@ def verify_kraus_unitarity(kraus_ops, *, tbw_tol=1e-6):
     op_products = np.sum([kraus.conj().T.dot(kraus)
                           for kraus in kraus_ops], axis=0)
     return np.sum(op_products)/dim_hilbert - 1 < tbw_tol
+
+
+def verify_ptm_trace_pres(ptm_op, *, rtol=1e-5, atol=1e-8):
+    assert len(ptm_op.shape) == 2
+    dim_pauli = ptm_op.shape[0]
+    expected_row = np.zeros(dim_pauli)
+    expected_row[0] = 1
+    return np.allclose(ptm_op[0], expected_row, rtol, atol)

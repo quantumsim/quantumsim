@@ -23,7 +23,7 @@ class PauliBasis:
         if vectors.shape[1] != vectors.shape[2]:
             raise ValueError(
                 "Pauli basis vectors must be square matrices, got shape {}x{}"
-                    .format(vectors.shape[1], vectors.shape[2]))
+                .format(vectors.shape[1], vectors.shape[2]))
 
         self.vectors = vectors
         self.labels = labels

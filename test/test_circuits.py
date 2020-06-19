@@ -65,7 +65,7 @@ class TestCircuitsCommon:
         dim = 2
         angle1, angle2 = sympy.symbols('angle1 angle2')
 
-        def rotate_chot_rotate(angle1, angle2):
+        def rotate_cnot_rotate(angle1, angle2):
             cnot = ptm_cnot
             return (np.einsum('ai,ijkl,km->ajml',
                               ptm_rotate(angle2), cnot, ptm_rotate(angle1),
@@ -78,7 +78,7 @@ class TestCircuitsCommon:
         angle1_2 = 0.8 * pi
         angle2_2 = 0.3 * pi
 
-        gate = Gate(('D', 'A'), dim, rotate_chot_rotate)
+        gate = Gate(('D', 'A'), dim, rotate_cnot_rotate)
         assert gate.free_parameters == {angle1, angle2}
 
         gate1 = gate(angle1=angle1_1, angle2=angle2_1)

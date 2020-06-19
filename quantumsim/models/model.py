@@ -1,5 +1,4 @@
 import abc
-import numpy as np
 from collections import defaultdict
 from copy import copy, deepcopy
 from more_itertools import pairwise
@@ -57,8 +56,9 @@ class Model(metaclass=abc.ABCMeta):
     ----------
     setup : quantumsim.Setup
     """
-    def __init__(self, setup):
+    def __init__(self, setup, dim=None):
         self._setup = setup
+        self._dim = dim
 
     def wait(self, qubit, duration):
         return WaitingGate(qubit, duration, self.dim)
@@ -67,9 +67,8 @@ class Model(metaclass=abc.ABCMeta):
         return self._setup.param(param, *qubits)
 
     @property
-    @abc.abstractmethod
     def dim(self):
-        pass
+        return self._dim
 
     @staticmethod
     def _normalize_operation(op, qubits):
@@ -101,7 +100,7 @@ class Model(metaclass=abc.ABCMeta):
                 .format(type(op)))
 
     @staticmethod
-    def gate(duration=0, plot_metadata=None, repr_=None):
+    def gate(duration=0, param_funcs=None, plot_metadata=None, repr_=None):
         def gate_decorator(func):
             def wrapper(self, *qubits, **params):
                 if callable(duration):
@@ -112,7 +111,8 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = duration
                 circuit = func(self, *qubits)
                 circuit.set(**params)
-                return Box(circuit.qubits, circuit.gates, plot_metadata, repr_)
+                return Box(circuit.qubits, circuit.gates, param_funcs,
+                           plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper
@@ -124,7 +124,7 @@ class Model(metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        circuit : quantumsim.circuits.TimeAware
+        circuit : quantumsim.circuits.Circuit
 
         Returns
         -------
