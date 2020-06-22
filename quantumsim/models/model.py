@@ -32,7 +32,7 @@ class Model(metaclass=abc.ABCMeta):
     def wait(self, qubit, duration):
         return WaitPlaceholder(duration, self.dim).at(qubit)
 
-    def waiting_gate(self, qubit, duration):
+    def idle(self, qubit, duration):
         return Gate(
             qubit,
             self.dim,
@@ -140,16 +140,16 @@ class Model(metaclass=abc.ABCMeta):
             duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration).shift(time_start=time_start))
+                    self.idle(qubit, duration).shift(time_start=time_start))
             duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.waiting_gate(qubit, duration).shift(time_end=time_end))
+                    self.idle(qubit, duration).shift(time_end=time_end))
             for gate1, gate2 in pairwise(gates):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
                     waiting_gates.append(
-                        self.waiting_gate(qubit, duration).shift(time_start=gate1.time_end))
+                        self.idle(qubit, duration).shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
