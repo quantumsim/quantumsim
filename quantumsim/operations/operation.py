@@ -702,5 +702,6 @@ class ParametrizedOperation(Placeholder):
             raise OperationNotDefinedError(
                 'Arguments to the function do not define the full set, '
                 'needed to instantiate the operation') from exc
-        return self._operation_func(*args).set_bases(
+        tmp = self._operation_func(*args)
+        return tmp.set_bases(
             self._bases_in, self._bases_out)

@@ -1,8 +1,9 @@
 import numpy as np
 
 from .. import bases
-from ..operations.operation import ParametrizedOperation
-from ..operations.qubits import (
+# from ..operations.operation import ParametrizedOperation
+from ..circuits import Gate
+from ..models.perfect.qubits import (
     cnot,
     cphase,
     hadamard,
@@ -39,7 +40,7 @@ class IdealModel(Model):
             {
                 "version": "1",
                 "name": "Ideal Setup",
-                "setup": [{"time_1qubit": 0, "time_2qubit": 0, "time_measure": 0}],
+                "setup": [],
             }
         )
         super().__init__(setup=setup)
@@ -51,46 +52,36 @@ class IdealModel(Model):
     dim = 2
 
     @Model.gate(
-        duration="time_1qubit", plot_metadata={"style": "box", "label": "$X({theta})$"}
+        plot_metadata={"style": "box", "label": "$X({theta})$"},
     )
     def rotate_x(self, qubit):
         """Rotation around the X-axis by a given angle. Parameters: `angle` (degrees).
         """
-        return (
-            ParametrizedOperation(lambda angle: rotate_x(np.deg2rad(angle)), _BASIS).at(
-                qubit
-            ),
-        )
+        return rotate_x(qubit)
 
     @Model.gate(
-        duration="time_1qubit", plot_metadata={"style": "box", "label": "$X({theta})$"}
+        plot_metadata={"style": "box", "label": "$X({theta})$"}
     )
     def rotate_y(self, qubit):
         """Rotation around the Y-axis by a given angle. Parameters: `angle` (degrees).
         """
-        return (
-            ParametrizedOperation(lambda angle: rotate_y(np.deg2rad(angle)), _BASIS).at(
-                qubit
-            ),
-        )
+        return rotate_y(qubit)
 
     @Model.gate(
-        duration="time_1qubit", plot_metadata={"style": "box", "label": "$X({theta})$"}
+        plot_metadata={"style": "box", "label": "$X({theta})$"}
     )
     def rotate_z(self, qubit):
         """Rotation around the Z-axis by a given angle. Parameters: `angle` (degrees).
         """
-        return (
-            ParametrizedOperation(lambda angle: rotate_z(np.deg2rad(angle)), _BASIS).at(
-                qubit
-            ),
-        )
+        return rotate_z(qubit)
 
-    @Model.gate(duration="time_1qubit", plot_metadata={"style": "box", "label": "$H$"})
+    @Model.gate(
+        plot_metadata={"style": "box", "label": "$H$"},
+    )
     def hadamard(self, qubit):
         """A Hadamard gate.
         """
-        return (hadamard().at(qubit),)
+        return hadamard(qubit)
 
     @Model.gate(
         duration="time_2qubit",
@@ -102,19 +93,14 @@ class IdealModel(Model):
             ],
         },
     )
-    def cphase(self, control_qubit, target_qubit):
+    def cphase(self, qubit1, qubit2):
         """Conditional phase rotation of the target
         qubit by a given angle, depending on the state of the control qubit.
         Parameters: `angle` (degrees).
         """
-        return (
-            ParametrizedOperation(
-                lambda angle: cphase(np.deg2rad(angle)), _BASIS * 2
-            ).at(control_qubit, target_qubit),
-        )
+        return cphase(qubit1, qubit2)
 
     @Model.gate(
-        duration="time_2qubit",
         plot_metadata={
             "style": "line",
             "markers": [
@@ -127,10 +113,9 @@ class IdealModel(Model):
         """Conditional NOT on the target qubit depending on the state of the control
         qubit. Parameters: `angle` (degrees).
         """
-        return (cnot().at(control_qubit, target_qubit),)
+        return cnot(control_qubit, target_qubit)
 
     @Model.gate(
-        duration="time_2qubit",
         plot_metadata={
             "style": "line",
             "markers": [
@@ -142,10 +127,9 @@ class IdealModel(Model):
     def swap(self, control_qubit, target_qubit):
         """A SWAP gate.
         """
-        return (swap().at(control_qubit, target_qubit),)
+        return swap(control_qubit, target_qubit)
 
     @Model.gate(
-        duration="time_measure",
         plot_metadata={"style": "box",
                        "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
         param_funcs={"result": _born_projection},
@@ -156,7 +140,15 @@ class IdealModel(Model):
 
         def project(result):
             if result in (0, 1):
-                return self._ptm_project[result]
+                basis_element = (_BASIS[0].subbasis([result]),)
+                return np.array([[1.]]), basis_element, basis_element
             raise ValueError("Unknown measurement result: {}".format(result))
 
-        return (ParametrizedOperation(project, _BASIS_CLASSICAL).at(qubit),)
+        return Gate(qubit,
+                    self.dim,
+                    project,
+                    duration=0,
+                    plot_metadata={"style": "box",
+                                   "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
+                    repr_='measure',
+                    )

@@ -111,8 +111,13 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = duration
                 circuit = func(self, *qubits)
                 circuit.set(**params)
-                return Box(circuit.qubits, circuit.gates, param_funcs,
-                           plot_metadata, repr_)
+                if param_funcs:
+                    ops = [copy(g) for g in circuit.operations()]
+                    for op in ops:
+                        op._param_funcs.update(param_funcs)
+                else:
+                    ops = circuit.gates
+                return Box(circuit.qubits, ops, plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper

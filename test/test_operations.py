@@ -188,11 +188,11 @@ class TestOperations:
 
     def test_ptm(self):
         # Some random gate sequence
-        circuit = (lib2.rotate_x(0)(theta=np.pi/2) +
-                   lib2.rotate_y(1)(theta=0.3333) +
+        circuit = (lib2.rotate_x(0)(angle=np.pi/2) +
+                   lib2.rotate_y(1)(angle=0.3333) +
                    lib2.cphase(0, 2)(angle=np.pi) +
                    lib2.cphase(1, 2)(angle=np.pi) +
-                   lib2.rotate_x(1)(theta=-np.pi/2))
+                   lib2.rotate_x(1)(angle=-np.pi/2))
 
         b = (bases.general(2),) * 3
         ptm = circuit.ptm(b, b)

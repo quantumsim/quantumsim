@@ -26,24 +26,6 @@ def _to_str(op_params):
     return set(map(str, chain(*(p.free_symbols for p in op_params))))
 
 
-def _sympy_to_native(symbol):
-    try:
-        if symbol.is_Integer:
-            return int(symbol)
-        if symbol.is_Float:
-            return float(symbol)
-        if symbol.is_Complex:
-            return complex(symbol)
-        return symbol
-    except Exception as ex:
-        raise RuntimeError(
-            "Could not convert sympy symbol to native type."
-            "It may be due to misinterpretation of some symbols by sympy."
-            "Try to use sympy expressions as gate parameters' values "
-            "explicitly."
-        ) from ex
-
-
 def deparametrize(op, params=None):
     """
     Convert parametrized operation with sympy expressions, that can be
@@ -54,19 +36,18 @@ def deparametrize(op, params=None):
     op: ParametrizedOperation
     params: dict
         Extra parameters to set before instantiating the operation
-
+0
     Returns
     -------
-    Operation
-    """
+    Operation """
     if not isinstance(op, ParametrizedOperation):
         return op
     op_params = op.params
     if params:
-        if not _to_str(op_params).issubset(params.keys()):
-            return op
-        op_params = (p.subs(params) for p in op_params)
-    op_params = tuple(_sympy_to_native(p) for p in op_params)
+        # if not _to_str(op_params).issubset(params.keys()):
+        #     return op
+        op_params = (p.subs(params, simultaneous=True) for p in op_params)
+    op_params = tuple(sympy_to_native(p) for p in op_params)
     return op.set_params(op_params).substitute()
 
 
@@ -325,8 +306,10 @@ class GateSetMixin(ABC):
         FinalizedCircuit
             Finalized version of this circuit
         """
+        param_funcs = self._param_funcs_sympified()
         # noinspection PyTypeChecker
-        return FinalizedCircuit(self.qubits, self.operations(), bases_in=bases_in)
+        return FinalizedCircuit(self.qubits, self.operations(), param_funcs=param_funcs,
+                                bases_in=bases_in)
 
     def _qubit_time_start(self, qubit):
         for gate in self.gates:
@@ -961,6 +944,10 @@ class FinalizedCircuit:
         else:
             self._param_funcs = dict()
 
+    @property
+    def params(self):
+        return self._params
+
     @staticmethod
     def _op_params(op):
         if not isinstance(op, ParametrizedOperation):
@@ -968,36 +955,12 @@ class FinalizedCircuit:
         # All parameters must be sympy expressions at this point
         return set(map(str, chain(*(p.free_symbols for p in op.params))))
 
-    @classmethod
-    def _deparametrize(cls, op, params=None):
-        """
-        Convert parametrized operation with sympy expressions, that can be
-        converted into number into an operation.
-
-        Parameters
-        ----------
-        op: ParametrizedOperation
-        params: dict
-            Extra parameters to set before instantiating the operation
-
-        Returns
-        -------
-        Operation
-        """
-        if not isinstance(op, ParametrizedOperation):
-            return op
-        op_params = op.params
-        if params:
-            op_params = (p.subs(params, simultaneous=True) for p in op_params)
-        op_params = tuple(sympy_to_native(p) for p in op_params)
-        return op.set_params(op_params).substitute()
-
     def __call__(self, **params):
         if len(self._params) > 0:
-            unset_params = self._params - params.keys()
+            unset_params = self._params - params.keys() - self._param_funcs.keys()
             if len(unset_params) != 0:
                 raise KeyError(*unset_params)
-            units = [self._deparametrize(op, params).at(*ix)
+            units = [deparametrize(op, params).at(*ix)
                      for op, ix in self.operation.units()]
             out = FinalizedCircuit(self.qubits, [])
             out.operation = Operation.from_sequence(units).compile()
