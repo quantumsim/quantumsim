@@ -88,6 +88,8 @@ class Controller:
         seed : int
             The seed used to initialized the random number generator.
         """
+        if isinstance(seed, np.generic):
+            seed = seed.item()
         if not isinstance(seed, int):
             raise TypeError(
                 "Seed expected as int, provided as {} instead".format(type(seed)))

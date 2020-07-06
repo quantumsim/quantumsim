@@ -137,7 +137,6 @@ class State:
                 dims=_dims,
                 coords=_coords)
 
-        outcome = outcome.assign_attrs({'qubit_order': self.qubits})
         outcome.name = "diagonal"
         return outcome
 
