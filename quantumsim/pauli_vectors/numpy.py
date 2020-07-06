@@ -63,7 +63,7 @@ class PauliVectorNumpy(PauliVectorBase):
             self._data, dm_in_idx, ptm, ptm_out_idx + ptm_in_idx, dm_out_idx,
             optimize=True)
 
-    def diagonal(self, *, get_data=True):
+    def diagonal(self, *, get_data=True, flatten=True):
         no_trace_tensors = [basis.computational_basis_vectors
                             for basis in self.bases]
 
@@ -75,9 +75,13 @@ class PauliVectorNumpy(PauliVectorBase):
 
         indices = list(range(n_qubits))
         out_indices = list(range(n_qubits, 2 * n_qubits))
-        complex_dm_dimension = pytools.product(self.dim_hilbert)
-        return np.einsum(self._data, indices, *trace_argument, out_indices,
-                         optimize=True).real.reshape(complex_dm_dimension)
+        if flatten:
+            complex_dm_dimension = pytools.product(self.dim_hilbert)
+            return np.einsum(self._data, indices, *trace_argument, out_indices,
+                             optimize=True).real.reshape(complex_dm_dimension)
+        else:
+            return np.einsum(self._data, indices, *trace_argument, out_indices,
+                             optimize=True).real
 
     def trace(self):
         # TODO: can be made more effective
@@ -118,4 +122,3 @@ class PauliVectorNumpy(PauliVectorBase):
 
     def copy(self):
         return self.from_pv(self.to_pv().copy(), self.bases)
-

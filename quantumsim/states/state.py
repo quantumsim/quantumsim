@@ -96,28 +96,51 @@ class State:
     def renormalize(self):
         self.pauli_vector.renormalize()
 
-    @property
-    def diagonal(self):
-        diag = self.pauli_vector.diagonal()
+    def diagonal(self, *, flatten=True, trace_over=None):
+        if trace_over is None:
+            diag = self.pauli_vector.diagonal(flatten=False)
+            bases_labels = [basis.superbasis.computational_subbasis().labels
+                            for basis in self.pauli_vector.bases]
+        else:
+            if not all(q in self.qubits for q in trace_over):
+                raise ValueError(
+                    "Not all qubits to be traced over are part of the state.")
 
-        bases_labels = (basis.superbasis.computational_subbasis().labels
-                        for basis in self.pauli_vector.bases)
+            traced_axes = tuple(ind for ind, q in enumerate(self.qubits)
+                                if q in trace_over)
+            diag = np.sum(self.pauli_vector.diagonal(flatten=False),
+                          axis=traced_axes)
+            bases_labels = [b.superbasis.computational_subbasis().labels
+                            for q, b in zip(self.qubits, self.pauli_vector.bases)
+                            if q not in trace_over]
 
-        def tuple_to_string(tup):
-            state = "".join(str(x) for x in tup)
-            return state
+        if flatten:
+            def tuple_to_string(tup):
+                state = "".join(str(x) for x in tup)
+                return state
 
-        state_labels = [tuple_to_string(label)
-                        for label in product(*bases_labels)]
+            state_labels = [tuple_to_string(label)
+                            for label in product(*bases_labels)]
 
-        outcome = xr.DataArray(
-            data=diag,
-            dims=["state_label"],
-            coords={"state_label": state_labels})
-        outcome.name = "state_diags"
+            outcome = xr.DataArray(
+                data=diag.flatten(),
+                dims=["state_label"],
+                coords={"state_label": state_labels})
+        else:
+            _dims = ['state_' + q for q in self.qubits if q not in trace_over]
+            state_labels = [[int(state) for state in qubit_states]
+                            for qubit_states in bases_labels]
+            _coords = dict(zip(_dims, state_labels))
+
+            outcome = xr.DataArray(
+                data=diag,
+                dims=_dims,
+                coords=_coords)
+
+        outcome = outcome.assign_attrs({'qubit_order': self.qubits})
+        outcome.name = "diagonal"
         return outcome
 
-    @property
     def density_matrix(self):
         density_mat = self.pauli_vector.to_dm()
 
