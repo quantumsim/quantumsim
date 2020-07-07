@@ -31,9 +31,12 @@ class PauliVectorBase(metaclass=abc.ABCMeta):
     def __init__(self, bases, pv=None, *, force=False):
         self.bases = list(bases)
         if self.size > self._size_max and not force:
+            import numpy as np
+            gib = 2**30
             raise ValueError(
-                'Density matrix of the system is going to have {} items. It '
-                'is probably too much. If you know what you are doing, '
+                f'Warning: detected an attempt to create a density matrix of {self.size/gib} GiB.'
+                f'That is equivalent to {np.log2(self.size):.2f} qubits, and probably too much for me.'
+                'If you are sure that this is what you intended,'
                 'pass `force=True` argument to the constructor.')
 
     @classmethod
