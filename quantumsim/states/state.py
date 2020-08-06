@@ -23,7 +23,10 @@ class State:
     """
 
     def __init__(self, qubits, *, dim=2,
-                 pauli_bases=None, pauli_vector=None, pauli_vector_class=None):
+                 pauli_bases=None,
+                 pauli_vector=None,
+                 pauli_vector_class=None,
+                 force=False):
         self.qubits = list(qubits)
         if pauli_vector is not None:
             self.pauli_vector = pauli_vector
@@ -38,14 +41,14 @@ class State:
             if pauli_vector_class is None:
                 from ..pauli_vectors import Default
 
-                self.pauli_vector = Default(bases_)
+                self.pauli_vector = Default(bases_, force=force)
             else:
                 if not issubclass(pauli_vector_class, PauliVectorBase):
                     raise ValueError(
                         "pauli_vector_class must be a subclass of "
                         "quantumsim.pauli_vectors.PauliVectorBase"
                     )
-                self.pauli_vector = pauli_vector_class(bases_)
+                self.pauli_vector = pauli_vector_class(bases_, force=force)
 
     def __copy__(self):
         return self.copy()
