@@ -166,9 +166,13 @@ class PauliVectorCuda(PauliVectorBase):
 
         if self._work_data.gpudata.size < new_size_bytes:
             # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
+            try:
+                self._work_data.gpudata.free()
+                self._work_data = ga.empty(new_shape, np.float64)
+                self._work_data.gpudata.size = self._work_data.nbytes
+            except:
+                raise ValueError("Error reallocating pauli vector of"
+                                 "shape {} and size {}".format(new_shape, new_size_bytes))
         else:
             # reallocation not required,
             # reshape but reuse allocation
