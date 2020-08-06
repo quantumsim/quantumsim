@@ -68,7 +68,7 @@ class PauliVectorBase(metaclass=abc.ABCMeta):
 
     @property
     def size(self):
-        return pytools.product(self.dim_hilbert) ** 2
+        return pytools.product(self.dim_pauli)
 
     @property
     def dim_pauli(self):
