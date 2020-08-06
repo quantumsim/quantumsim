@@ -319,7 +319,7 @@ class Controller:
                     _eval_params[param] = param_func(**func_args)
 
                 # sub in the operation
-                operation = deparametrize(operation, _eval_params)
+                operation = deparametrize(operation, _eval_params).compile()
                 # append realized value to the pre-located DataArray
                 outcome.loc[{"param": list(_op_params)}] = list(
                     _eval_params.values())
