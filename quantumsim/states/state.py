@@ -22,12 +22,19 @@ class State:
         :class:`quantumsim.pauli_vectors.pauli_vector.PauliVectorBase`.
     """
 
-    def __init__(self, qubits, *, dim=2, pauli_vector_class=None, pauli_vector=None):
+    def __init__(self, qubits, *, dim=2,
+                 pauli_bases=None, pauli_vector=None, pauli_vector_class=None):
         self.qubits = list(qubits)
         if pauli_vector is not None:
             self.pauli_vector = pauli_vector
         else:
-            bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
+            if pauli_bases is not None:
+                if len(pauli_bases) != len(self.qubits):
+                    raise ValueError("Mismatch between number of qubits"
+                                     "and number of bases vectors")
+                bases_ = pauli_bases
+            else:
+                bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
             if pauli_vector_class is None:
                 from ..pauli_vectors import Default
 

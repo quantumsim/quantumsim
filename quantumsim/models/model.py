@@ -115,7 +115,7 @@ class Model(metaclass=abc.ABCMeta):
 
         return gate_decorator
 
-    def add_waiting_gates(self, circuit):
+    def add_waiting_gates(self, circuit, time_start=None, time_end=None):
         """Insert missing waiting placeholders.
 
         Parameters
@@ -131,25 +131,27 @@ class Model(metaclass=abc.ABCMeta):
             for qubit in gate.qubits:
                 gates_dict[qubit].append(gate)
 
-        time_start = circuit.time_start
-        time_end = circuit.time_end
+        _time_start = time_start or circuit.time_start
+        _time_end = time_end or circuit.time_end
         margin = 1e-1
         waiting_gates = []
 
         for qubit, gates in gates_dict.items():
-            duration = gates[0].time_start - time_start
+            duration = gates[0].time_start - _time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_start=time_start))
-            duration = time_end - gates[-1].time_end
+                    self.idle(qubit, duration).shift(time_start=_time_start))
+            duration = _time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_end=time_end))
+                    self.idle(qubit, duration).shift(time_end=_time_end))
             for gate1, gate2 in pairwise(gates):
-                duration = gate2.time_start - gate1.time_end
-                if duration > margin:
-                    waiting_gates.append(
-                        self.idle(qubit, duration).shift(time_start=gate1.time_end))
+                if gate1.time_end >= _time_start and gate2.time_end <= _time_end:
+                    duration = gate2.time_start - gate1.time_end
+                    if duration > margin:
+                        waiting_gates.append(
+                            self.idle(qubit, duration).shift(time_start=gate1.time_end))
+
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
