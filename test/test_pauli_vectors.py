@@ -19,6 +19,7 @@ from quantumsim.algebra import kraus_to_ptm, ptm_convert_basis
 @pytest.fixture(params=[
     ('quantumsim.pauli_vectors.numpy', 'PauliVectorNumpy'),
     ('quantumsim.pauli_vectors.cuda', 'PauliVectorCuda'),
+    ('quantumsim.pauli_vectors.opencl', 'PauliVectorOpenCL'),
 ])
 def pauli_vector_cls(request):
     mod = pytest.importorskip(request.param[0])
