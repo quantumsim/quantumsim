@@ -1,18 +1,23 @@
 # This file is part of quantumsim. (https://github.com/brianzi/quantumsim)
-# (c) 2016 Brian Tarasinski
+# (c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
+import os
 import sys
+import warnings
 
 import numpy as np
-import os
-import pytools
-import warnings
 import pyopencl as cl
 import pyopencl.array as ga
+import pytools
 
 from .pauli_vector import PauliVectorBase
 
+
+KERNELS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                            'primitives.cl')
+if not os.path.exists(KERNELS_FILE):
+    raise ImportError("Could not find OpenCL kernels file")
 
 class PauliVectorOpenCL(PauliVectorBase):
     """Create a new density matrix for several qudits.
@@ -30,15 +35,22 @@ class PauliVectorOpenCL(PauliVectorBase):
         :math:`2^22` elements currently) is not allowed. Set this to `True`
         if you know what you are doing.
     context: pyopencl.Context, optional
-        OpenCL context. By default, `pyopencl.create_some_context()` will 
+        OpenCL context. By default, `pyopencl.create_some_context()` will
         be called to create one automatically.
     """
+    dtype = np.float64
     _gpuarray_cache = {}
 
     def __init__(self, bases, pv=None, *, force=False, context=None):
         super().__init__(bases, pv, force=force)
+
+        # Context initialization
         self._context = context or cl.create_some_context()
         self._queue = cl.CommandQueue(self._context)
+
+        # OpenCL kernels initialization
+        with open(KERNELS_FILE, 'r') as f:
+            self._kernels = cl.Program(self._context, f.read()).build()
 
         if pv is not None:
             if self.dim_pauli != pv.shape:
@@ -60,12 +72,13 @@ class PauliVectorOpenCL(PauliVectorBase):
                     .format(pv.dtype)
                 )
 
-            self._data = cl.array.to_device(self._queue, pv.astype(np.float64))
+            self._data = cl.array.to_device(
+                self._queue, np.ascontiguousarray(pv, dtype=self.dtype))
         elif isinstance(pv, cl.array.Array):
-            if pv.dtype != np.float64:
+            if pv.dtype != self.dtype:
                 raise ValueError(
-                    '`pv` must have float64 data type, got {}'
-                    .format(pv.dtype)
+                    '`pv` must have {} data type, got {}'
+                    .format(self.dtype, pv.dtype)
                 )
             self._data = pv
         else:
@@ -134,7 +147,73 @@ class PauliVectorOpenCL(PauliVectorBase):
         flatten : boolean
             TODO docstring
         """
-        raise NotImplementedError
+        diag_bases = [pb.computational_subbasis() for pb in self.bases]
+        diag_shape = [db.dim_pauli for db in diag_bases]
+        diag_size = pytools.product(diag_shape)
+
+        if target_array is None:
+            if self._work_data.data.size < diag_size * 8:
+                self._free_gpuarray(self._work_data)
+                self._work_data = cl.array.empty(self._queue, diag_shape, self.dtype)
+            target_array = self._work_data
+        else:
+            if target_array.size < diag_size:
+                raise ValueError(
+                    "Size of `target_gpu_array` is too small ({}).\n"
+                    "Should be at least {} ."
+                    .format(target_array.size, diag_size))
+
+        idx = [[pb.computational_basis_indices[i]
+                for i in range(pb.dim_hilbert)
+                if pb.computational_basis_indices[i] is not None]
+               for pb in self.bases]
+
+        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
+
+        xshape = np.array(self._data.shape, np.uint32)
+        yshape = np.array(diag_shape, np.uint32)
+
+        xshape_gpu = self._cached_gpuarray(xshape)
+        yshape_gpu = self._cached_gpuarray(yshape)
+
+        idx_i_gpu = self._cached_gpuarray(idx_i)
+        idx_j_gpu = self._cached_gpuarray(idx_j)
+
+        block = (2 ** 8, 1, 1)
+        grid = (max(1, (diag_size - 1) // 2 ** 8 + 1), 1, 1)
+
+        if len(yshape) == 0:
+            # brain-dead case, but should be handled according to exp.
+            target_array.set(self._data.get())
+        else:
+            self._kernels.multitake(
+                self._queue,
+                grid,
+                block,
+                self._data.data,
+                target_array.data,
+                idx_i_gpu.data,
+                idx_j_gpu.data,
+                xshape_gpu.data,
+                yshape_gpu.data,
+                np.uint32(len(yshape)),
+                g_times_l=True,
+            )
+
+        if get_data:
+            if flatten:
+                return target_array.get().ravel()[:diag_size]
+            else:
+                return (target_array.get().ravel()[:diag_size]
+                        .reshape(diag_shape))
+        else:
+            return cl.array.Array(
+                self._queue,
+                shape=diag_shape,
+                dtype=self.dtype,
+                data=target_array.data,
+            )
 
     def trace(self):
         # TODO: there is a smarter way of doing this with pauli-dirac basis
@@ -163,6 +242,10 @@ class PauliVectorOpenCL(PauliVectorBase):
         """Return a deep copy of this Density."""
         raise NotImplementedError
 
+    def _free_gpuarray(self, arr):
+        arr.data.release()
+        self._queue.finish()
+
     def _cached_gpuarray(self, array):
         """
         Given a numpy array,
@@ -171,4 +254,13 @@ class PauliVectorOpenCL(PauliVectorBase):
         If it is not found in the cache, upload to gpu
         and store in cache, otherwise return cached allocation.
         """
-        raise NotImplementedError
+
+        array = np.ascontiguousarray(array)
+        key = hash(array.tobytes())
+        try:
+            array_gpu = self._gpuarray_cache[key]
+        except KeyError:
+            array_gpu = cl.array.to_device(self._queue, array)
+            self._gpuarray_cache[key] = array_gpu
+
+        return array_gpu
