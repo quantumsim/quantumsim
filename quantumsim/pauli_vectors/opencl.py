@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 import pyopencl as cl
 import pyopencl.array as ga
+import pyopencl.reduction
 import pytools
 
 from .pauli_vector import PauliVectorBase
@@ -18,6 +19,7 @@ KERNELS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                             'primitives.cl')
 if not os.path.exists(KERNELS_FILE):
     raise ImportError("Could not find OpenCL kernels file")
+
 
 class PauliVectorOpenCL(PauliVectorBase):
     """Create a new density matrix for several qudits.
@@ -50,7 +52,19 @@ class PauliVectorOpenCL(PauliVectorBase):
 
         # OpenCL kernels initialization
         with open(KERNELS_FILE, 'r') as f:
-            self._kernels = cl.Program(self._context, f.read()).build()
+            kernels = cl.Program(self._context, f.read()).build()
+
+        self._cl_multitake = kernels.multitake
+        self._cl_sum_along_axis = cl.reduction.ReductionKernel(
+            ctx=self._context,
+            dtype_out=np.float64,
+            neutral="0", reduce_expr="a+b",
+            map_expr="(i/stride) % dim == offset ? in[i] : 0",
+            arguments="const double *in, unsigned int stride, unsigned int dim, "
+                      "unsigned int offset"
+        )
+
+
 
         if pv is not None:
             if self.dim_pauli != pv.shape:
@@ -148,7 +162,7 @@ class PauliVectorOpenCL(PauliVectorBase):
             TODO docstring
         """
         diag_bases = [pb.computational_subbasis() for pb in self.bases]
-        diag_shape = [db.dim_pauli for db in diag_bases]
+        diag_shape = tuple((db.dim_pauli for db in diag_bases))
         diag_size = pytools.product(diag_shape)
 
         if target_array is None:
@@ -187,7 +201,7 @@ class PauliVectorOpenCL(PauliVectorBase):
             # brain-dead case, but should be handled according to exp.
             target_array.set(self._data.get())
         else:
-            self._kernels.multitake(
+            self._cl_multitake(
                 self._queue,
                 grid,
                 block,
@@ -232,7 +246,28 @@ class PauliVectorOpenCL(PauliVectorBase):
             Index of the qubit.
         """
         self._validate_qubit(qubit, 'qubit')
-        raise NotImplementedError
+
+        # TODO on graphics card, optimize for tracing out?
+        diag = self.diagonal(get_data=False)
+
+        res = []
+        stride = diag.strides[qubit] // 8
+        dim = diag.shape[qubit]
+        for offset in range(dim):
+            pt = self._cl_sum_along_axis(diag, stride, dim, offset, queue=self._queue)
+            res.append(pt)
+
+        out = [p.get().item() for p in res]
+        if len(out) == self.dim_hilbert:
+            return out
+        else:
+            # We need to insert zeros at the basis elements, that are missing
+            # from the basis
+            it = iter(out)
+            return [next(it) if qbi is not None else 0.
+                    for qbi in self.bases[qubit]
+                    .computational_basis_indices.values()]
+
 
     def renormalize(self):
         """Renormalize to trace one."""
