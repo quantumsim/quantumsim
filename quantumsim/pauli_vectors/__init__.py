@@ -1,14 +1,23 @@
 from .numpy import PauliVectorNumpy, PauliVectorBase
 
-__all__ = ['Default', 'PauliVectorNumpy', 'PauliVectorBase']
+__all__ = ['Default', 'PauliVectorNumpy', 'PauliVectorBase', ]
+
+try:
+    from .opencl import PauliVectorOpenCL
+    __all__.append('PauliVectorOpenCL')
+    Default = PauliVectorOpenCL
+except ImportError:
+    Default = PauliVectorNumpy
 
 try:
     from .cuda import PauliVectorCuda
     __all__.append('PauliVectorCuda')
     Default = PauliVectorCuda
 except ImportError:
+    pass
+
+if Default == PauliVectorNumpy:
     import warnings
-    warnings.warn('Could not import CUDA backend. Either PyCUDA is not '
-                  'installed, or your PC has no NVidia GPU at all. Be wise '
-                  'with a difficulty of the problem you state to Quantumsim.')
-    Default = PauliVectorNumpy
+    warnings.warn('Could not initialize any of GPU backends. If you need '
+                  'high-performance computations, check that either PyOpenCL or PyCUDA '
+                  'are accessible and operational.')
