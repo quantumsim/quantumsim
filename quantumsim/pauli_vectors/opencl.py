@@ -41,6 +41,7 @@ class PauliVectorOpenCL(PauliVectorBase):
         be called to create one automatically.
     """
     dtype = np.float64
+    itemsize = np.dtype(dtype).itemsize
     _gpuarray_cache = {}
 
     def __init__(self, bases, pv=None, *, force=False, context=None):
@@ -114,6 +115,39 @@ class PauliVectorOpenCL(PauliVectorBase):
             raise NotImplementedError('Applying {}-qubit PTM is not '
                                       'implemented in the active backend.')
 
+    def _ensure_gpu_array_shape(self, arr, shape):
+        """
+        This function tries to reuse GPU allocation of `arr`, if it is possible, and casts it to the shape `shape`. If required memory of `arr` allocation is not sufficient -- release it and allocate larger memory blob.
+
+        Parameters
+        ----------
+        arr: pyopencl.array.Array
+            An old array.
+        shape: tuple of int
+            Required output array shape
+
+        Returns
+        -------
+        pyopencl.array.Array
+    `   """
+        new_size = pytools.product(shape)
+        new_size_bytes = new_size * self.itemsize
+
+        if self._work_data.data.size < new_size_bytes:
+            # reallocate
+            arr.data.release()
+            self._queue.finish()  # TODO: is there any other way to force-release?
+            return cl.array.empty(self._queue, shape, self.dtype)
+        else:
+            # reallocation not required,
+            # reshape but reuse allocation
+            return cl.array.Array(
+                self._queue,
+                shape=shape,
+                dtype=self.dtype,
+                data=self._work_data.data,
+            )
+
     def _apply_two_qubit_ptm(self, qubit0, qubit1, ptm):
         """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
 
@@ -148,6 +182,7 @@ class PauliVectorOpenCL(PauliVectorBase):
         self._validate_qubit(qubit, 'bit')
         raise NotImplementedError
 
+
     def diagonal(self, *, get_data=True, target_array=None, flatten=True):
         """Obtain the diagonal of the density matrix.
 
@@ -166,16 +201,14 @@ class PauliVectorOpenCL(PauliVectorBase):
         diag_size = pytools.product(diag_shape)
 
         if target_array is None:
-            if self._work_data.data.size < diag_size * 8:
-                self._free_gpuarray(self._work_data)
-                self._work_data = cl.array.empty(self._queue, diag_shape, self.dtype)
-            target_array = self._work_data
+            target_array = self._ensure_gpu_array_shape(self._work_data, diag_shape)
         else:
             if target_array.size < diag_size:
                 raise ValueError(
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {} ."
                     .format(target_array.size, diag_size))
+            target_array = self._ensure_gpu_array_shape(target_array, diag_shape)
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -199,7 +232,8 @@ class PauliVectorOpenCL(PauliVectorBase):
 
         if len(yshape) == 0:
             # brain-dead case, but should be handled according to exp.
-            target_array.set(self._data.get())
+            cl.enqueue_copy(self._queue, target_array.data, self._data.data,
+                            byte_count=self._data.size * self.itemsize)
         else:
             self._cl_multitake(
                 self._queue,
@@ -222,12 +256,7 @@ class PauliVectorOpenCL(PauliVectorBase):
                 return (target_array.get().ravel()[:diag_size]
                         .reshape(diag_shape))
         else:
-            return cl.array.Array(
-                self._queue,
-                shape=diag_shape,
-                dtype=self.dtype,
-                data=target_array.data,
-            )
+            return target_array
 
     def trace(self):
         # TODO: there is a smarter way of doing this with pauli-dirac basis
@@ -276,10 +305,6 @@ class PauliVectorOpenCL(PauliVectorBase):
     def copy(self):
         """Return a deep copy of this Density."""
         raise NotImplementedError
-
-    def _free_gpuarray(self, arr):
-        arr.data.release()
-        self._queue.finish()
 
     def _cached_gpuarray(self, array):
         """
