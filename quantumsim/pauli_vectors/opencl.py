@@ -56,6 +56,7 @@ class PauliVectorOpenCL(PauliVectorBase):
             kernels = cl.Program(self._context, f.read()).build()
 
         self._cl_multitake = kernels.multitake
+        self._cl_applyptm = kernels.two_qubit_general_ptm
         self._cl_sum_along_axis = cl.reduction.ReductionKernel(
             ctx=self._context,
             dtype_out=np.float64,
@@ -64,8 +65,6 @@ class PauliVectorOpenCL(PauliVectorBase):
             arguments="const double *in, unsigned int stride, unsigned int dim, "
                       "unsigned int offset"
         )
-
-
 
         if pv is not None:
             if self.dim_pauli != pv.shape:
@@ -117,7 +116,9 @@ class PauliVectorOpenCL(PauliVectorBase):
 
     def _ensure_gpu_array_shape(self, arr, shape):
         """
-        This function tries to reuse GPU allocation of `arr`, if it is possible, and casts it to the shape `shape`. If required memory of `arr` allocation is not sufficient -- release it and allocate larger memory blob.
+        This function tries to reuse GPU allocation of `arr`, if it is possible,
+        and casts it to the shape `shape`. If required memory of `arr` allocation
+        is not sufficient -- release it and allocate larger memory blob.
 
         Parameters
         ----------
@@ -163,7 +164,65 @@ class PauliVectorOpenCL(PauliVectorBase):
         """
         self._validate_qubit(qubit1, 'qubit0')
         self._validate_qubit(qubit0, 'qubit1')
-        raise NotImplementedError
+        if len(ptm.shape) != 4:
+            raise ValueError(
+                "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
+
+        # bit0 must be the more significant bit (bit 0 is msb)
+        if qubit0 > qubit1:
+            qubit0, qubit1 = qubit1, qubit0
+            ptm = np.einsum("abcd -> badc", ptm)
+
+        new_shape = list(self._data.shape)
+        dim0_out, dim1_out, dim0_in, dim1_in = ptm.shape
+        assert new_shape[qubit1] == dim1_in
+        assert new_shape[qubit0] == dim0_in
+        new_shape[qubit1] = dim1_out
+        new_shape[qubit0] = dim0_out
+        new_size = pytools.product(new_shape)
+        rest_shape = new_shape.copy()
+        rest_shape[qubit1] = 1
+        rest_shape[qubit0] = 1
+
+        new_shape = tuple(new_shape)
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
+        ptm_gpu = self._cached_gpuarray(ptm)
+
+        dint = 1
+        for i in sorted(rest_shape):
+            if i * dint > 256 // (dim0_out * dim1_out):
+                break
+            else:
+                dint *= i
+
+        # dim_a_out, dim_b_out, d_internal (arbitrary)
+        block = (dim0_out, dim1_out, dint)
+        blocksize = dim1_out * dim0_out * dint
+        sh_mem_size = dint * dim1_in * dim0_in  # + ptm.size
+        grid_size = max(1, (new_size - 1) // blocksize + 1)
+        grid = (grid_size, 1, 1)
+
+        dim_z = pytools.product(self._data.shape[qubit1 + 1:])
+        dim_y = pytools.product(self._data.shape[qubit0 + 1:qubit1])
+        dim_rho = new_size  # self.data.size
+
+        buf = cl.LocalMemory(self.itemsize * sh_mem_size)
+        self._cl_applyptm(
+            self._queue,
+            grid,
+            block,
+            self._data.data,
+            self._work_data.data,
+            ptm_gpu.data,
+            buf,
+            np.uint32(dim0_in), np.uint32(dim1_in),
+            np.uint32(dim_z),
+            np.uint32(dim_y),
+            np.uint32(dim_rho),
+            g_times_l=True,
+        )
+
+        self._data, self._work_data = self._work_data, self._data
 
     def _apply_single_qubit_ptm(self, qubit, ptm):
         # noinspection PyUnresolvedReferences
@@ -179,8 +238,48 @@ class PauliVectorOpenCL(PauliVectorBase):
             If provided, will convert qubit basis to specified
             after the PTM application.
         """
+        new_shape = list(self._data.shape)
         self._validate_qubit(qubit, 'bit')
-        raise NotImplementedError
+        if len(ptm.shape) != 2:
+            raise ValueError(
+                "`ptm` must be a 2D array, got {}D".format(len(ptm.shape)))
+
+        dim_bit_out, dim_bit_in = ptm.shape
+        new_shape[qubit] = dim_bit_out
+        assert new_shape[qubit] == dim_bit_out
+        new_size = pytools.product(new_shape)
+
+        new_shape = tuple(new_shape)
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
+        ptm_gpu = self._cached_gpuarray(ptm)
+
+        dint = min(64, self._data.size // dim_bit_in)
+        block = (1, dim_bit_out, dint)
+        blocksize = dim_bit_out * dint
+        grid_size = max(1, (new_size - 1) // blocksize + 1)
+        grid = (grid_size, 1, 1)
+
+        dim_z = pytools.product(self._data.shape[qubit + 1:])
+        dim_y = pytools.product(self._data.shape[:qubit])
+        dim_rho = new_size  # self.data.size
+
+        buf = cl.LocalMemory(self.itemsize * (ptm.size + blocksize))
+        self._cl_applyptm(
+            self._queue,
+            grid,
+            block,
+            self._data.data,
+            self._work_data.data,
+            ptm_gpu.data,
+            buf,
+            np.uint32(1), np.uint32(dim_bit_in),
+            np.uint32(dim_z),
+            np.uint32(dim_y),
+            np.uint32(dim_rho),
+            g_times_l=True,
+        )
+
+        self._data, self._work_data = self._work_data, self._data
 
 
     def diagonal(self, *, get_data=True, target_array=None, flatten=True):
