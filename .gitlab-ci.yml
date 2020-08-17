@@ -82,22 +82,20 @@ pages:
   needs:
     - job: build html documentation
       artifacts: true
-  only:
-    - branches@quantumsim/quantumsim
-  except:
-    - master@quantumsim/quantumsim
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
   environment:
-    name: sphinx_build/$CI_COMMIT_REF_NAME
-    url: https://quantumsim.gitlab.io/quantumsim/sphinx_build/$CI_PIPELINE_ID/
+    name: $CI_COMMIT_REF_NAME
+    url: https://quantumsim.gitlab.io/quantumsim/$CI_COMMIT_REF_SLUG
   script:
-    - mkdir -p public/sphinx_build
-    - cp -R doc/build/html public/sphinx_build/$CI_PIPELINE_ID
+    - mkdir -p public
+    - cp -R doc/build/html public/$CI_COMMIT_REF_SLUG
   artifacts:
-    name: sphinx_build_$CI_PIPELINE_ID
+    name: sphinx_build_$CI_COMMIT_REF_SLUG
     paths:
       - public
-    expire_in: 7 days
     when: always
 
 upload documentation to docs repo:
