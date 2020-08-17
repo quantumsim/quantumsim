@@ -34,6 +34,6 @@ setup(
     },
     install_requires=list(open('requirements.txt').read().strip().split('\n')),
     extras_require={
-        'cuda': list(open('requirements-gpu.txt').read().strip().split('\n'))
+        'cuda': list(open('requirements-cuda.txt').read().strip().split('\n'))
     }
 )

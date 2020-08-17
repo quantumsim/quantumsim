@@ -1,9 +1,40 @@
-image: registry.gitlab.com/quantumsim/testing
+image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 stages:
+- build_image
 - build
 - test
 - deploy
+
+build docker image:
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  stage: build_image
+  before_script:
+    - |
+      echo "{\"auths\": {
+        \"$CI_REGISTRY\": {
+          \"username\": \"gitlab-ci-token\",
+          \"password\": \"$CI_BUILD_TOKEN\"}
+        }
+      }" > /kaniko/.docker/config.json
+  script:
+    - /kaniko/executor
+      --context $CI_PROJECT_DIR
+      --dockerfile $CI_PROJECT_DIR/.ci/Dockerfile
+      --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      changes:
+        - .ci/Dockerfile
+        - /requirements*.txt
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 build html documentation:
   stage: build
