@@ -8,6 +8,8 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git curl pandoc python3-all-dev python3-pip python3-setuptools \
         python3-wheel python3-tk \
+        # Portable OpenCL runtime for CPU
+        pocl-opencl-icd \
         # Additional tools for running CI
         file rsync openssh-client && \
     echo UTC > /etc/timezone && \
@@ -28,7 +30,9 @@ RUN pip3 install --upgrade --no-cache pip && \
 COPY requirements*.txt /root/
 RUN pip install --upgrade --no-cache -r /root/requirements.txt \
                                      -r /root/requirements-docs.txt && \
-    pip install --upgrade --no-cache -r /root/requirements-cuda.txt
+    # Need to do this separately because pycuda requires numpy to be installed
+    pip install --upgrade --no-cache -r /root/requirements-cuda.txt \
+                                     -r /root/requirements-opencl.txt
 
 RUN ssh-keyscan -t rsa gitlab.com >> /etc/ssh/ssh_known_hosts && \
     ssh-keyscan -t rsa github.com >> /etc/ssh/ssh_known_hosts

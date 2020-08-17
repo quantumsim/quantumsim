@@ -30,10 +30,11 @@ setup(
     ext_package='quantumsim',
     package_data={
         # all Cuda and json files we can find
-        '': ['*.cu', '*.json'],
+        '': ['*.cu', '*.cl', '*.json'],
     },
     install_requires=list(open('requirements.txt').read().strip().split('\n')),
     extras_require={
-        'cuda': list(open('requirements-cuda.txt').read().strip().split('\n'))
+        'cuda': list(open('requirements-cuda.txt').read().strip().split('\n')),
+        'opencl': list(open('requirements-opencl.txt').read().strip().split('\n'))
     }
 )
