@@ -26,7 +26,11 @@ RUN pip3 install --upgrade --no-cache pip && \
 
 # actual requirements
 COPY requirements*.txt /root/
-RUN pip install --upgrade --no-cache -r /root/requirements.txt \
+# We need to install mpmath from git because in Python 3.8 `smth is 0` gives `SyntaxError`
+# Please, @fredrik-johansson, release :)
+# https://github.com/fredrik-johansson/mpmath/issues/547
+RUN pip install --upgrade --no-cache git+https://github.com/fredrik-johansson/mpmath.git && \
+    pip install --upgrade --no-cache -r /root/requirements.txt \
                                      -r /root/requirements-docs.txt && \
     pip install --upgrade --no-cache -r /root/requirements-cuda.txt
 
