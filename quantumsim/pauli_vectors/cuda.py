@@ -9,15 +9,10 @@ import os
 import pytools
 import warnings
 
-# noinspection PyUnresolvedReferences
 import pycuda.autoinit
-# noinspection PyUnresolvedReferences
 import pycuda.driver as drv
-# noinspection PyUnresolvedReferences
 import pycuda.gpuarray as ga
-# noinspection PyUnresolvedReferences
 import pycuda.reduction
-# noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
 from .pauli_vector import PauliVectorBase
@@ -32,7 +27,8 @@ for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
                 kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
-                    "--default-stream", "per-thread", "-lineinfo"])
+                    "--default-stream", "per-thread", "-lineinfo",
+                    "-Wno-deprecated-gpu-targets"])
             break
     except FileNotFoundError:
         pass
@@ -53,7 +49,8 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
     neutral="0", reduce_expr="a+b",
     map_expr="(i/stride) % dim == offset ? in[i] : 0",
     arguments="const double *in, unsigned int stride, unsigned int dim, "
-              "unsigned int offset"
+              "unsigned int offset",
+    options=["-Wno-deprecated-gpu-targets"],
 )
 
 
