@@ -1,4 +1,4 @@
-FROM nvidia/cuda:9.2-devel-ubuntu18.04
+FROM nvidia/cuda:11.0-devel-ubuntu20.04
 
 # make our environment sane
 ENV LANG C.UTF-8
