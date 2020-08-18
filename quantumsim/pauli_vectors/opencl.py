@@ -253,7 +253,11 @@ class PauliVectorOpenCL(PauliVectorBase):
         self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
         ptm_gpu = self._cached_gpuarray(ptm)
 
-        dint = min(64, self._data.size // dim_bit_in)
+        max_wg_size = self._context.devices[0].get_info(
+            cl.device_info.MAX_WORK_GROUP_SIZE)
+        dint = min((64,
+                    self._data.size // dim_bit_in,
+                    max_wg_size // dim_bit_out))
         block = (1, dim_bit_out, dint)
         blocksize = dim_bit_out * dint
         grid_size = max(1, (new_size - 1) // blocksize + 1)
