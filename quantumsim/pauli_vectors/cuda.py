@@ -128,6 +128,28 @@ class PauliVectorCuda(PauliVectorBase):
             raise NotImplementedError('Applying {}-qubit PTM is not '
                                       'implemented in the active backend.')
 
+    def _ensure_gpu_array_shape(self, arr, shape):
+        new_size = pytools.product(shape)
+        new_size_bytes = new_size * 8
+        if arr.gpudata.size < new_size_bytes:
+            # reallocate
+            try:
+                arr.gpudata.free()
+                out = ga.empty(shape, np.float64)
+                out.gpudata.size = self._work_data.nbytes
+            except Exception as ex:
+                raise RuntimeError(f"Could not allocate a GPU array of shape {shape} "
+                                   f"and size {new_size_bytes} bytes") from ex
+        else:
+            # reallocation not required,
+            # reshape but reuse allocation
+            out = ga.GPUArray(
+                shape=shape,
+                dtype=np.float64,
+                gpudata=self._work_data.gpudata,
+            )
+        return out
+
     def _apply_two_qubit_ptm(self, qubit0, qubit1, ptm):
         """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
 
@@ -159,21 +181,8 @@ class PauliVectorCuda(PauliVectorBase):
         new_shape[qubit1] = dim1_out
         new_shape[qubit0] = dim0_out
         new_size = pytools.product(new_shape)
-        new_size_bytes = new_size * 8
 
-        if self._work_data.gpudata.size < new_size_bytes:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
-        else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(
-                shape=new_shape,
-                dtype=np.float64,
-                gpudata=self._work_data.gpudata,
-            )
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
@@ -239,21 +248,8 @@ class PauliVectorCuda(PauliVectorBase):
         new_shape[qubit] = dim_bit_out
         assert new_shape[qubit] == dim_bit_out
         new_size = pytools.product(new_shape)
-        new_size_bytes = new_size * 8
 
-        if self._work_data.gpudata.size < new_size_bytes:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
-        else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(
-                shape=new_shape,
-                dtype=np.float64,
-                gpudata=self._work_data.gpudata,
-            )
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
@@ -299,10 +295,7 @@ class PauliVectorCuda(PauliVectorBase):
         diag_size = pytools.product(diag_shape)
 
         if target_array is None:
-            if self._work_data.gpudata.size < diag_size * 8:
-                self._work_data.gpudata.free()
-                self._work_data = ga.empty(diag_shape, np.float64)
-                self._work_data.gpudata.size = self._work_data.nbytes
+            self._work_data = self._ensure_gpu_array_shape(self._work_data, diag_shape)
             target_array = self._work_data
         else:
             if target_array.size < diag_size:
@@ -310,6 +303,7 @@ class PauliVectorCuda(PauliVectorBase):
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {}."
                     .format(target_array.size, diag_size))
+            target_array = self._ensure_gpu_array_shape(target_array, diag_shape)
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -349,9 +343,7 @@ class PauliVectorCuda(PauliVectorBase):
                 return (target_array.get().ravel()[:diag_size]
                         .reshape(diag_shape))
         else:
-            return ga.GPUArray(shape=diag_shape,
-                               gpudata=target_array.gpudata,
-                               dtype=np.float64)
+            return target_array
 
     def trace(self):
         # TODO: there is a smarter way of doing this with pauli-dirac basis
