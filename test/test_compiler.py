@@ -296,7 +296,7 @@ class TestCompiler:
         assert op2.bases_in[0] == bases_in[1]
         assert op1.bases_in[1] == bases_in[2]
         # Qubit 0 did not leak
-        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1, 3, 4])
+        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1])
         # Qubit 1 leaked
         assert op2.bases_out[0] == bases_out[1].subbasis([0, 1, 2, 6])
         # Qubit 2 is measured
