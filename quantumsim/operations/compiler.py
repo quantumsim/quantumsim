@@ -41,6 +41,7 @@ def stage_align_bases(graph, *, optimize=True, sv_cutoff=1e-5):
         compile_next_node_in_queue(queue, optimize=optimize,
                                    sv_cutoff=sv_cutoff)
 
+
 def stage_merge_nodes(graph):
     """
 
@@ -331,7 +332,7 @@ def optimal_bases(node, *, sv_cutoff=1e-5):
     d_out = np.prod([b.dim_pauli for b in node.op.bases_out])
     u, s, vh = np.linalg.svd(node.op_ptm
                              .reshape(d_out, d_in), full_matrices=False)
-    (truncate_index,) = (s > sv_cutoff).shape
+    truncate_index = np.sum(s > sv_cutoff)
 
     mask_in = np.any(
         np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
