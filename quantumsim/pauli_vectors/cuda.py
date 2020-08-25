@@ -20,6 +20,7 @@ from .pauli_vector import PauliVectorBase
 package_path = os.path.dirname(os.path.realpath(__file__))
 
 mod = None
+DEFAULT_NVCC_FLAGS.append("-Wno-deprecated-gpu-targets")
 
 for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
                     package_path + "/primitives.cu"]:
@@ -27,8 +28,7 @@ for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
         with open(kernel_file, "r") as kernel_source_file:
             mod = SourceModule(
                 kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
-                    "--default-stream", "per-thread", "-lineinfo",
-                    "-Wno-deprecated-gpu-targets"])
+                    "--default-stream", "per-thread", "-lineinfo"])
             break
     except FileNotFoundError:
         pass
@@ -50,7 +50,6 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
     map_expr="(i/stride) % dim == offset ? in[i] : 0",
     arguments="const double *in, unsigned int stride, unsigned int dim, "
               "unsigned int offset",
-    options=["-Wno-deprecated-gpu-targets"],
 )
 
 
