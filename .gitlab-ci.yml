@@ -1,12 +1,5 @@
 image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
 
-workflow:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-    - if: '$CI_PIPELINE_SOURCE == "api"'
-
 stages:
 - build_image
 - build
@@ -87,15 +80,16 @@ pages:
   only:
     - branches@quantumsim/quantumsim
   except:
+    - master@quantumsim/quantumsim
     - schedules
   environment:
-    name: docs/$CI_COMMIT_REF_NAME
-    url: https://quantumsim.gitlab.io/quantumsim/docs/$CI_PIPELINE_ID/
+    name: sphinx_build/$CI_COMMIT_REF_NAME
+    url: https://quantumsim.gitlab.io/quantumsim/sphinx_build/$CI_PIPELINE_ID/
   script:
-    - mkdir -p public/docs
-    - cp -R doc/build/html public/docs/$CI_PIPELINE_ID
+    - mkdir -p public/sphinx_build
+    - cp -R doc/build/html public/sphinx_build/$CI_PIPELINE_ID
   artifacts:
-    name: docs_$CI_PIPELINE_ID
+    name: sphinx_build_$CI_PIPELINE_ID
     paths:
       - public
     expire_in: 7 days
@@ -138,3 +132,109 @@ upload new release to PyPI:
   - branches
   script:
   - twine upload dist/*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
