@@ -4,6 +4,8 @@ workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
 
 stages:
 - build_image
@@ -86,6 +88,7 @@ pages:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
     - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
   environment:
     name: $CI_COMMIT_REF_NAME
     url: https://quantumsim.gitlab.io/quantumsim/$CI_COMMIT_REF_SLUG
