@@ -397,9 +397,7 @@ class PauliVectorCuda(PauliVectorBase):
 
     def copy(self):
         """Return a deep copy of this Density."""
-        data_cp = self._data.copy()
-        cp = self.__class__(self.bases, data=data_cp)
-        return cp
+        return self.__class__(self.bases, pv=self._data.copy())
 
     def _cached_gpuarray(self, array):
         """
