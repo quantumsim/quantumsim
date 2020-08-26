@@ -148,7 +148,7 @@ class TestCompiler:
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm(op_angle.bases_in, op_angle.bases_out) == \
-               approx(op_2angle.ptm(op_2angle.bases_in, op_2angle.bases_out))
+            approx(op_2angle.ptm(op_2angle.bases_in, op_2angle.bases_out))
         assert pv1.to_pv() == approx(pv0.to_pv())
 
         rx_pi = lib.rotate_x(np.pi)
@@ -296,7 +296,7 @@ class TestCompiler:
         assert op2.bases_in[0] == bases_in[1]
         assert op1.bases_in[1] == bases_in[2]
         # Qubit 0 did not leak
-        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1, 3, 4])
+        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1])
         # Qubit 1 leaked
         assert op2.bases_out[0] == bases_out[1].subbasis([0, 1, 2, 6])
         # Qubit 2 is measured
@@ -367,7 +367,7 @@ class TestCompiler:
             ))
         zzpc = zz_parametrized.compile(bases_in, bases_out)
         assert len(list(zzpc.units())) == 4
-        params= dict(angle1=-np.pi / 2, lr02=0.1, foo='bar')
+        params = dict(angle1=-np.pi / 2, lr02=0.1, foo='bar')
         new_units = [(op.substitute(**params)
                       if isinstance(op, ParametrizedOperation)
                       else op).at(*ix) for op, ix in zzpc.units()]
