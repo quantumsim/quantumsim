@@ -106,11 +106,9 @@ class State:
     def renormalize(self):
         self.pauli_vector.renormalize()
 
-    def diagonal(self, *, flatten=True, trace_over=None):
+    def diagonal(self, *, flatten=True, trace_over=None, get_data=False):
         if trace_over is None:
             diag = self.pauli_vector.diagonal(flatten=False)
-            bases_labels = [basis.superbasis.computational_subbasis().labels
-                            for basis in self.pauli_vector.bases]
         else:
             if not all(q in self.qubits for q in trace_over):
                 raise ValueError(
@@ -120,35 +118,46 @@ class State:
                                 if q in trace_over)
             diag = np.sum(self.pauli_vector.diagonal(flatten=False),
                           axis=traced_axes)
-            bases_labels = [b.superbasis.computational_subbasis().labels
-                            for q, b in zip(self.qubits, self.pauli_vector.bases)
-                            if q not in trace_over]
 
-        if flatten:
-            def tuple_to_string(tup):
-                state = "".join(str(x) for x in tup)
-                return state
+        if get_data:
+            if flatten:
+                return diag.flatten()
+            return diag
 
-            state_labels = [tuple_to_string(label)
-                            for label in product(*bases_labels)]
-
-            outcome = xr.DataArray(
-                data=diag.flatten(),
-                dims=["state_label"],
-                coords={"state_label": state_labels})
         else:
-            _dims = ['state_' + q for q in self.qubits if q not in trace_over]
-            state_labels = [[int(state) for state in qubit_states]
-                            for qubit_states in bases_labels]
-            _coords = dict(zip(_dims, state_labels))
+            if trace_over is None:
+                bases_labels = [basis.superbasis.computational_subbasis().labels
+                                for basis in self.pauli_vector.bases]
+            else:
+                bases_labels = [b.superbasis.computational_subbasis().labels
+                                for q, b in zip(self.qubits, self.pauli_vector.bases)
+                                if q not in trace_over]
 
-            outcome = xr.DataArray(
-                data=diag,
-                dims=_dims,
-                coords=_coords)
+            if flatten:
+                def tuple_to_string(tup):
+                    state = "".join(str(x) for x in tup)
+                    return state
 
-        outcome.name = "diagonal"
-        return outcome
+                state_labels = [tuple_to_string(label)
+                                for label in product(*bases_labels)]
+
+                outcome = xr.DataArray(
+                    data=diag.flatten(),
+                    dims=["state_label"],
+                    coords={"state_label": state_labels})
+            else:
+                _dims = ['state_' + q for q in self.qubits if q not in trace_over]
+                state_labels = [[int(state) for state in qubit_states]
+                                for qubit_states in bases_labels]
+                _coords = dict(zip(_dims, state_labels))
+
+                outcome = xr.DataArray(
+                    data=diag,
+                    dims=_dims,
+                    coords=_coords)
+
+            outcome.name = "diagonal"
+            return outcome
 
     def density_matrix(self):
         density_mat = self.pauli_vector.to_dm()
