@@ -1,7 +1,6 @@
-# This file is part of quantumsim. (https://github.com/brianzi/quantumsim)
-# (c) 2016 Brian Tarasinski
-# Distributed under the GNU GPLv3. See LICENSE.txt or
-# https://www.gnu.org/licenses/gpl.txt
+# This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
+# (c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov
+# Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt
 import sys
 
 import numpy as np
