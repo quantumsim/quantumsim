@@ -255,6 +255,7 @@ class PauliVectorCuda(PauliVectorBase):
         dint = min(64, self._data.size // dim_bit_in)
         block = (1, dim_bit_out, dint)
         blocksize = dim_bit_out * dint
+        sh_mem_size = dint * dim_bit_in
         grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
@@ -272,7 +273,7 @@ class PauliVectorCuda(PauliVectorBase):
             dim_z,
             dim_y,
             dim_rho,
-            shared_size=8 * (ptm.size + blocksize))
+            shared_size=8 * sh_mem_size)
 
         self._data, self._work_data = self._work_data, self._data
 
