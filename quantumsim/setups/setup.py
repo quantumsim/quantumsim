@@ -64,16 +64,23 @@ class Setup:
 
     def to_dataset(self):
         qubit_set = set()
+        pair_set = set()
         common_params = {}
         specific_params = defaultdict(set)
+        shared_params = defaultdict(set)
 
         for qubits, params in self._qubits.items():
             if qubits == tuple():
                 common_params.update(params)
             else:
-                qubit_set.update(qubits)
-                for param in params.keys():
-                    specific_params[param].update(qubits)
+                if len(qubits) == 1:
+                    qubit_set.update(qubits)
+                    for param in params.keys():
+                        specific_params[param].update(qubits)
+                else:
+                    pair_set.add(qubits)
+                    for param in params.keys():
+                        shared_params[param].add(qubits)
 
         qubit_params = {param: (
             'qubit', [self.param(param, qubit)
@@ -81,10 +88,21 @@ class Setup:
                       for qubit in qubit_set])
             for param in specific_params.keys()}
 
+        pair_params = {param: (
+            'qubit_pair', [self.param(param, *qubits)
+                           if qubits in shared_params[param] else np.nan
+                           for qubits in pair_set])
+                       for param in shared_params.keys()}
+
         dataset = xr.Dataset(
             coords=merge(
-                {'qubit': list(qubit_set)},
+                {
+                    'qubit': sorted(list(qubit_set)),
+                    'qubit_pair': ["{},{}".format(q1, q2)
+                                   for q1, q2 in sorted(list(pair_set))]
+                },
                 qubit_params,
+                pair_params,
                 common_params)
         )
 
