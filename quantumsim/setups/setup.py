@@ -82,6 +82,9 @@ class Setup:
                     for param in params.keys():
                         shared_params[param].add(qubits)
 
+        qubit_set = sorted(list(qubit_set))
+        pair_set = sorted(list(pair_set))
+
         qubit_params = {}
         for param in specific_params.keys():
             _param_vals = []
@@ -111,9 +114,8 @@ class Setup:
             ),
             coords=merge(
                 {
-                    'qubit': sorted(list(qubit_set)),
-                    'qubit_pair': ["{},{}".format(q1, q2)
-                                   for q1, q2 in sorted(list(pair_set))]
+                    'qubit': qubit_set,
+                    'qubit_pair': ["{},{}".format(q1, q2) for q1, q2 in pair_set]
                 },
                 common_params)
         )
