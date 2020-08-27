@@ -82,11 +82,21 @@ class Setup:
                     for param in params.keys():
                         shared_params[param].add(qubits)
 
-        qubit_params = {param: (
-            'qubit', [self.param(param, qubit)
-                      if qubit in specific_params[param] else np.nan
-                      for qubit in qubit_set])
-            for param in specific_params.keys()}
+        qubit_params = {}
+        for param in specific_params.keys():
+            _param_vals = []
+            for qubit in qubit_set:
+                if qubit in specific_params[param]:
+                    _param_vals.append(self.param(param, qubit))
+                elif param in common_params:
+                    _param_vals.append(self.param(param, qubit))
+                else:
+                    _param_vals.append(np.nan)
+
+            if param in common_params:
+                del common_params[param]
+
+            qubit_params[param] = (['qubit'], _param_vals)
 
         pair_params = {param: (
             'qubit_pair', [self.param(param, *qubits)
@@ -95,14 +105,16 @@ class Setup:
                        for param in shared_params.keys()}
 
         dataset = xr.Dataset(
+            data_vars=merge(
+                qubit_params,
+                pair_params
+            ),
             coords=merge(
                 {
                     'qubit': sorted(list(qubit_set)),
                     'qubit_pair': ["{},{}".format(q1, q2)
                                    for q1, q2 in sorted(list(pair_set))]
                 },
-                qubit_params,
-                pair_params,
                 common_params)
         )
 
