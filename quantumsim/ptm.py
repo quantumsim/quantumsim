@@ -1215,13 +1215,14 @@ class TwoPTMCompiler:
                 for b in op.bits:
                     del active_block_idx[b]
             elif len(op.bits) == 1:
-                blocks[active_block_idx[op.bits[0]]].append((op.bits, op, ctr))
+                blocks[active_block_idx[op.bits[0]]].append(
+                    (op.bits, op.operator, ctr))
             elif len(op.bits) == 2:
                 b0, b1 = op.bits
                 bl_i0, bl_i1 = active_block_idx[b0], active_block_idx[b1]
                 if bl_i0 == bl_i1:
                     # qubits are in same block
-                    blocks[bl_i0].append((op.bits, op, ctr))
+                    blocks[bl_i0].append((op.bits, op.operator, ctr))
                 else:
                     if len(bits_in_block[b0]) == 2:
                         # b0 was in block with someone else, new block for b0
@@ -1243,12 +1244,12 @@ class TwoPTMCompiler:
                     if bl_i0 < bl_i1:
                         blocks[bl_i1].extend(blocks[bl_i0])
                         blocks[bl_i0] = []
-                        blocks[bl_i1].append((op.bits, op, ctr))
+                        blocks[bl_i1].append((op.bits, op.operator, ctr))
                         active_block_idx[b0] = active_block_idx[b1]
                     else:
                         blocks[bl_i0].extend(blocks[bl_i1])
                         blocks[bl_i1] = []
-                        blocks[bl_i0].append((op.bits, op, ctr))
+                        blocks[bl_i0].append((op.bits, op.operator, ctr))
                         active_block_idx[b1] = active_block_idx[b0]
 
         # active blocks move to end
