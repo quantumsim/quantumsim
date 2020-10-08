@@ -1,9 +1,8 @@
 import numpy as np
-from functools import reduce, lru_cache
+from functools import reduce
 from itertools import chain
 
 
-@lru_cache(maxsize=128)
 def bases_kron(bases):
     return reduce(np.kron, [b.vectors for b in bases])
 
