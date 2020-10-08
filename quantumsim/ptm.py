@@ -793,19 +793,19 @@ class AdjunctionPLM(PTM):
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
 
-        #result = np.einsum("xab, bc, yca -> xy", st_out, self.op, st_in,
+        # result = np.einsum("xab, bc, yca -> xy", st_out, self.op, st_in,
         #                   optimize=True)
-        
+
         out = np.einsum("xab, yca, bc -> xy",
-                    st_out, st_in, self.op,
-                    optimize=True)
+                        st_out, st_in, self.op,
+                        optimize=True)
         out -= np.einsum("xab, ybc, ca -> xy",
                          st_out, st_in, self.op,
                          optimize=True)
         return -1j * out
 
         # taking the real part implements the two parts of the commutator
-        #return result.imag
+        # return result.imag
 
 
 class LindbladPLM(PTM):
@@ -832,7 +832,7 @@ class LindbladPLM(PTM):
 
         st_out = basis_out.basisvectors
         st_in = basis_in.basisvectors
-        
+
         '''
 
         result = np.einsum("xab, bc, ycd, ad -> xy", st_out, self.op, st_in,
@@ -851,12 +851,12 @@ class LindbladPLM(PTM):
                         st_in, self.op.conj(),
                         optimize=True)
         out -= 0.5*np.einsum("xab, cb, cd, yda -> xy",
-                         st_out, self.op.conj(),
-                         self.op, st_in,
-                         optimize=True)
+                             st_out, self.op.conj(),
+                             self.op, st_in,
+                             optimize=True)
         out -= 0.5*np.einsum("xab, ybc, dc, da -> xy",
-                         st_out, st_in,
-                         self.op.conj(), self.op, optimize=True)
+                             st_out, st_in,
+                             self.op.conj(), self.op, optimize=True)
         return out
 
 
@@ -1104,17 +1104,19 @@ class CompilerBlock:
             op,
             index=None,
             bitmap=None,
+            cond=None,
             in_basis=None,
             out_basis=None):
         self.bits = bits
         self.op = op
         self.bitmap = bitmap
+        self.cond = cond
         self.in_basis = in_basis
         self.out_basis = out_basis
         self.ptm = None
 
     def __repr__(self):
-        if self.op == "measure" or self.op == "getdiag":
+        if self.op == "measure" or self.op == "getdiag" or self.op == 'cond_op':
             opstring = self.op
         else:
             opstring = "ptm"
@@ -1131,6 +1133,13 @@ class CompilerBlock:
 
         return "<{}: {} on {} {}>".format(
             self.__class__.__name__, opstring, bitsstring, basis_string)
+
+
+class Operation:
+    def __init__(self, bits, op, *, cond=None):
+        self.bits = bits
+        self.operator = op
+        self.cond = cond
 
 
 class TwoPTMCompiler:
@@ -1165,8 +1174,8 @@ class TwoPTMCompiler:
 
         self.bits = set()
 
-        for bs, op in self.operations:
-            for b in bs:
+        for op in self.operations:
+            for b in op.bits:
                 self.bits.add(b)
 
         self.initial_bases = initial_bases
@@ -1184,9 +1193,9 @@ class TwoPTMCompiler:
         active_block_idx = {}
         bits_in_block = {}
 
-        for bs, op in self.operations:
+        for op in self.operations:
 
-            for b in bs:
+            for b in op.bits:
                 if b not in active_block_idx:
                     new_bl = []
                     active_block_idx[b] = len(blocks)
@@ -1194,20 +1203,25 @@ class TwoPTMCompiler:
                     bits_in_block[b] = [b]
 
             ctr += 1
-            if op == "measure" or op == "getdiag":
+            if op.operator == "measure" or op.operator == "getdiag":
                 # measurement goes in single block
-                measure_block = [(bs, op, ctr)]
+                measure_block = [(op.bits, op.operator, ctr)]
                 blocks.append(measure_block)
-                for b in bs:
+                for b in op.bits:
                     del active_block_idx[b]
-            elif len(bs) == 1:
-                blocks[active_block_idx[bs[0]]].append((bs, op, ctr))
-            elif len(bs) == 2:
-                b0, b1 = bs
+            elif op.operator == 'cond_op':
+                cond_op_block = [(op.bits, op.operator, ctr, op.cond)]
+                blocks.append(cond_op_block)
+                for b in op.bits:
+                    del active_block_idx[b]
+            elif len(op.bits) == 1:
+                blocks[active_block_idx[op.bits[0]]].append((op.bits, op, ctr))
+            elif len(op.bits) == 2:
+                b0, b1 = op.bits
                 bl_i0, bl_i1 = active_block_idx[b0], active_block_idx[b1]
                 if bl_i0 == bl_i1:
                     # qubits are in same block
-                    blocks[bl_i0].append((bs, op, ctr))
+                    blocks[bl_i0].append((op.bits, op, ctr))
                 else:
                     if len(bits_in_block[b0]) == 2:
                         # b0 was in block with someone else, new block for b0
@@ -1229,12 +1243,12 @@ class TwoPTMCompiler:
                     if bl_i0 < bl_i1:
                         blocks[bl_i1].extend(blocks[bl_i0])
                         blocks[bl_i0] = []
-                        blocks[bl_i1].append((bs, op, ctr))
+                        blocks[bl_i1].append((op.bits, op, ctr))
                         active_block_idx[b0] = active_block_idx[b1]
                     else:
                         blocks[bl_i0].extend(blocks[bl_i1])
                         blocks[bl_i1] = []
-                        blocks[bl_i0].append((bs, op, ctr))
+                        blocks[bl_i0].append((op.bits, op, ctr))
                         active_block_idx[b1] = active_block_idx[b0]
 
         # active blocks move to end
@@ -1252,6 +1266,9 @@ class TwoPTMCompiler:
         for bl in self.blocks:
             if bl[0][1] == "measure" or bl[0][1] == "getdiag":
                 mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1])
+                self.compiled_blocks.append(mbl)
+            elif bl[0][1] == 'cond_op':
+                mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1], cond=bl[0][3])
                 self.compiled_blocks.append(mbl)
             else:
                 product = TwoPTMProduct([])
@@ -1314,7 +1331,7 @@ class TwoPTMCompiler:
             if cb.op == "measure":
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
-            elif cb.op == "getdiag":
+            elif cb.op == "getdiag" or cb.op == 'cond_op':
                 cb.out_basis = cb.in_basis
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
