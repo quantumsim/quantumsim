@@ -479,6 +479,46 @@ class FluxPulse(Gate):
                 x, y + 0.3), textcoords='data', ha='center')
 
 
+class ConditionalPulseLRU(Gate):
+    def __init__(
+            self,
+            bit,
+            time,
+            angle,
+            **kwargs):
+
+        p = ptm.rotate_x_ptm(angle)
+        super().__init__(bit, time, p, **kwargs)
+        self.set_labels(angle)
+
+    def set_labels(self, angle):
+
+        self.angle = angle
+        multiple_of_pi = angle / np.pi
+        if np.allclose(multiple_of_pi, 1):
+            self.label = r"$R_x(\pi)$"
+        elif not np.allclose(angle, 0) and np.allclose(
+                np.round(1 / multiple_of_pi, 0), 1 / multiple_of_pi):
+            divisor = 1 / multiple_of_pi
+            self.label = r"$R_x(\pi/%d)$" % divisor
+        else:
+            self.label = r"$R_x(%g)$" % angle
+
+    def adjust(self, angle):
+        p = ptm.rotate_x_ptm(angle)
+        if self.dephasing_angle:
+            p = np.dot(
+                p,
+                ptm.dephasing_ptm(
+                    self.dephasing_angle,
+                    0,
+                    self.dephasing_angle))
+        if self.dephasing_axis:
+            p = np.dot(p, ptm.dephasing_ptm(0, self.dephasing_axis, 0))
+        self.ptm = p
+        self.set_labels(angle)
+
+
 class ParkPulse(Gate):
     def __init__(self, bit, time, int_time=None, **kwargs):
         """A Park gate acting at time `time` between bit0 and bit1 (it is

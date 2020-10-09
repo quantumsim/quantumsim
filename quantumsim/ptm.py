@@ -1333,6 +1333,7 @@ class TwoPTMCompiler:
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
             elif cb.op == "getdiag" or cb.op == 'cond_op':
+                # HACK: for our LRUs the basis doesn't change
                 cb.out_basis = cb.in_basis
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
