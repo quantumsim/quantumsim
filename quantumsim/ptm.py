@@ -1104,19 +1104,19 @@ class CompilerBlock:
             op,
             index=None,
             bitmap=None,
-            cond=None,
+            cond_ptm=None,
             in_basis=None,
             out_basis=None):
         self.bits = bits
         self.op = op
         self.bitmap = bitmap
-        self.cond = cond
+        self.cond_ptm = cond_ptm
         self.in_basis = in_basis
         self.out_basis = out_basis
         self.ptm = None
 
     def __repr__(self):
-        if self.op == "measure" or self.op == "getdiag" or self.op == 'cond_op':
+        if self.op in ["measure", "getdiag", "pulse_lru", "res_lru"]:
             opstring = self.op
         else:
             opstring = "ptm"
@@ -1136,10 +1136,13 @@ class CompilerBlock:
 
 
 class Operation:
-    def __init__(self, bits, op, *, cond=None):
+    def __init__(self, bits, op, *, cond_ptm=None):
         self.bits = bits
         self.operator = op
-        self.cond = cond
+        if op == 'pulse_lru' or op == 'res_lru':
+            assert cond_ptm is not None
+            assert callable(cond_ptm)
+        self.cond_ptm = cond_ptm
 
 
 class TwoPTMCompiler:
@@ -1209,8 +1212,9 @@ class TwoPTMCompiler:
                 blocks.append(measure_block)
                 for b in op.bits:
                     del active_block_idx[b]
-            elif op.operator == 'cond_op':
-                cond_op_block = [(op.bits, op.operator, ctr, op.cond)]
+            elif op.operator == 'pulse_lru' or op.operator == 'res_lru':
+                cond_op_block = [
+                    (op.bits, op.operator, ctr, op.cond_ptm)]
                 blocks.append(cond_op_block)
                 for b in op.bits:
                     del active_block_idx[b]
@@ -1268,37 +1272,61 @@ class TwoPTMCompiler:
             if bl[0][1] == "measure" or bl[0][1] == "getdiag":
                 mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1])
                 self.compiled_blocks.append(mbl)
-            elif bl[0][1] == 'cond_op':
-                mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1], cond=bl[0][3])
+            elif bl[0][1] == 'pulse_lru' or bl[0][1] == 'res_lru':
+                mbl = CompilerBlock(
+                    bits=bl[0][0], op=bl[0][1], cond_ptm=bl[0][3])
                 self.compiled_blocks.append(mbl)
             else:
-                product = TwoPTMProduct([])
-                bit_map = {}
+                block_bits = set()
                 for bits, op, i in bl:
-                    if len(bits) == 1:
+                    block_bits.update(bits)
+                if len(block_bits) == 1:
+                    product = ProductPTM([])
+                    bit_map = {}
+                    for bits, op, i in bl:
                         b, = bits
                         if b not in bit_map:
                             bit_map[b] = len(bit_map)
-                        product.elements.append(([bit_map[b]], op))
-                    if len(bits) == 2:
-                        b0, b1 = bits
-                        if b0 not in bit_map:
-                            bit_map[b0] = len(bit_map)
-                        if b1 not in bit_map:
-                            bit_map[b1] = len(bit_map)
-                        product.elements.append(
-                            ([bit_map[b0], bit_map[b1]], op))
+                        product.elements.append(op)
 
-                # order the bitlist
-                bits = list(bit_map.keys())
-                if bit_map[bits[0]] == 1:
-                    bits = list(reversed(bits))
+                    bits = list(bit_map.keys())
+                    if bit_map[bits[0]] == 1:
+                        bits = list(reversed(bits))
 
-                ptm_block = CompilerBlock(
-                    bits=bits,
-                    bitmap=bit_map,
-                    op=product)
-                self.compiled_blocks.append(ptm_block)
+                    ptm_block = CompilerBlock(
+                        bits=bits,
+                        bitmap=bit_map,
+                        op=product)
+
+                    self.compiled_blocks.append(ptm_block)
+                elif len(block_bits) == 2:
+                    product = TwoPTMProduct([])
+                    bit_map = {}
+                    for bits, op, i in bl:
+                        if len(bits) == 1:
+                            b, = bits
+                            if b not in bit_map:
+                                bit_map[b] = len(bit_map)
+                            product.elements.append(([bit_map[b]], op))
+                        if len(bits) == 2:
+                            b0, b1 = bits
+                            if b0 not in bit_map:
+                                bit_map[b0] = len(bit_map)
+                            if b1 not in bit_map:
+                                bit_map[b1] = len(bit_map)
+                            product.elements.append(
+                                ([bit_map[b0], bit_map[b1]], op))
+
+                    # order the bitlist
+                    bits = list(bit_map.keys())
+                    if bit_map[bits[0]] == 1:
+                        bits = list(reversed(bits))
+
+                    ptm_block = CompilerBlock(
+                        bits=bits,
+                        bitmap=bit_map,
+                        op=product)
+                    self.compiled_blocks.append(ptm_block)
 
     def basis_choice(self, tol=1e-16):
 
@@ -1332,9 +1360,21 @@ class TwoPTMCompiler:
             if cb.op == "measure":
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
-            elif cb.op == "getdiag" or cb.op == 'cond_op':
-                # HACK: for our LRUs the basis doesn't change
+            elif cb.op == "getdiag":
                 cb.out_basis = cb.in_basis
+            elif cb.op == 'pulse_lru':
+                # HACK: for our LRUs the basis doesn't change. Alternatively one might want to compile this with some general basis.
+                cb.out_basis = cb.in_basis
+            elif cb.op == 'res_lru':
+                # HACK: for our LRUs the basis doesn't change. Alternatively one might want to compile this with some general basis.
+                cb.out_basis = cb.in_basis
+            elif len(cb.in_basis) == 1:
+                full_basis = [b.get_superbasis() for b in cb.in_basis]
+                full_mat = cb.op.get_matrix(cb.in_basis[0], full_basis[0])
+                sparse_out = np.nonzero(np.einsum(
+                    "ab -> a", full_mat**2, optimize=True) > tol)[0]
+                cb.out_basis = [full_basis[0].get_subbasis(sparse_out), ]
+                cb.ptm = cb.op.get_matrix(cb.in_basis[0], cb.out_basis[0])
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
                 full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
