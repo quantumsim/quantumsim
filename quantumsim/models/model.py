@@ -4,10 +4,7 @@ from copy import copy, deepcopy
 from more_itertools import pairwise
 
 from ..circuits import Gate, Circuit, Box
-from ..operations import Operation
 from .. import bases
-
-from ..operations.operation import IndexedOperation
 
 
 class WaitingGate(Gate):
@@ -48,8 +45,6 @@ class WaitingGate(Gate):
                             **self.metadata))
 
 
-
-
 class Model(metaclass=abc.ABCMeta):
     """
     Parameters
@@ -69,35 +64,6 @@ class Model(metaclass=abc.ABCMeta):
     @property
     def dim(self):
         return self._dim
-
-    @staticmethod
-    def _normalize_operation(op, qubits):
-        """
-
-        Parameters
-        ----------
-        op : Operation or IndexedOperation
-        qubits : str or list of str
-
-        Returns
-        -------
-        IndexedOperation
-        """
-        if isinstance(op, Operation):
-            if len(qubits) > 1:
-                raise ValueError(
-                    "Can't construct an operation from a sequence: "
-                    "all operations in multi-qubit gate must provide "
-                    "indices using Operation.at() method.")
-            return op.at(0)
-        elif isinstance(op, IndexedOperation):
-            op, ix = op
-            ix = tuple(qubits.index(qubit) for qubit in ix)
-            return op.at(*ix)
-        else:
-            raise ValueError(
-                "`op` can be only Operation or IndexedOperation, got {}"
-                .format(type(op)))
 
     @staticmethod
     def gate(duration=0, param_funcs=None, plot_metadata=None, repr_=None):
