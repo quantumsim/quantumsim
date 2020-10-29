@@ -18,12 +18,13 @@ _BASIS = (bases.general(2),)
 _BASIS_CLASSICAL = (bases.general(2).subbasis([0, 1]),)
 
 
-def _born_projection(inds, state, rng, *, atol=1e-08):
-    if len(inds) != 1:
+def _born_projection(qubits, state, rng):
+    if len(qubits) != 1:
         raise ValueError("Measure should only act on a single qubit")
-    meas_probs = np.array(state.pauli_vector.meas_prob(*inds))
-    meas_probs[np.abs(meas_probs) < atol] = 0
+    ind = state.qubits.index(qubits[0])
+    meas_probs = state.pauli_vector.meas_prob(ind)
     meas_probs /= np.sum(meas_probs)
+    meas_probs[meas_probs < 0] = 0
     result = rng.choice(len(meas_probs), p=meas_probs)
     return result
 
