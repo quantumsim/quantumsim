@@ -1279,33 +1279,56 @@ class TwoPTMCompiler:
                 mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1])
                 self.compiled_blocks.append(mbl)
             else:
-                product = TwoPTMProduct([])
-                bit_map = {}
+                block_bits = set()
                 for bits, op, i in bl:
-                    if len(bits) == 1:
+                    block_bits.update(bits)
+                if len(block_bits) == 1:
+                    product = ProductPTM([])
+                    bit_map = {}
+                    for bits, op, i in bl:
                         b, = bits
                         if b not in bit_map:
                             bit_map[b] = len(bit_map)
-                        product.elements.append(([bit_map[b]], op))
-                    if len(bits) == 2:
-                        b0, b1 = bits
-                        if b0 not in bit_map:
-                            bit_map[b0] = len(bit_map)
-                        if b1 not in bit_map:
-                            bit_map[b1] = len(bit_map)
-                        product.elements.append(
-                            ([bit_map[b0], bit_map[b1]], op))
+                        product.elements.append(op)
 
-                # order the bitlist
-                bits = list(bit_map.keys())
-                if bit_map[bits[0]] == 1:
-                    bits = list(reversed(bits))
+                    bits = list(bit_map.keys())
+                    if bit_map[bits[0]] == 1:
+                        bits = list(reversed(bits))
 
-                ptm_block = CompilerBlock(
-                    bits=bits,
-                    bitmap=bit_map,
-                    op=product)
-                self.compiled_blocks.append(ptm_block)
+                    ptm_block = CompilerBlock(
+                        bits=bits,
+                        bitmap=bit_map,
+                        op=product)
+
+                    self.compiled_blocks.append(ptm_block)
+                elif len(block_bits) == 2:
+                    product = TwoPTMProduct([])
+                    bit_map = {}
+                    for bits, op, i in bl:
+                        if len(bits) == 1:
+                            b, = bits
+                            if b not in bit_map:
+                                bit_map[b] = len(bit_map)
+                            product.elements.append(([bit_map[b]], op))
+                        if len(bits) == 2:
+                            b0, b1 = bits
+                            if b0 not in bit_map:
+                                bit_map[b0] = len(bit_map)
+                            if b1 not in bit_map:
+                                bit_map[b1] = len(bit_map)
+                            product.elements.append(
+                                ([bit_map[b0], bit_map[b1]], op))
+
+                    # order the bitlist
+                    bits = list(bit_map.keys())
+                    if bit_map[bits[0]] == 1:
+                        bits = list(reversed(bits))
+
+                    ptm_block = CompilerBlock(
+                        bits=bits,
+                        bitmap=bit_map,
+                        op=product)
+                    self.compiled_blocks.append(ptm_block)
 
     def basis_choice(self, tol=1e-16):
 
@@ -1341,6 +1364,13 @@ class TwoPTMCompiler:
                                 for b in cb.in_basis]
             elif cb.op == "getdiag":
                 cb.out_basis = cb.in_basis
+            elif len(cb.in_basis) == 1:
+                full_basis = [b.get_superbasis() for b in cb.in_basis]
+                full_mat = cb.op.get_matrix(cb.in_basis[0], full_basis[0])
+                sparse_out = np.nonzero(np.einsum(
+                    "ab -> a", full_mat**2, optimize=True) > tol)[0]
+                cb.out_basis = [full_basis[0].get_subbasis(sparse_out), ]
+                cb.ptm = cb.op.get_matrix(cb.in_basis[0], cb.out_basis[0])
             elif len(cb.in_basis) == 2:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
                 full_mat = cb.op.get_matrix(cb.in_basis, full_basis)
