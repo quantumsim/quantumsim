@@ -1114,11 +1114,13 @@ class CompilerBlock:
             op,
             index=None,
             bitmap=None,
+            cond_ptm=None,
             in_basis=None,
             out_basis=None):
         self.bits = bits
         self.op = op
         self.bitmap = bitmap
+        self.cond_ptm = cond_ptm
         self.in_basis = in_basis
         self.out_basis = out_basis
         self.ptm = None
@@ -1218,6 +1220,13 @@ class TwoPTMCompiler:
                 # for b in bs:
                 for b in op.bits:
                     del active_block_idx[b]
+            elif op.operator == 'pulse_lru' or op.operator == 'res_lru':
+                cond_op_block = [
+                    (op.bits, op.operator, ctr, op.cond_ptm)]
+                blocks.append(cond_op_block)
+                for b in op.bits:
+                    del active_block_idx[b]
+
             # elif len(bs) == 1:
             elif len(op.bits) == 1:
                 #blocks[active_block_idx[bs[0]]].append((bs, op, ctr))
@@ -1277,6 +1286,10 @@ class TwoPTMCompiler:
         for bl in self.blocks:
             if bl[0][1] == "measure" or bl[0][1] == "getdiag":
                 mbl = CompilerBlock(bits=bl[0][0], op=bl[0][1])
+                self.compiled_blocks.append(mbl)
+            elif bl[0][1] == 'pulse_lru' or bl[0][1] == 'res_lru':
+                mbl = CompilerBlock(
+                    bits=bl[0][0], op=bl[0][1], cond_ptm=bl[0][3])
                 self.compiled_blocks.append(mbl)
             else:
                 block_bits = set()
@@ -1363,6 +1376,12 @@ class TwoPTMCompiler:
                 cb.out_basis = [b.get_classical_subbasis()
                                 for b in cb.in_basis]
             elif cb.op == "getdiag":
+                cb.out_basis = cb.in_basis
+            elif cb.op == 'pulse_lru':
+                # HACK: for our LRUs the basis doesn't change. Alternatively one might want to compile this with some general basis.
+                cb.out_basis = cb.in_basis
+            elif cb.op == 'res_lru':
+                # HACK: for our LRUs the basis doesn't change. Alternatively one might want to compile this with some general basis.
                 cb.out_basis = cb.in_basis
             elif len(cb.in_basis) == 1:
                 full_basis = [b.get_superbasis() for b in cb.in_basis]
