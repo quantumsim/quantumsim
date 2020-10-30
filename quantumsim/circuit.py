@@ -479,6 +479,39 @@ class FluxPulse(Gate):
                 x, y + 0.3), textcoords='data', ha='center')
 
 
+class ConditionalPulseLRU(Gate):
+    def __init__(self, bit, time, angle, int_time=None, **kwargs):
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time,
+                             time_start=time_start,
+                             time_end=time_end,
+                             **kwargs)
+        else:
+            super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.angle = angle
+        self.label = r"$LRU_{p}$"
+
+
+class ConditionalResonatorLRU(Gate):
+    def __init__(self, bit, time, int_time=None, **kwargs):
+        if int_time is not None:
+            assert isinstance(int_time, int)
+            time_start = time - (int_time / 2)
+            time_end = time + (int_time / 2)
+            super().__init__(time,
+                             time_start=time_start,
+                             time_end=time_end,
+                             **kwargs)
+        else:
+            super().__init__(time, **kwargs)
+        self.involved_qubits.append(bit)
+        self.label = r"$LRU_{res}$"
+
+
 class ParkPulse(Gate):
     def __init__(self, bit, time, int_time=None, **kwargs):
         """A Park gate acting at time `time` between bit0 and bit1 (it is
