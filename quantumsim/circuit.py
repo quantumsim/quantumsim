@@ -1482,8 +1482,7 @@ class Circuit:
         """
         times = [g.time for g in self.gates]
 
-        #tmin = min(times)
-        tmin = 0
+        tmin = min(times)
         tmax = max(times)
 
         if tmax - tmin < 0.1:
