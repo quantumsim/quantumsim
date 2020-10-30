@@ -1126,7 +1126,7 @@ class CompilerBlock:
         self.ptm = None
 
     def __repr__(self):
-        if self.op == "measure" or self.op == "getdiag":
+        if self.op in ["measure", "getdiag", "pulse_lru", "res_lru"]:
             opstring = self.op
         else:
             opstring = "ptm"
