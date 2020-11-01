@@ -28,15 +28,106 @@ class State:
             self.pauli_vector = pauli_vector
         else:
             bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
-            if pauli_vector_class is None:
-                from ..pauli_vectors import Default
-                self.pauli_vector = Default(bases_)
-            else:
-                if not issubclass(pauli_vector_class, PauliVectorBase):
-                    raise ValueError(
-                        "pauli_vector_class must be a subclass of "
-                        "quantumsim.pauli_vectors.PauliVectorBase")
-                self.pauli_vector = pauli_vector_class(bases_)
+            self.pauli_vector = self._pv_cls(pauli_vector_class)(bases_)
+
+    @classmethod
+    def from_dm(cls, qubits, dm, bases, *, pauli_vector_class=None, force=False):
+        """
+        Constructs a new State from an existing Pauli vector array and bases.
+
+        Parameters
+        ----------
+        qubits: list of hashable
+            Tags of the qubits.
+        dm: array
+            Density matrix of the state.
+        bases: list of quantumsim.bases.PauliBasis
+            Bases to store the state.
+        pauli_vector_class: class, optional
+            Class used for storage of Pauli vector
+        force : bool
+            By default creation of too large density matrix (more than
+            :math:`2^22` elements currently) is not allowed. Set this to `True`
+            if you know what you are doing.
+
+        Returns
+        -------
+        State
+        """
+        pauli_vector = cls._pv_cls(pauli_vector_class).from_dm(dm, bases, force=force)
+        return cls(qubits, dim=pauli_vector.dim_hilbert, pauli_vector=pauli_vector)
+
+    @classmethod
+    def from_pv(cls, qubits, pv, bases, *, pauli_vector_class=None, force=False):
+        """
+        Constructs a new State from an existing Pauli vector array and bases.
+
+        Parameters
+        ----------
+        qubits: list of hashable
+            Tags of the qubits
+        pv: array
+            Pauli vector
+        bases: list of quantumsim.bases.PauliBasis
+            Bases of the `pv`
+        pauli_vector_class: class, optional
+            Class used for storage of Pauli vector
+        force : bool
+            By default creation of too large density matrix (more than
+            :math:`2^22` elements currently) is not allowed. Set this to `True`
+            if you know what you are doing.
+
+        Returns
+        -------
+        State
+        """
+        pauli_vector = cls._pv_cls(pauli_vector_class).from_dm(bases, pv, force=force)
+        return cls(qubits, dim=pauli_vector.dim_hilbert, pauli_vector=pauli_vector)
+
+    def to_dm(self):
+        """
+        Returns a density matrix, that corresponds to this state.
+
+        Returns
+        -------
+        array
+        """
+        return self.pauli_vector.to_dm()
+
+    def to_pv(self):
+        """
+        Returns a Pauli vector, that corresponds to this state, in the internal basis of
+        the state (can be obtained via `State.bases_in` and `State.bases_out`
+        properties).
+
+        Returns
+        -------
+        array
+        """
+        return self.pauli_vector.to_pv()
+
+    @staticmethod
+    def _pv_cls(pauli_vector_class):
+        """
+
+        Parameters
+        ----------
+        pauli_vector_class: class or None
+
+        Returns
+        -------
+        class
+            A resolved subclass of PauliVectorBase
+        """
+        if pauli_vector_class is None:
+            from ..pauli_vectors import Default
+            return Default
+        else:
+            if not issubclass(pauli_vector_class, PauliVectorBase):
+                raise ValueError(
+                    "pauli_vector_class must be a subclass of "
+                    "quantumsim.pauli_vectors.PauliVectorBase")
+            return pauli_vector_class
 
     def __copy__(self):
         return self.copy()

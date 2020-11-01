@@ -112,8 +112,8 @@ class TestOperations:
         op = Gate.from_lindblad_form(t1+t2, b1, hamiltonian=ham,
                                      lindblad_ops=lindblad_ops)
         dm = random_hermitian_matrix(2, seed=3)
-        state1 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b1))
-        state2 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b1))
+        state1 = State.from_dm([0, 1], dm, b1)
+        state2 = State.from_dm([0, 1], dm, b1)
 
         op1 @ state1
         op2 @ state1
@@ -126,10 +126,10 @@ class TestOperations:
         op_plus = Gate.from_lindblad_form(20, b, hamiltonian=ham)
         op_minus = Gate.from_lindblad_form(20, b, hamiltonian=-ham)
         dm = random_hermitian_matrix(2, seed=5)
-        state = State([0], pauli_vector=PauliVector.from_dm(dm, b))
+        state = State.from_dm([0], dm, b)
         op_plus @ state
         op_minus @ state
-        assert np.allclose(state.pauli_vector.to_dm(), dm)
+        assert np.allclose(state.to_dm(), dm)
 
     def test_lindblad_two_qubit(self):
         b = (bases.general(2),)
@@ -142,8 +142,8 @@ class TestOperations:
         op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1)
         op2 = Gate.from_lindblad_form(25, b, hamiltonian=ham2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham)
-        state1 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
-        state2 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
+        state1 = State.from_dm([0, 1], dm, b*2)
+        state2 = State.from_dm([0, 1], dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
@@ -166,8 +166,8 @@ class TestOperations:
         op1 = Gate.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Gate.from_lindblad_form(25, b, lindblad_ops=ops2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, lindblad_ops=ops)
-        state1 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
-        state2 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
+        state1 = State.from_dm([0, 1], dm, b*2)
+        state2 = State.from_dm([0, 1], dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
@@ -179,8 +179,8 @@ class TestOperations:
                                       lindblad_ops=ops2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham,
                                      lindblad_ops=ops)
-        state1 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
-        state2 = State([0, 1], pauli_vector=PauliVector.from_dm(dm, b*2))
+        state1 = State.from_dm([0, 1], dm, b*2)
+        state2 = State.from_dm([0, 1], dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
@@ -200,8 +200,8 @@ class TestOperations:
 
         op_3q = Gate.from_ptm(ptm, b)
         dm = random_hermitian_matrix(8, seed=93)
-        state1 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
-        state2 = State([0, 1, 2], pauli_vector=PauliVector.from_dm(dm, b))
+        state1 = State.from_dm([0, 1, 2], dm, b)
+        state2 = State.from_dm([0, 1, 2], dm, b)
 
         circuit @ state1
         op_3q @ state2
