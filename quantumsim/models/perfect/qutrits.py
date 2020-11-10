@@ -28,13 +28,14 @@ def rotate_euler(qubit):
     Gate
         An operation, that corresponds to the rotation.
     """
-    def _rotate_euler(phi, theta, lamda):
-        exp_phi, exp_lambda = np.exp(1j * phi), np.exp(1j * lamda)
-        sin_theta, cos_theta = np.sin(theta / 2), np.cos(theta / 2)
-        matrix = np.array([
+    def _rotate_euler(angle_z1, angle_x, angle_z2):
+        exp_phi, exp_lambda = np.exp(1j * angle_z1), np.exp(1j * angle_z2)
+        sin_theta, cos_theta = np.sin(angle_x / 2), np.cos(angle_x / 2)
+        matrix = np.array([[
             [cos_theta, -1j * exp_lambda * sin_theta, 0],
             [-1j * exp_phi * sin_theta, exp_phi * exp_lambda * cos_theta, 0],
-            [0, 0, 1]])
+            [0, 0, 1]
+        ]])
         return kraus_to_ptm(matrix, basis, basis), basis, basis
 
     return Gate(qubit,
@@ -58,9 +59,9 @@ def rotate_x(qubit):
     Gate
         An operation, that corresponds to the rotation.
     """
-    def _rotate_x(theta):
-        sin, cos = np.sin(theta / 2), np.cos(theta / 2)
-        matrix = np.array([[cos, -1j * sin, 0], [-1j * sin, cos, 0], [0, 0, 1]])
+    def _rotate_x(angle):
+        sin, cos = np.sin(angle / 2), np.cos(angle / 2)
+        matrix = np.array([[[cos, -1j * sin, 0], [-1j * sin, cos, 0], [0, 0, 1]]])
         return kraus_to_ptm(matrix, basis, basis), basis, basis
 
     return Gate(qubit,
@@ -84,9 +85,9 @@ def rotate_y(qubit):
     Gate
         An operation, that corresponds to the rotation.
     """
-    def _rotate_y(theta):
-        sin, cos = np.sin(theta / 2), np.cos(theta / 2)
-        matrix = np.array([[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]])
+    def _rotate_y(angle):
+        sin, cos = np.sin(angle / 2), np.cos(angle / 2)
+        matrix = np.array([[[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]]])
         return kraus_to_ptm(matrix, basis, basis), basis, basis
 
     return Gate(qubit,
@@ -115,7 +116,7 @@ def cphase(qubit1, qubit2):
         dcphase[2, 4] = 1
         dcphase[4, 2] = 1
         unitary = expm(-1j * angle * dcphase / np.pi)
-        return kraus_to_ptm(unitary, basis2, basis2), basis2, basis2
+        return kraus_to_ptm(unitary.reshape(1, 9, 9), basis2, basis2), basis2, basis2
 
     return Gate([qubit1, qubit2],
                 DIM,

@@ -106,6 +106,10 @@ class State:
         """
         return self.pauli_vector.to_pv()
 
+    @property
+    def bases(self):
+        return self.pauli_vector.bases
+
     @staticmethod
     def _pv_cls(pauli_vector_class):
         """
@@ -240,3 +244,22 @@ class State:
         """
         return State(qubits, pauli_vector=self.pauli_vector.partial_trace(
             *[self.qubits.index(q) for q in qubits]))
+
+    def meas_prob(self, qubit):
+        """
+        Returns an array of probabilities to measure each state of a `qubit`.
+        May not be normalized to 1.
+
+        Parameters
+        ----------
+        qubit: hashable
+            Tag of a qubit
+
+        Returns
+        -------
+        array
+        """
+        try:
+            return self.pauli_vector.meas_prob(self.qubits.index(qubit))
+        except ValueError as ex:
+            raise ValueError(f'Qubit {qubit} is not in the state') from ex

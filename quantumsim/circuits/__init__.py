@@ -1,6 +1,7 @@
 from .circuit import Gate, Circuit, Box, FinalizedCircuit, allow_param_repeat, \
-    deparametrize, _to_str
+    _to_str
+from .compiler import optimize
 from .plotter import plot
 
 __all__ = ['Gate', 'Circuit', 'FinalizedCircuit', 'allow_param_repeat',
-           'plot', 'deparametrize', '_to_str']
+           'plot', 'optimize', '_to_str']

@@ -5,6 +5,7 @@
 
 import pytest
 import numpy as np
+from pytest import approx
 
 from quantumsim.models.perfect import qubits as lib2
 from quantumsim import bases, State
@@ -24,20 +25,19 @@ class TestOperations:
         gm_two_qubit_basis = gm_qubit_basis * 2
 
         damp_op = Gate.from_kraus(damp_kraus_mat, gm_qubit_basis)
-        damp_ptm = damp_op.ptm(gm_qubit_basis)
 
         expected_mat = np.array([[1, 0, 0, 0],
                                  [0, np.sqrt(1-p_damp), 0, 0],
                                  [0, 0, np.sqrt(1-p_damp), 0],
                                  [p_damp, 0, 0, 1-p_damp]])
-        assert np.allclose(damp_ptm, expected_mat)
+        assert np.allclose(damp_op.ptm, expected_mat)
 
         with pytest.raises(ValueError, match=r'.* must be list-like, .*'):
             damp_op.set_bases(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
         cz = Gate.from_kraus(cz_kraus_mat, gm_two_qubit_basis)
-        cz_ptm = cz.ptm(gm_two_qubit_basis)
+        cz_ptm = cz.ptm
 
         assert cz_ptm.shape == (4, 4, 4, 4)
         cz_ptm = cz_ptm.reshape((16, 16))
@@ -52,7 +52,7 @@ class TestOperations:
         system_bases = qutrit_basis * 2
 
         cz = Gate.from_kraus(cz_kraus_mat, system_bases)
-        cz_ptm = cz.ptm(system_bases)
+        cz_ptm = cz.ptm
 
         assert cz_ptm.shape == (9, 9, 9, 9)
         cz_ptm_flat = cz_ptm.reshape((81, 81))
@@ -89,11 +89,11 @@ class TestOperations:
         op1 = Gate.from_kraus(damp_kraus_mat, gell_mann_basis)
         op2 = op1.set_bases(general_basis, general_basis) \
             .set_bases(gell_mann_basis, gell_mann_basis)
-        assert np.allclose(op1.ptm(gell_mann_basis), op2.ptm(gell_mann_basis))
+        assert op1.ptm == approx(op2.ptm)
         assert op1.bases_in == op2.bases_in
         assert op1.bases_out == op2.bases_out
 
-    def test_lindblad_singlequbit(self):
+    def test_lindblad_single_qubit(self):
         ham = random_hermitian_matrix(2, seed=56)
         lindblad_ops = np.array([
             [[0, 0.1],
@@ -118,7 +118,7 @@ class TestOperations:
         op1 @ state1
         op2 @ state1
         op @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+        assert np.allclose(state1.to_pv(), state2.to_pv())
 
     def test_lindblad_time_inverse(self):
         ham = random_hermitian_matrix(2, seed=4)
@@ -186,6 +186,7 @@ class TestOperations:
         op @ state2
         assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
 
+    @pytest.mark.xfail(reason="PTM will migrate to FinalizedCircuit")
     def test_ptm(self):
         # Some random gate sequence
         circuit = (lib2.rotate_x(0)(angle=np.pi/2) +

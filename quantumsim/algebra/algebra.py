@@ -27,7 +27,7 @@ def kraus_to_ptm(kraus, bases_in, bases_out):
     einsum_args.append(kraus.conj())
     einsum_args.append([6 * nq] + [2 * i for i in range(2 * nq)])
     einsum_args.append([4 * nq + i for i in range(2 * nq)])
-    return np.einsum(*einsum_args, optimize=True).real
+    return np.einsum(*einsum_args, optimize='greedy').real
 
 
 def ptm_convert_basis(ptm, bi_old, bo_old, bi_new, bo_new):
@@ -38,7 +38,7 @@ def ptm_convert_basis(ptm, bi_old, bo_old, bi_new, bo_new):
                      bases_kron(bo_new), bases_kron(bo_old),
                      ptm.reshape((d_out, d_in)),
                      bases_kron(bi_old), bases_kron(bi_new),
-                     optimize=True).real.reshape(shape)
+                     optimize='greedy').real.reshape(shape)
 
 
 def dm_to_pv(dm, bases):
@@ -49,7 +49,7 @@ def dm_to_pv(dm, bases):
     for i, b in enumerate(bases):
         einsum_args.append(b.vectors),
         einsum_args.append([2 * n_qubits + i, i + n_qubits, i])
-    return np.einsum(*einsum_args, optimize=True).real
+    return np.einsum(*einsum_args, optimize='greedy').real
 
 
 def pv_to_dm(pv, bases):
@@ -59,7 +59,7 @@ def pv_to_dm(pv, bases):
     for i, b in enumerate(bases):
         einsum_args.append(b.vectors)
         einsum_args.append([2 * nq + i, i, nq + i])
-    return np.einsum(*einsum_args, optimize=True).reshape((dim ** nq,) * 2)
+    return np.einsum(*einsum_args, optimize='greedy').reshape((dim ** nq,) * 2)
 
 
 def plm_lindbladian_part(lindblad_op, bases):
@@ -103,7 +103,7 @@ def plm_lindbladian_part(lindblad_op, bases):
     for i, basis in enumerate(bases):
         einsum_args += [basis.vectors, [5*n+i, n+i, 3*n+i]]
     einsum_args.append(list(range(4*n, 6*n)))
-    out = np.einsum(*einsum_args, optimize=True)
+    out = np.einsum(*einsum_args, optimize='greedy')
 
     einsum_args = [
         lindblad_op, [6*n] + list(range(2*n)),
@@ -114,7 +114,7 @@ def plm_lindbladian_part(lindblad_op, bases):
     for i, basis in enumerate(bases):
         einsum_args += [basis.vectors, [5*n+i, n+i, 3*n+i]]
     einsum_args.append(list(range(4*n, 6*n)))
-    out -= 0.5 * np.einsum(*einsum_args, optimize=True)
+    out -= 0.5 * np.einsum(*einsum_args, optimize='greedy')
 
     einsum_args = [
         lindblad_op, [6*n] + list(range(2*n)),
@@ -125,7 +125,7 @@ def plm_lindbladian_part(lindblad_op, bases):
     for i, basis in enumerate(bases):
         einsum_args += [basis.vectors, [5*n+i, 3*n+i, 2*n+i]]
     einsum_args.append(list(range(4*n, 6*n)))
-    out -= 0.5 * np.einsum(*einsum_args, optimize=True)
+    out -= 0.5 * np.einsum(*einsum_args, optimize='greedy')
 
     return out
 
@@ -166,7 +166,7 @@ def plm_hamiltonian_part(hamiltonian, bases):
     for i, basis in enumerate(bases):
         einsum_args += [basis.vectors, [4*n+i, n+i, 2*n+i]]
     einsum_args.append(list(range(3*n, 5*n)))
-    out = np.einsum(*einsum_args, optimize=True)
+    out = np.einsum(*einsum_args, optimize='greedy')
 
     einsum_args = [hamiltonian, list(range(2*n))]
     for i, basis in enumerate(bases):
@@ -174,6 +174,6 @@ def plm_hamiltonian_part(hamiltonian, bases):
     for i, basis in enumerate(bases):
         einsum_args += [basis.vectors, [4*n+i, 2*n+i, i]]
     einsum_args.append(list(range(3*n, 5*n)))
-    out -= np.einsum(*einsum_args, optimize=True)
+    out -= np.einsum(*einsum_args, optimize='greedy')
 
     return -1j * out

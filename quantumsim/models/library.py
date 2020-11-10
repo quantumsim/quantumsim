@@ -1,7 +1,6 @@
 import numpy as np
 
 from .. import bases
-# from ..operations.operation import ParametrizedOperation
 from ..circuits import Gate
 from ..models.perfect.qubits import (
     cnot,

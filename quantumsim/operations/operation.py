@@ -300,12 +300,6 @@ kkj            Resulting operation
 
         return _Chain(operations)
 
-    @property
-    def _compile(self):
-        # Need to lazily import due to circular dependency
-        from .compiler import compile_operation
-        return compile_operation
-
     def compile(self, bases_in=None, bases_out=None, *, sv_cutoff=1e-5):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.

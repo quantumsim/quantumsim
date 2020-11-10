@@ -3,17 +3,14 @@ from collections import defaultdict
 from copy import copy, deepcopy
 from more_itertools import pairwise
 
-from ..circuits import Gate, Circuit, Box
-from .. import bases
+from ..circuits.circuit import GatePlaceholder, Circuit, Box
 
 
-class WaitingGate(Gate):
+class WaitingGate(GatePlaceholder):
     def __init__(self, qubit, duration, dim_hilbert, time_start=0, plot_metadata=None,
                  **metadata):
         super().__init__(qubits=[qubit],
                          dim_hilbert=dim_hilbert,
-                         operation_func=lambda: (None, bases.general(dim_hilbert),
-                                                 bases.general(dim_hilbert)),
                          duration=duration,
                          time_start=time_start,
                          plot_metadata=plot_metadata or {
@@ -83,7 +80,7 @@ class Model(metaclass=abc.ABCMeta):
                         op._param_funcs.update(param_funcs)
                 else:
                     ops = circuit.gates
-                return Box(circuit.qubits, ops, plot_metadata, repr_)
+                return Box(qubits, ops, plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper
@@ -128,7 +125,7 @@ class Model(metaclass=abc.ABCMeta):
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
 
-    def finalize(self, circuit, bases_in=None):
+    def finalize(self, circuit, bases_in=None, qubits=None):
         """
         This function is aimed to perform post-processing operations on a
         circuit (such as, for example, adding waiting gates) and returns a
@@ -138,6 +135,8 @@ class Model(metaclass=abc.ABCMeta):
         ----------
         circuit: quantumsim.circuits.CircuitBase
             A circuit
+        qubits: list of hashable
+            Qubits of the circuit, to set qubit order.
         bases_in: tuple of quantumsim.PauliBasis
 
         Returns
@@ -145,4 +144,4 @@ class Model(metaclass=abc.ABCMeta):
         quantumsim.circuits.FinalizedCircuit
             A post-processed and finalized version of the circuit.
         """
-        return circuit.finalize(bases_in=bases_in)
+        return circuit.finalize(bases_in=bases_in, qubits=qubits)

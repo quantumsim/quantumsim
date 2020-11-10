@@ -1,7 +1,7 @@
 from numpy import pi
 
 from quantumsim import Model, Setup
-from quantumsim.circuits import FinalizedCircuit
+from quantumsim.circuits import FinalizedCircuit, Circuit
 from quantumsim.models import WaitingGate
 
 import quantumsim.models.perfect.qubits as lib
@@ -55,11 +55,11 @@ def test_create_timed_model():
         def strange_duration_gate(self, qubit):
             return lib.rotate_y(qubit, angle=pi)
 
-        def finalize(self, circuit, *, bases_in=None):
+        def finalize(self, circuit, qubits, bases_in=None):
             # Filter out waiting gates
             # In real life this will be replacing them to idling operators
             gates = [g for g in circuit.operations() if not isinstance(g, WaitingGate)]
-            return FinalizedCircuit(circuit.qubits, gates, bases_in=bases_in)
+            return FinalizedCircuit(Circuit(gates), qubits, bases_in=bases_in)
 
     sample_setup = Setup("""
     setup:
@@ -67,10 +67,11 @@ def test_create_timed_model():
     """)
 
     m = SampleModel(sample_setup)
-    cnot = m.rotate_y('D0', angle=0.5*pi) + m.cphase('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
+    cnot = (m.rotate_y('D0', angle=0.5*pi) +
+            m.cphase('D0', 'D1') +
+            m.rotate_y('D0', angle=-0.5*pi))
     assert len(list(cnot.operations())) == 11
-    cnot = m.finalize(cnot)
-    assert len(list(cnot.operation.units())) == 3
-    assert len(list(cnot(angle=pi).operation.units())) == 1
+    cnot = m.finalize(cnot, ['D0', 'D1'])
+    assert len(list(cnot.compiled_circuit.operations())) == 3
+    assert len(list(cnot(angle=pi).compiled_circuit.operations())) == 1
 
