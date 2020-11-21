@@ -283,7 +283,7 @@ class GateSetMixin(ABC):
         """
         param_funcs = self._param_funcs_sympified()
         # noinspection PyTypeChecker
-        return FinalizedCircuit(qubits or sorted(self.qubits), self.operations(),
+        return FinalizedCircuit(self, qubits or sorted(self.qubits),
                                 param_funcs=param_funcs, bases_in=bases_in)
 
     def _qubit_time_start(self, qubit):
@@ -392,12 +392,23 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
         if plot_metadata:
             self.plot_metadata = plot_metadata
         if repr_:
+            if not isinstance(repr_, str):
+                raise ValueError(f"repr_ must be a LaTeX-formatted string, got {repr_}")
             self._repr = repr_
         self._duration = duration
         self._time_start = time_start
 
     def __copy__(self):
-        raise NotImplementedError
+        return self.__class__(
+            qubits=self.qubits,
+            dim_hilbert=self._dim_hilbert,
+            duration=self._duration,
+            time_start=self._time_start,
+            plot_metadata=self.plot_metadata,
+            repr_=self._repr,
+            bases_in=self.bases_in,
+            bases_out=self.bases_out
+        )
 
     @property
     def shape(self):
@@ -519,6 +530,7 @@ class Gate(GatePlaceholder):
         """
         super(Gate, self).__init__(qubits, dim_hilbert, duration, time_start,
                                    plot_metadata, repr_, bases_in, bases_out)
+        self._ptm = None
         argspec = inspect.getfullargspec(operation_func)
         if argspec.varargs is not None:
             raise ValueError(
@@ -536,15 +548,16 @@ class Gate(GatePlaceholder):
 
     def __copy__(self):
         other = self.__class__(
-            self._qubits,
-            self.dim_hilbert,
-            self._operation_func,
-            self._duration,
-            self._time_start,
-            copy(self._param_funcs),
-            self.plot_metadata,
-            self.bases_in,
-            self.bases_out
+            qubits=self._qubits,
+            dim_hilbert=self.dim_hilbert,
+            operation_func=self._operation_func,
+            duration=self._duration,
+            time_start=self._time_start,
+            param_funcs=copy(self._param_funcs),
+            plot_metadata=self.plot_metadata,
+            repr_=self._repr,
+            bases_in=self.bases_in,
+            bases_out=self.bases_out
         )
         other.ptm = copy(self.ptm)
         other._params = copy(self._params)
@@ -806,9 +819,15 @@ class Gate(GatePlaceholder):
         quantumsim.Gate
             Equivalent operation in the new basis.
         """
-        other = super(Gate, self).set_bases(bases_in, bases_out)
+        other = copy(self)
+        if bases_in is not None:
+            self._validate_bases(bases_in=bases_in)
+            other.bases_in = bases_in
+        if bases_out is not None:
+            self._validate_bases(bases_out=bases_out)
+            other.bases_out = bases_out
         if self.ptm is not None and (self.bases_in != other.bases_in or
-                                      self.bases_out != other.bases_out):
+                                     self.bases_out != other.bases_out):
             other.ptm = ptm_convert_basis(self.ptm, self.bases_in, self.bases_out,
                                           other.bases_in, other.bases_out)
         return other
@@ -1051,3 +1070,19 @@ class FinalizedCircuit:
         if len(self._params) != 0:
             raise KeyError(*self._params)
         self.compiled_circuit @ state
+
+    def ptm(self, bases_in, bases_out=None):
+        if len(self._params) > 0:
+            raise PTMNotDefinedError(*self._params)
+        bases_out = bases_out or bases_in
+        ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
+        start_ptm = Gate.from_ptm(np.identity(int(np.prod(ptm_in_shape)), dtype=float)
+                                  .reshape(ptm_in_shape*2), bases_in,
+                                  qubits=self.qubits)
+        from .compiler import optimize
+        # Since start_ptm involves all the qubits, compiler will merge all the
+        # operations into it, resulting into a single gate that has PTM
+        return optimize(
+            start_ptm + self.compiled_circuit, optimizations=False,
+            bases_in=bases_in, bases_out=bases_out, qubits=self.qubits
+        ).ptm

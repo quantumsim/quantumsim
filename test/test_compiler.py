@@ -9,15 +9,14 @@ from numpy import pi
 from pytest import approx
 
 from quantumsim import bases, State
-from quantumsim.algebra.tools import random_hermitian_matrix
+from quantumsim.algebra import kraus_to_ptm
+from quantumsim.algebra.tools import random_hermitian_matrix, random_unitary_matrix
 from quantumsim.circuits import optimize, Gate, Circuit
 
 from quantumsim.models.perfect import qubits as lib2
 from quantumsim.models.perfect import qutrits as lib3
 
 
-# FIXME All checks that check len(gate.free_parameters) should instead check if
-#       the gate has a PTM
 class TestCompiler:
     def test_opt_basis_single_qubit_2d(self):
         b = bases.general(2)
@@ -136,13 +135,14 @@ class TestCompiler:
         circ0_c = optimize(circ0, bases_full, bases_full)
         assert isinstance(circ0_c, Gate)
         assert len(circ0_c.free_parameters) == 0
+        assert circ0_c.ptm is not None
         assert len(circ0_c.qubits) == 1
         pv1 = State.from_dm([0], dm, bases_full)
         circ0_c @ pv1
         op_angle = circ0_c
         op_2angle = optimize(lib.rotate_x(0)(angle=2*angle), bases_full, bases_full)
         assert isinstance(op_2angle, Gate)
-        # FIXME assert op_angle.shape == op_2angle.shape
+        assert op_angle.shape == op_2angle.shape
         assert op_angle.bases_in == op_2angle.bases_in
         assert op_angle.bases_out == op_2angle.bases_out
         assert op_angle.ptm == approx(op_2angle.ptm)
@@ -152,12 +152,14 @@ class TestCompiler:
         circ_2pi_c1 = optimize(circ_2pi, subbases, bases_full)
         assert isinstance(circ_2pi_c1, Gate)
         assert len(circ0_c.free_parameters) == 0
+        assert circ0_c.ptm is not None
         assert circ_2pi_c1.bases_in == subbases
         assert circ_2pi_c1.bases_out == subbases
 
         circ_2pi_c2 = optimize(circ_2pi, bases_full, subbases)
         assert isinstance(circ_2pi_c2, Gate)
         assert len(circ0_c.free_parameters) == 0
+        assert circ0_c.ptm is not None
         assert circ_2pi_c2.bases_in == subbases
         assert circ_2pi_c2.bases_out == subbases
 
@@ -266,17 +268,16 @@ class TestCompiler:
         bases_out = (b_full, b_full, b012)
         zz = (
             lib3.rotate_x(2)(angle=-pi/2) +
-            lib3.cphase(0, 2)(angle=pi, leakage_rate=0.1) +
-            lib3.cphase(2, 1)(angle=pi, leakage_rate=0.25) +
+            lib3.cphase(0, 2)(angle=pi) +
+            lib3.cphase(2, 1)(angle=pi) +
             lib3.rotate_x(2)(angle=pi/2) +
             lib3.rotate_x(0)(angle=pi) +
             lib3.rotate_x(1)(angle=pi)
         )
-        # FIXME: implement Circuit.ptm()
-        # zz_ptm = zz.ptm(bases_in, bases_out)
+        zz_ptm = zz.finalize().ptm(bases_in, bases_out)
         zzc = optimize(zz, bases_in=bases_in, bases_out=bases_out, qubits=(0, 1, 2))
-        # zzc_ptm = zzc.ptm(bases_in, bases_out)
-        # assert zz_ptm == approx(zzc_ptm)
+        zzc_ptm = zzc.finalize().ptm(bases_in, bases_out)
+        assert zz_ptm == approx(zzc_ptm)
 
         units = list(zzc.operations())
         assert len(units) == 2
@@ -325,8 +326,7 @@ class TestCompiler:
             lib3.rotate_x(0)(angle=np.pi) +
             lib3.rotate_x(1)(angle=np.pi)
         ), bases_in, bases_out, qubits=[0, 1, 2])
-        # FIXME implement PTM extraction
-        # ptm_ref = zz.ptm(bases_in, bases_out)
+        ptm_ref = zz.finalize().ptm(bases_in, bases_out)
 
         zz_parametrized = (
             lib3.rotate_x(2)(angle='angle1') +
@@ -353,5 +353,4 @@ class TestCompiler:
         zz_new = zz_parametrized(angle1=angle1, phase02=phase02, foo='bar')
         zzpc = optimize(zz_new, bases_in, bases_out, qubits=[0, 1, 2])
         assert len(list(zzpc.operations())) == 2
-        # FIXME implement PTM extraction
-        # assert zzpc.ptm(bases_in, bases_out) == approx(ptm_ref)
+        assert zzpc.finalize().ptm(bases_in, bases_out) == approx(ptm_ref)

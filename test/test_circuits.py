@@ -5,9 +5,9 @@ import sympy
 from numpy import pi
 from pytest import approx
 from quantumsim.algebra import kraus_to_ptm
-from quantumsim.algebra.tools import random_unitary_matrix
+from quantumsim.algebra.tools import random_unitary_matrix, random_hermitian_matrix
 from quantumsim.circuits import Gate, allow_param_repeat
-from quantumsim import bases
+from quantumsim import bases, State
 
 
 def ptm_cphase(angle):
@@ -94,7 +94,63 @@ class TestCircuitsCommon:
         assert gate2(angle2=angle2_2, angle1=0xdeadbeef).ptm == approx(
             gate(angle1=angle1_2, angle2=angle2_2).ptm)
 
-    @pytest.mark.xfail
+    def test_circuits_finalize_order(self):
+        basis = (bases.general(2),)
+        unitary = random_unitary_matrix(4, 555).reshape(1, 4, 4)
+        ptm = kraus_to_ptm(unitary, basis*2, basis*2)
+        ptm_inv = np.einsum('abcd->badc', ptm)
+
+        dm = random_hermitian_matrix(4, 342)
+        gate = Gate.from_ptm(ptm, basis*2, basis*2)
+        fgate = gate.finalize()
+        state1 = State.from_dm([0, 1], dm, basis*2)
+        fgate @ state1
+        assert fgate.qubits == [0, 1]
+        assert fgate.ptm(basis*2) == approx(ptm)
+        fgate = gate.finalize(qubits=[1, 0])
+        assert fgate.qubits == [1, 0]
+        assert fgate.ptm(basis*2) == approx(ptm_inv)
+        assert ptm != approx(ptm_inv)
+        assert fgate.ptm(basis*2) != approx(gate.finalize().ptm(basis*2))
+
+        gate = Gate.from_ptm(ptm_inv, basis*2, basis*2, qubits=['B', 'A'])
+        fgate = gate.finalize()
+        state2 = State.from_dm(['A', 'B'], dm, basis*2)
+        fgate @ state2
+        assert fgate.qubits == ['A', 'B']
+        assert fgate.ptm(basis*2) == approx(ptm)
+        fgate = gate.finalize(qubits=['B', 'A'])
+        state3 = State.from_dm(['A', 'B'], dm, basis*2)
+        fgate @ state3
+        assert fgate.qubits == ['B', 'A']
+        assert fgate.ptm(basis*2) == approx(ptm_inv)
+
+        assert state1.to_pv() == approx(state2.to_pv())
+        assert state1.to_pv() == approx(state3.to_pv())
+
+        dm = random_hermitian_matrix(8, 342)
+        unitary = random_unitary_matrix(8, 555).reshape(1, 8, 8)
+        ptm = kraus_to_ptm(unitary, basis*3, basis*3)
+        gate = Gate.from_ptm(ptm, basis*3, basis*3)
+        fgate = gate.finalize()
+        state1 = State.from_dm([0, 1, 2], dm, basis*3)
+        fgate @ state1
+        assert fgate.qubits == [0, 1, 2]
+        assert fgate.ptm(basis*3) == approx(ptm)
+        fgate = gate.finalize(qubits=(1, 0, 2))
+        state2 = State.from_dm([0, 1, 2], dm, basis*3)
+        fgate @ state2
+        assert fgate.qubits == [1, 0, 2]
+        assert fgate.ptm(basis*3) == approx(np.einsum('abcdef->bacedf', ptm))
+        fgate = gate.finalize(qubits=(2, 1, 0))
+        state3 = State.from_dm([0, 1, 2], dm, basis*3)
+        fgate @ state3
+        assert fgate.qubits == [2, 1, 0]
+        assert fgate.ptm(basis*3) == approx(np.einsum('abcdef->cbafed', ptm))
+
+        assert state1.to_pv() == approx(state2.to_pv())
+        assert state1.to_pv() == approx(state3.to_pv())
+
     def test_circuits_add(self):
         dim = 2
         ptm_rplus = ptm_rotate(0.5 * pi)
@@ -106,48 +162,47 @@ class TestCircuitsCommon:
 
         circuit = grplus + gcphase
         ptm = np.einsum('ijkl, km -> ijml', ptm_cz, ptm_rplus)
-        assert circuit.qubits == ['Q0', 'Q1']
+        assert circuit.qubits == {'Q0', 'Q1'}
         assert len(circuit.gates) == 2
-        assert circuit.ptm == approx(ptm)
+        assert circuit.finalize().ptm(basis) == approx(ptm)
 
         circuit = circuit + grminus
         ptm = np.einsum('ai, ijkl -> ajkl', ptm_rminus, ptm)
-        assert circuit.qubits == ['Q0', 'Q1']
+        assert circuit.qubits == {'Q0', 'Q1'}
         assert len(circuit.gates) == 3
-        assert circuit.ptm == approx(ptm)
+        assert circuit.finalize().ptm(basis) == approx(ptm)
 
         circuit = grplus + (gcphase + grminus)
         ptm = np.einsum('ai, ijkl, km -> ajml', ptm_rminus, ptm_cz, ptm_rplus)
-        assert circuit.qubits == ['Q0', 'Q1']
+        assert circuit.qubits == {'Q0', 'Q1'}
         assert len(circuit.gates) == 3
-        assert circuit.ptm == approx(ptm)
+        assert circuit.finalize().ptm(basis) == approx(ptm)
 
         grplus = Gate('Q1', dim, lambda: (ptm_rplus, bases1q, bases1q))
         grminus = Gate('Q1', dim, lambda: (ptm_rminus, bases1q, bases1q))
         circuit = grplus + gcphase + grminus
-        ptm = np.einsum('ai, ijkl, km -> ajml', ptm_rminus, ptm_cz, ptm_rplus)
-        assert circuit.qubits == ['Q1', 'Q0']
+        ptm = np.einsum('ai, ijkl, km -> jalm', ptm_rminus, ptm_cz, ptm_rplus)
+        assert circuit.qubits == {'Q1', 'Q0'}
         assert len(circuit.gates) == 3
-        assert circuit.ptm == approx(ptm)
+        assert circuit.finalize(qubits=['Q0', 'Q1']).ptm(basis, basis) == approx(ptm)
 
         basis = (basis[0],) * 3
         grplus = Gate('Q2', dim, lambda: (ptm_rplus, bases1q, bases1q))
         grminus = Gate('Q0', dim, lambda: (ptm_rminus, bases1q, bases1q))
         circuit = grplus + gcphase + grminus
         ptm = np.einsum('mi, ijkl, ab -> amjbkl', ptm_rminus, ptm_cz, ptm_rplus)
-        assert circuit.qubits == ['Q2', 'Q0', 'Q1']
+        assert circuit.qubits == {'Q2', 'Q0', 'Q1'}
         assert len(circuit.gates) == 3
-        assert circuit.ptm == approx(ptm)
+        assert circuit.finalize(qubits=['Q2', 'Q0', 'Q1']).ptm(basis) == approx(ptm)
 
         grplus = Gate('Q0', dim, lambda: (ptm_rplus, bases1q, bases1q))
         grminus = Gate('Q2', dim, lambda: (ptm_rminus, bases1q, bases1q))
         circuit = grplus + gcphase + grminus
         ptm = np.einsum('ab, ijkl, kn -> ijanlb', ptm_rminus, ptm_cz, ptm_rplus)
-        assert circuit.qubits == ['Q0', 'Q1', 'Q2']
+        assert circuit.qubits == {'Q0', 'Q1', 'Q2'}
         assert len(circuit.gates) == 3
-        assert circuit.ptm(basis, basis) == approx(ptm)
+        assert circuit.finalize().ptm(basis, basis) == approx(ptm)
 
-    @pytest.mark.xfail
     def test_circuits_params(self):
         dim = 2
         grotate = Gate('Q0', dim, lambda angle: (ptm_rotate(angle), bases1q, bases1q))
@@ -166,7 +221,7 @@ class TestCircuitsCommon:
         assert circuit.free_parameters == {sympy.symbols('angle')}
         assert len(circuit.gates) == 3
         angle = 0.736
-        assert circuit(angle=angle).ptm(bases2q, bases2q) == approx(
+        assert circuit(angle=angle).finalize().ptm(bases2q, bases2q) == approx(
             np.einsum('ai, ijkl, km -> ajml',
                       ptm_rotate(angle), ptm_cphase(angle), ptm_rotate(angle)))
 
@@ -176,14 +231,13 @@ class TestCircuitsCommon:
         ptm_ref = np.einsum('ai, ijkl, km -> ajml',
                             ptm_rotate(angle3), ptm_cphase(angle2), ptm_rotate(angle1))
 
-        circuit = grotate(angle=angle1) + gcphase(angle=angle2) + \
-                  grotate(angle=angle3)
-        assert circuit.ptm(bases2q, bases2q) == approx(ptm_ref)
+        circuit = grotate(angle=angle1) + gcphase(angle=angle2) + grotate(angle=angle3)
+        assert circuit.finalize().ptm(bases2q, bases2q) == approx(ptm_ref)
 
-        circuit = grotate(angle='angle1') + gcphase(angle='angle2') + \
-                  grotate(angle='angle3')
+        circuit = (grotate(angle='angle1') + gcphase(angle='angle2') +
+                   grotate(angle='angle3'))
         assert circuit(angle1=angle1, angle2=angle2, angle3=angle3)\
-                   .ptm(bases2q, bases2q) == approx(ptm_ref)
+               .finalize().ptm(bases2q, bases2q) == approx(ptm_ref)
 
 
 class TestCircuitsTimeAware:

@@ -186,7 +186,6 @@ class TestOperations:
         op @ state2
         assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
 
-    @pytest.mark.xfail(reason="PTM will migrate to FinalizedCircuit")
     def test_ptm(self):
         # Some random gate sequence
         circuit = (lib2.rotate_x(0)(angle=np.pi/2) +
@@ -196,7 +195,7 @@ class TestOperations:
                    lib2.rotate_x(1)(angle=-np.pi/2))
 
         b = (bases.general(2),) * 3
-        ptm = circuit.ptm(b, b)
+        ptm = circuit.finalize().ptm(b, b)
         assert isinstance(ptm, np.ndarray)
 
         op_3q = Gate.from_ptm(ptm, b)
