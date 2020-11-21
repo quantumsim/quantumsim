@@ -5,7 +5,7 @@ from itertools import product
 def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
          amp_limits=None, phase_limits=None, cmap_name='plasma'):
     """
-    Plots the density matrix as a complext 3D histogram.
+    Plots the density matrix as a complex 3D histogram.
 
     Parameters
     ----------
@@ -18,7 +18,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
         identity is added to the state instead, so that total trace is
         preserved. This should emulate behaviour of tomography in the presence
         of leakage.
-    add_colorbar : bool, optional
+    colorbar : bool, optional
         If True, a colorbar is created and drawn to the figure axes, by default True
     amp_limits : list or tuple or None
         A list or tuple of two float numbers, corresponding to the lower and upper
@@ -27,8 +27,11 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     phase_limits : list or tuple or None
         A list or tuple of two float numbers, corresponding to the lower and upper
         limit of phase-axis (the colorbar), in this case corresponding to the complex
-        phase of the state. If `None`, the lower limit is set to :math:`-\\pi`,
-        while the upper one to :math:`\\pi`.
+        phase of the state.
+        If None, the lower limit is set to :math:`-\\pi`, while the upper one to
+        :math:`\\pi`.
+    cmap_name : str
+        Name of the colormap to use to plot phase.
 
     Returns
     -------
@@ -36,7 +39,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     """
     import matplotlib.pyplot as plt
     from matplotlib.colors import Normalize
-    from matplotlib import colorbar as _colorbar
+    from matplotlib import colorbar as colorbar_
 
     if ax is None:
         fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
@@ -69,8 +72,8 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
         dim = pv.dim_hilbert
 
     def tuple_to_string(tup):
-        state = ''.join(str(x) for x in tup)
-        return r'$\left| %s \right\rangle$' % state
+        state_ = ''.join(str(x) for x in tup)
+        return r'$\left| %s \right\rangle$' % state_
 
     labels = [tuple_to_string(x) for x in product(*(range(d) for d in dim))]
 
@@ -83,7 +86,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     cmap = plt.get_cmap(cmap_name)
     colors = cmap(norm(np.angle(rho.flatten())))
 
-    if amp_limits and isinstance(amp_limits, (list, tuple)):
+    if amp_limits and isinstance(phase_limits, (list, tuple)):
         assert len(amp_limits) == 2
     else:
         amp_limits = (0, 1)
@@ -113,8 +116,8 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     ax.set_zlabel('Amplitude')
 
     if colorbar:
-        cax, _ = _colorbar.make_axes(ax)
-        cb = _colorbar.ColorbarBase(cax, cmap=cmap, norm=norm)
+        cax, _ = colorbar_.make_axes(ax)
+        cb = colorbar_.ColorbarBase(cax, cmap=cmap, norm=norm)
         cb.set_ticks((-np.pi, 0, np.pi))
         cb.set_ticklabels((r'$-\pi$', r'$0$', r'$\pi$'))
         cb.set_label('Phase')

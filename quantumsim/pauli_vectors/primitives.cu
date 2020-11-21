@@ -1,5 +1,5 @@
 /*This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)*/
-/*(c) 2016 Brian Tarasinski*/
+/*(c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov*/
 /*Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt*/
 
 #include <cuda.h>

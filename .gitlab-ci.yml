@@ -1,9 +1,42 @@
-image: registry.gitlab.com/quantumsim/testing
+image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
 
 stages:
+- build_image
 - build
 - test
 - deploy
+
+build docker image:
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  stage: build_image
+  before_script:
+    - |
+      echo "{\"auths\": {
+        \"$CI_REGISTRY\": {
+          \"username\": \"gitlab-ci-token\",
+          \"password\": \"$CI_BUILD_TOKEN\"}
+        }
+      }" > /kaniko/.docker/config.json
+  script:
+    - /kaniko/executor
+      --context $CI_PROJECT_DIR
+      --dockerfile $CI_PROJECT_DIR/.ci/Dockerfile
+      --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      changes:
+        - .ci/Dockerfile
+        - /requirements*.txt
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 build html documentation:
   stage: build
@@ -55,22 +88,21 @@ pages:
   needs:
     - job: build html documentation
       artifacts: true
-  only:
-    - branches@quantumsim/quantumsim
-  except:
-    - master@quantumsim/quantumsim
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
   environment:
-    name: sphinx_build/$CI_COMMIT_REF_NAME
-    url: https://quantumsim.gitlab.io/quantumsim/sphinx_build/$CI_PIPELINE_ID/
+    name: $CI_COMMIT_REF_NAME
+    url: https://quantumsim.gitlab.io/quantumsim/$CI_COMMIT_REF_SLUG
   script:
-    - mkdir -p public/sphinx_build
-    - cp -R doc/build/html public/sphinx_build/$CI_PIPELINE_ID
+    - mkdir -p public
+    - cp -R doc/build/html public/$CI_COMMIT_REF_SLUG
   artifacts:
-    name: sphinx_build_$CI_PIPELINE_ID
+    name: sphinx_build_$CI_COMMIT_REF_SLUG
     paths:
       - public
-    expire_in: 7 days
     when: always
 
 upload documentation to docs repo:

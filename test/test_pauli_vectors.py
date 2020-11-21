@@ -190,6 +190,24 @@ class TestPauliVectors:
         pv0.apply_ptm(ptm, qubit)
         assert pv0.to_pv() == approx(pv1.to_pv())
 
+    @pytest.mark.parametrize('qubit', [0, 1, 2])
+    def test_apply_1q_projecting_ptm(self, pauli_vector_cls, dm_basis, qubit):
+        unitary = random_unitary_matrix(2, 45)
+
+        b_in = (dm_basis(2),)
+        b_out = (dm_basis(2).subbasis([1]),)
+        bases = b_in * 3
+        dm_before = random_density_matrix(8, seed=46)
+        pv = pauli_vector_cls.from_dm(dm_before, bases)
+        pv_before = pv.to_pv()
+        ix_out = [0, 1, 2]
+        ix_out[qubit] = 3
+        ptm = kraus_to_ptm(unitary.reshape(1, 2, 2), b_in, b_out)
+
+        pv_ref = np.einsum(ptm, [3, qubit], pv_before, [0, 1, 2], ix_out)
+        pv.apply_ptm(ptm, qubit)
+        pv.to_pv() == approx(pv_ref)
+
     @pytest.mark.parametrize('qubits', [
         (0, 1), (0, 2), (1, 2), (1, 0), (2, 0), (2, 1)
     ])

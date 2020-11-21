@@ -1,7 +1,6 @@
-# This file is part of quantumsim. (https://github.com/brianzi/quantumsim)
-# (c) 2016 Brian Tarasinski
-# Distributed under the GNU GPLv3. See LICENSE.txt or
-# https://www.gnu.org/licenses/gpl.txt
+# This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
+# (c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov
+# Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt
 import sys
 from itertools import chain
 
@@ -25,6 +24,7 @@ from .pauli_vector import PauliVectorBase, prod
 package_path = os.path.dirname(os.path.realpath(__file__))
 
 mod = None
+DEFAULT_NVCC_FLAGS.append("-Wno-deprecated-gpu-targets")
 
 for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
                     package_path + "/primitives.cu"]:
@@ -53,7 +53,7 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
     neutral="0", reduce_expr="a+b",
     map_expr="(i/stride) % dim == offset ? in[i] : 0",
     arguments="const double *in, unsigned int stride, unsigned int dim, "
-              "unsigned int offset"
+              "unsigned int offset",
 )
 
 
@@ -131,6 +131,28 @@ class PauliVectorCuda(PauliVectorBase):
             raise NotImplementedError('Applying {}-qubit PTM is not '
                                       'implemented in the active backend.')
 
+    def _ensure_gpu_array_shape(self, arr, shape):
+        new_size = prod(shape)
+        new_size_bytes = new_size * 8
+        if arr.gpudata.size < new_size_bytes:
+            # reallocate
+            try:
+                arr.gpudata.free()
+                out = ga.empty(shape, np.float64)
+                out.gpudata.size = self._work_data.nbytes
+            except Exception as ex:
+                raise RuntimeError(f"Could not allocate a GPU array of shape {shape} "
+                                   f"and size {new_size_bytes} bytes") from ex
+        else:
+            # reallocation not required,
+            # reshape but reuse allocation
+            out = ga.GPUArray(
+                shape=shape,
+                dtype=np.float64,
+                gpudata=self._work_data.gpudata,
+            )
+        return out
+
     def _apply_two_qubit_ptm(self, qubit0, qubit1, ptm):
         """Apply a two-qubit Pauli transfer matrix to qubit `bit0` and `bit1`.
 
@@ -162,21 +184,8 @@ class PauliVectorCuda(PauliVectorBase):
         new_shape[qubit1] = dim1_out
         new_shape[qubit0] = dim0_out
         new_size = prod(new_shape)
-        new_size_bytes = new_size * 8
 
-        if self._work_data.gpudata.size < new_size_bytes:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
-        else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(
-                shape=new_shape,
-                dtype=np.float64,
-                gpudata=self._work_data.gpudata,
-            )
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
@@ -242,27 +251,15 @@ class PauliVectorCuda(PauliVectorBase):
         new_shape[qubit] = dim_bit_out
         assert new_shape[qubit] == dim_bit_out
         new_size = prod(new_shape)
-        new_size_bytes = new_size * 8
 
-        if self._work_data.gpudata.size < new_size_bytes:
-            # reallocate
-            self._work_data.gpudata.free()
-            self._work_data = ga.empty(new_shape, np.float64)
-            self._work_data.gpudata.size = self._work_data.nbytes
-        else:
-            # reallocation not required,
-            # reshape but reuse allocation
-            self._work_data = ga.GPUArray(
-                shape=new_shape,
-                dtype=np.float64,
-                gpudata=self._work_data.gpudata,
-            )
+        self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
 
         ptm_gpu = self._cached_gpuarray(ptm)
 
         dint = min(64, self._data.size // dim_bit_in)
         block = (1, dim_bit_out, dint)
         blocksize = dim_bit_out * dint
+        sh_mem_size = dint * dim_bit_in
         grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
@@ -280,7 +277,7 @@ class PauliVectorCuda(PauliVectorBase):
             dim_z,
             dim_y,
             dim_rho,
-            shared_size=8 * (ptm.size + blocksize))
+            shared_size=8 * sh_mem_size)
 
         self._data, self._work_data = self._work_data, self._data
 
@@ -302,10 +299,7 @@ class PauliVectorCuda(PauliVectorBase):
         diag_size = prod(diag_shape)
 
         if target_array is None:
-            if self._work_data.gpudata.size < diag_size * 8:
-                self._work_data.gpudata.free()
-                self._work_data = ga.empty(diag_shape, np.float64)
-                self._work_data.gpudata.size = self._work_data.nbytes
+            self._work_data = self._ensure_gpu_array_shape(self._work_data, diag_shape)
             target_array = self._work_data
         else:
             if target_array.size < diag_size:
@@ -313,6 +307,7 @@ class PauliVectorCuda(PauliVectorBase):
                     "Size of `target_gpu_array` is too small ({}).\n"
                     "Should be at least {}."
                     .format(target_array.size, diag_size))
+            target_array = self._ensure_gpu_array_shape(target_array, diag_shape)
 
         idx = [[pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
@@ -352,9 +347,7 @@ class PauliVectorCuda(PauliVectorBase):
                 return (target_array.get().ravel()[:diag_size]
                         .reshape(diag_shape))
         else:
-            return ga.GPUArray(shape=diag_shape,
-                               gpudata=target_array.gpudata,
-                               dtype=np.float64)
+            return target_array
 
     def trace(self):
         # TODO: there is a smarter way of doing this with pauli-dirac basis
@@ -408,9 +401,7 @@ class PauliVectorCuda(PauliVectorBase):
 
     def copy(self):
         """Return a deep copy of this Density."""
-        data_cp = self._data.copy()
-        cp = self.__class__(self.bases, data=data_cp)
-        return cp
+        return self.__class__(self.bases, pv=self._data.copy())
 
     def _cached_gpuarray(self, array):
         """

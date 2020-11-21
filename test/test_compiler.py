@@ -7,6 +7,7 @@ import pytest
 import numpy as np
 from numpy import pi
 from pytest import approx
+from scipy.linalg import expm
 
 from quantumsim import bases, State
 from quantumsim.algebra import kraus_to_ptm
@@ -263,13 +264,31 @@ class TestCompiler:
         b0 = b_full.subbasis([0])
         b01 = b_full.subbasis([0, 1])
         b012 = b_full.subbasis([0, 1, 2])
+        basis2 = (b_full, b_full)
+
+        def leaky_cz(qubit1, qubit2):
+            def _cphase(leakage_rate):
+                dcphase = np.zeros((9, 9))
+                dcphase[2, 4] = 1
+                dcphase[4, 2] = 1
+                angle_frac = 1 - np.arcsin(np.sqrt(leakage_rate)) / pi
+                unitary = expm(-1j * pi * angle_frac * dcphase)
+                return (kraus_to_ptm(unitary.reshape(1, 9, 9), basis2, basis2),
+                        basis2, basis2)
+
+            return Gate([qubit1, qubit2], 3, _cphase, duration=0, plot_metadata={
+                "style": "line", "markers": [
+                    {"style": "marker", "label": "o"},
+                    {"style": "marker", "label": "o"},
+                ],
+            }, repr_="CPhase({angle})")
 
         bases_in = (b01, b01, b0)
         bases_out = (b_full, b_full, b012)
         zz = (
             lib3.rotate_x(2)(angle=-pi/2) +
-            lib3.cphase(0, 2)(angle=pi) +
-            lib3.cphase(2, 1)(angle=pi) +
+            leaky_cz(0, 2)(leakage_rate=0.1) +
+            leaky_cz(2, 1)(leakage_rate=0.25) +
             lib3.rotate_x(2)(angle=pi/2) +
             lib3.rotate_x(0)(angle=pi) +
             lib3.rotate_x(1)(angle=pi)
@@ -289,7 +308,7 @@ class TestCompiler:
         assert op2.bases_in[0] == bases_in[1]
         assert op1.bases_in[1] == bases_in[2]
         # Qubit 0 did not leak
-        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1, 3, 4])
+        assert op1.bases_out[0] == bases_out[0].subbasis([0, 1])
         # Qubit 1 leaked
         assert op2.bases_out[0] == bases_out[1].subbasis([0, 1, 2, 6])
         # Qubit 2 is measured
@@ -304,7 +323,8 @@ class TestCompiler:
 
         # Compiled version still needs to be projected, so we can't compare
         # Pauli vectors, so we can to check only DM diagonals.
-        assert np.allclose(state1.diagonal, state2.diagonal)
+        assert np.allclose(state1.pauli_vector.diagonal(),
+                           state2.pauli_vector.diagonal())
 
     def test_compilation_with_placeholders(self):
         b_full = bases.general(3)
