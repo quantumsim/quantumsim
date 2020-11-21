@@ -3,10 +3,10 @@
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 import sys
+from itertools import chain
 
 import numpy as np
 import os
-import pytools
 import warnings
 
 # noinspection PyUnresolvedReferences
@@ -20,7 +20,7 @@ import pycuda.reduction
 # noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
-from .pauli_vector import PauliVectorBase
+from .pauli_vector import PauliVectorBase, prod
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -161,7 +161,7 @@ class PauliVectorCuda(PauliVectorBase):
         assert new_shape[qubit0] == dim0_in
         new_shape[qubit1] = dim1_out
         new_shape[qubit0] = dim0_out
-        new_size = pytools.product(new_shape)
+        new_size = prod(new_shape)
         new_size_bytes = new_size * 8
 
         if self._work_data.gpudata.size < new_size_bytes:
@@ -198,8 +198,8 @@ class PauliVectorCuda(PauliVectorBase):
         grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = pytools.product(self._data.shape[qubit1 + 1:])
-        dim_y = pytools.product(self._data.shape[qubit0 + 1:qubit1])
+        dim_z = prod(self._data.shape[qubit1 + 1:])
+        dim_y = prod(self._data.shape[qubit0 + 1:qubit1])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
@@ -241,7 +241,7 @@ class PauliVectorCuda(PauliVectorBase):
         dim_bit_out, dim_bit_in = ptm.shape
         new_shape[qubit] = dim_bit_out
         assert new_shape[qubit] == dim_bit_out
-        new_size = pytools.product(new_shape)
+        new_size = prod(new_shape)
         new_size_bytes = new_size * 8
 
         if self._work_data.gpudata.size < new_size_bytes:
@@ -266,8 +266,8 @@ class PauliVectorCuda(PauliVectorBase):
         grid_size = max(1, (new_size - 1) // blocksize + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = pytools.product(self._data.shape[qubit + 1:])
-        dim_y = pytools.product(self._data.shape[:qubit])
+        dim_z = prod(self._data.shape[qubit + 1:])
+        dim_y = prod(self._data.shape[:qubit])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
@@ -299,7 +299,7 @@ class PauliVectorCuda(PauliVectorBase):
         """
         diag_bases = [pb.computational_subbasis() for pb in self.bases]
         diag_shape = [db.dim_pauli for db in diag_bases]
-        diag_size = pytools.product(diag_shape)
+        diag_size = prod(diag_shape)
 
         if target_array is None:
             if self._work_data.gpudata.size < diag_size * 8:
@@ -319,7 +319,7 @@ class PauliVectorCuda(PauliVectorBase):
                 if pb.computational_basis_indices[i] is not None]
                for pb in self.bases]
 
-        idx_j = np.array(list(pytools.flatten(idx))).astype(np.uint32)
+        idx_j = np.array(list(chain(*idx))).astype(np.uint32)
         idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
 
         xshape = np.array(self._data.shape, np.uint32)

@@ -1,6 +1,13 @@
 import abc
-import pytools
+from functools import reduce
+
 from quantumsim.algebra.algebra import dm_to_pv, pv_to_dm
+
+
+def prod(iterable):
+    # From Python 3.8 this function can be replaced to math.prod
+    from operator import mul
+    return reduce(mul, iterable, 1)
 
 
 class PauliVectorBase(metaclass=abc.ABCMeta):
@@ -65,7 +72,7 @@ class PauliVectorBase(metaclass=abc.ABCMeta):
 
     @property
     def size(self):
-        return pytools.product(self.dim_hilbert) ** 2
+        return prod(self.dim_hilbert) ** 2
 
     @property
     def dim_pauli(self):

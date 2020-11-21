@@ -1,8 +1,7 @@
 import warnings
 
 import numpy as np
-import pytools
-from .pauli_vector import PauliVectorBase
+from .pauli_vector import PauliVectorBase, prod
 
 
 class PauliVectorNumpy(PauliVectorBase):
@@ -61,7 +60,7 @@ class PauliVectorNumpy(PauliVectorBase):
             dm_out_idx[i_in] = i_out
         self._data = np.einsum(
             self._data, dm_in_idx, ptm, ptm_out_idx + ptm_in_idx, dm_out_idx,
-            optimize=True)
+            optimize='greedy')
 
     def diagonal(self, *, get_data=True):
         no_trace_tensors = [basis.computational_basis_vectors
@@ -75,9 +74,9 @@ class PauliVectorNumpy(PauliVectorBase):
 
         indices = list(range(n_qubits))
         out_indices = list(range(n_qubits, 2 * n_qubits))
-        complex_dm_dimension = pytools.product(self.dim_hilbert)
+        complex_dm_dimension = prod(self.dim_hilbert)
         return np.einsum(self._data, indices, *trace_argument, out_indices,
-                         optimize=True).real.reshape(complex_dm_dimension)
+                         optimize='greedy').real.reshape(complex_dm_dimension)
 
     def trace(self):
         # TODO: can be made more effective
@@ -91,7 +90,7 @@ class PauliVectorNumpy(PauliVectorBase):
             if i not in qubits:
                 einsum_args.append(b.vectors)
                 einsum_args.append([i, self.n_qubits+i, self.n_qubits+i])
-        traced_dm = np.einsum(*einsum_args, optimize=True).real
+        traced_dm = np.einsum(*einsum_args, optimize='greedy').real
         return self.__class__([self.bases[q] for q in qubits], traced_dm)
 
     def meas_prob(self, qubit):
@@ -102,7 +101,7 @@ class PauliVectorNumpy(PauliVectorBase):
             einsum_args.append([i, self.n_qubits+i, self.n_qubits+i])
         einsum_args.append([self.n_qubits + qubit])
         try:
-            return np.einsum(*einsum_args, optimize=True).real
+            return np.einsum(*einsum_args, optimize='greedy').real
         except Exception:
             raise
 

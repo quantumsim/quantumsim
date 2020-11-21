@@ -8,7 +8,6 @@ from itertools import chain
 from math import log
 
 import numpy as np
-from pytools import flatten
 from scipy.linalg import expm
 from sympy import symbols, sympify
 
@@ -121,11 +120,11 @@ class GateSetMixin(ABC):
         pass
 
     def operations(self):
-        """Generator of operations (Mathematical units) of this circuit.
+        """Operations (Mathematical units) of this circuit.
 
-        Yields
+        Returns
         ------
-        Gate
+        list of Gate
             Operations in chronological order
         """
         pass
@@ -447,14 +446,14 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
         return self,
 
     def operations(self):
-        """Generator of operations (Mathematical units) of this circuit.
+        """Operations (Mathematical units) of this circuit.
 
-        Yields
-        ------
-        Gate
+        Returns
+        -------
+        list of Gate
             Operations in chronological order
         """
-        yield self
+        return [self]
 
     @property
     def free_parameters(self):
@@ -894,15 +893,15 @@ class Circuit(GateSetMixin):
         return self._gates
 
     def operations(self):
-        """Generator of operations (Mathematical units) of this circuit.
+        """Operations (Mathematical units) of this circuit.
 
-        Yields
+        Returns
         ------
-        Gate
+        list of Gate
             Operations in chronological order
         """
-        operations = flatten((gate.operations() for gate in self._gates))
-        yield from sorted(operations, key=lambda op: op.time_start)
+        operations = [gate.operations() for gate in self._gates]
+        return sorted(list(chain(*operations)), key=lambda op: op.time_start)
 
     @property
     def free_parameters(self):

@@ -2,6 +2,5 @@ PyYAML
 numpy>=1.12
 scipy
 sympy
-pytools
 matplotlib
 xarray
