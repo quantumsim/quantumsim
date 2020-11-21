@@ -1,9 +1,15 @@
 import abc
 from collections import defaultdict
 from copy import copy, deepcopy
-from more_itertools import pairwise
+from itertools import tee
 
 from ..circuits.circuit import GatePlaceholder, Circuit, Box
+
+
+def pairwise(iterable):
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 
 class WaitingGate(GatePlaceholder):
