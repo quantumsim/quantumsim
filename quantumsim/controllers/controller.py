@@ -8,7 +8,6 @@ import xarray as xr
 
 from .. import State
 from ..circuits import FinalizedCircuit, _to_str
-from ..operations import ParametrizedOperation
 
 
 class Controller:

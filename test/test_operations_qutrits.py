@@ -1,5 +1,5 @@
 # This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
-# (c) 2018 Quantumsim Authors
+# (c) 2020 Quantumsim Authors
 # Distributed under the GNU GPLv3. See LICENSE.txt or
 # https://www.gnu.org/licenses/gpl.txt
 
@@ -8,8 +8,7 @@ import pytest
 from numpy import pi
 from scipy.linalg import expm
 
-from quantumsim import bases, PauliVector, State
-# import quantumsim.operations.qutrits as lib
+from quantumsim import bases, State
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.models import perfect_qutrits as lib
 
@@ -135,4 +134,3 @@ class TestLibrary:
         state = State.from_dm([0], dm, basis)
         lib.dephase(0, foo='bar') @ state
         assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))
-

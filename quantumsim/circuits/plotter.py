@@ -1,7 +1,10 @@
+from itertools import product
+
 import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from matplotlib.patches import Rectangle
+from matplotlib import colorbar as _colorbar
 from sympy import latex
 
 _golden_mean = (np.sqrt(5) - 1.0) / 2.0
@@ -33,14 +36,14 @@ class MatplotlibPlotter:
                 figsize=figsize or (7, 0.5*len(self.circuit.qubits)))
             self.ax.set_ylim(-1, len(self.circuit.qubits))
             self.ax.set_yticks([])
-            tmin = self.circuit.time_start
-            tmax = self.circuit.time_end
+            t_min = self.circuit.time_start
+            t_max = self.circuit.time_end
 
-            if tmax - tmin < 0.1:
-                tmin -= 0.05
-                tmax += 0.05
-            buffer = (tmax - tmin) * 0.05
-            self.ax.set_xlim(tmin - 2.5 * buffer, tmax + 1.5 * buffer)
+            if t_max - t_min < 0.1:
+                t_min -= 0.05
+                t_max += 0.05
+            buffer = (t_max - t_min) * 0.05
+            self.ax.set_xlim(t_min - 2.5 * buffer, t_max + 1.5 * buffer)
 
         if callable(qubit_order):
             self.qubits = sorted(circuit.qubits, key=qubit_order)
@@ -199,3 +202,74 @@ class MatplotlibPlotter:
         item['color'] = item.get('color', 'k')
         item['zorder'] = item.get('zorder', self.zorders['line'])
         return item
+
+
+def circuit_heatmap(circuit, bases_in=None, bases_out=None, ax=None,
+                    truncate_levels=None, colorbar=True):
+    """
+    Parameters
+    ----------
+    circuit : quantumsim.Circuit
+        Operation to display
+    bases_in, bases_out : tuple of quantumsim.PauliBasis, optional
+    ax : matplotlib.axes.Axes or None
+        Axes to plot onto. If None, new figure is created and returned.
+    truncate_levels : None or int
+        If not None, all the states higher than provided are discarded and a
+        identity is added to the state instead, so that total trace is
+        preserved. This should emulate behavior of tomography in the presence
+        of leakage.
+    colorbar: bool
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure or None
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots(constrained_layout=True)
+    else:
+        fig = None
+
+    dim = circuit.dim_hilbert
+    num_qubits = circuit.num_qubits
+    num_basis_elements = (dim ** 2) ** num_qubits
+
+    bases_in = bases_in or circuit.bases_in
+    bases_out = bases_out or circuit.bases_out
+
+    ptm = circuit.ptm(bases_in, bases_out).reshape(
+        num_basis_elements, num_basis_elements
+    )
+
+    if truncate_levels is not None:
+        raise NotImplementedError
+
+    def tuple_to_string(tup):
+        pauli_element = "".join(str(x) for x in tup)
+        return r"$%s$" % pauli_element
+
+    bases_in_labels = (basis.labels for basis in bases_in)
+    x_labels = [tuple_to_string(x) for x in product(*bases_in_labels)]
+
+    bases_out_labels = (basis.labels for basis in bases_out)
+    y_labels = [tuple_to_string(x) for x in product(*bases_out_labels)]
+
+    img = ax.imshow(ptm, cmap="bwr", aspect="equal", origin="upper")
+    img.set_clim(vmin=-1, vmax=1)
+
+    ax.set_xticks(range(num_basis_elements))
+    ax.set_xticklabels(x_labels)
+    ax.set_xlabel("Input basis")
+
+    ax.set_yticks(range(num_basis_elements))
+    ax.set_yticklabels(y_labels)
+    ax.set_xlabel("Output basis")
+
+    if colorbar:
+        cax, _ = _colorbar.make_axes(ax)
+        cbar = _colorbar.Colorbar(cax, img)
+        cbar.set_ticks((-1, 0, 1))
+        cbar.ax.set_ylabel("Amplitude", rotation=270)
+
+    return fig
