@@ -4,139 +4,170 @@
 # https://www.gnu.org/licenses/gpl.txt
 
 import numpy as np
+import pytest
+from numpy import pi
 
-from quantumsim import bases, PauliVector
-import quantumsim.operations.qubits as lib
+from quantumsim import bases, State
+from quantumsim.algebra.tools import random_hermitian_matrix
+from quantumsim.models import perfect_qubits as lib
+
+basis = (bases.general(2),)
+basis2 = basis*2
 
 
-
+# noinspection DuplicatedCode
 class TestLibrary:
     def test_rotate_x(self):
-        qubit_basis = (bases.general(2),)
-        sys_bases = qubit_basis * 3
-        dm = PauliVector(sys_bases)
+        state = State(list(range(3)))
 
-        rotate90 = lib.rotate_x(0.5*np.pi)
-        rotate180 = lib.rotate_x(np.pi)
-        rotate360 = lib.rotate_x(2*np.pi)
+        lib.rotate_x(1, angle=0.5*np.pi, foo='bar') @ state
+        lib.rotate_x(2, angle=pi) @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
+        assert np.allclose(state.meas_prob(2), (0, 1))
 
-        rotate90(dm, 1)
-        rotate180(dm, 2)
-        assert np.allclose(dm.meas_prob(0), (1, 0))
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
-        assert np.allclose(dm.meas_prob(2), (0, 1))
+        lib.rotate_x(1, angle=pi) @ state
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
 
-        rotate180(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
+        lib.rotate_x(1, angle=0.5*pi) @ state
+        assert np.allclose(state.meas_prob(1), (1, 0))
 
-        rotate90(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (1, 0))
-
-        rotate360(dm, 0)
-        assert np.allclose(dm.meas_prob(0), (1, 0))
+        lib.rotate_x(0, angle=2*pi) @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
 
     def test_rotate_y(self):
-        qubit_basis = (bases.general(2),)
-        sys_bases = qubit_basis+qubit_basis+qubit_basis
-        dm = PauliVector(sys_bases)
+        state = State(list(range(3)))
 
-        rotate90 = lib.rotate_y(0.5*np.pi)
-        rotate180 = lib.rotate_y(np.pi)
-        rotate360 = lib.rotate_y(2*np.pi)
+        lib.rotate_y(1, angle=0.5*pi, foo='bar') @ state
+        lib.rotate_y(2, angle=pi) @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
+        assert np.allclose(state.meas_prob(2), (0, 1))
 
-        rotate90(dm, 1)
-        rotate180(dm, 2)
-        assert np.allclose(dm.meas_prob(0), (1, 0))
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
-        assert np.allclose(dm.meas_prob(2), (0, 1))
+        lib.rotate_y(1, angle=pi) @ state
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
 
-        rotate180(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
+        lib.rotate_y(1, angle=0.5*pi) @ state
+        assert np.allclose(state.meas_prob(1), (1, 0))
 
-        rotate90(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (1, 0))
-
-        rotate360(dm, 0)
-        assert np.allclose(dm.meas_prob(0), (1, 0))
+        lib.rotate_y(0, angle=2*pi) @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
 
     def test_rotate_z(self):
         sqrt2 = np.sqrt(2)
-        qubit_basis = (bases.general(2),)
-        dm = PauliVector(qubit_basis)
+        state = State([0])
 
-        rotate90 = lib.rotate_z(0.5*np.pi)
-        rotate180 = lib.rotate_z(np.pi)
-        rotate360 = lib.rotate_z(2*np.pi)
-
-        rotate90(dm, 0)
-        assert np.allclose(dm.to_pv(), [1, 0, 0, 0])
-        rotate180(dm, 0)
-        assert np.allclose(dm.to_pv(), [1, 0, 0, 0])
+        lib.rotate_z(0, angle=0.5*pi, foo='bar') @ state
+        assert np.allclose(state.to_pv(), [1, 0, 0, 0])
+        lib.rotate_z(0, angle=pi) @ state
+        assert np.allclose(state.to_pv(), [1, 0, 0, 0])
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, sqrt2, 0])
-        superpos_dm = PauliVector(qubit_basis,
-                                  had_expansion)
+        state = state.from_pv([0], had_expansion, basis)
 
-        rotate180(superpos_dm, 0)
-        assert np.allclose(superpos_dm.to_pv(),
-                           [0.5, 0.5, -sqrt2, 0])
+        lib.rotate_z(0, angle=pi) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, -sqrt2, 0])
 
-        rotate90(superpos_dm, 0)
-        assert np.allclose(superpos_dm.to_pv(),
-                           [0.5, 0.5, 0, -sqrt2])
+        lib.rotate_z(0, angle=0.5*pi) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, -sqrt2])
 
-        rotate180(superpos_dm, 0)
-        assert np.allclose(superpos_dm.to_pv(),
-                           [0.5, 0.5, 0, sqrt2])
+        lib.rotate_z(0, angle=pi) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, sqrt2])
 
-        rotate360(superpos_dm, 0)
-        assert np.allclose(superpos_dm.to_pv(),
-                           [0.5, 0.5, 0, sqrt2])
+        lib.rotate_z(0, angle=2*pi) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, sqrt2])
 
     def test_rotate_euler(self):
-        qubit_basis = (bases.general(2),)
-        dm = PauliVector(qubit_basis + qubit_basis)
+        state = State([0, 1])
 
-        rotate90x = lib.rotate_euler(0, 0.5*np.pi, 0)
-        rotate90y = lib.rotate_euler(0, 0.5*np.pi, 0)
+        lib.rotate_euler(0, angle_z1=0, angle_x=0.5*pi, angle_z2=0, foo='bar') @ state
+        assert np.allclose(state.meas_prob(0), (0.5, 0.5))
 
-        rotate90x(dm, 0)
-        assert np.allclose(dm.meas_prob(0), (0.5, 0.5))
-
-        rotate90y(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
+        lib.rotate_euler(1, angle_z1=0.5*pi, angle_x=0.5*pi, angle_z2=-0.5*pi) @ state
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
 
     def test_hadamard(self):
-        qubit_basis = (bases.general(2),)
-        sys_bases = qubit_basis+qubit_basis
-        dm = PauliVector(sys_bases)
+        state = State([0, 1])
 
-        hadamard = lib.hadamard()
+        lib.hadamard(1, foo='bar') @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.5, 0.5))
 
-        hadamard(dm, 1)
-        assert np.allclose(dm.meas_prob(0), (1, 0))
-        assert np.allclose(dm.meas_prob(1), (0.5, 0.5))
+        lib.hadamard(1) @ state
+        assert np.allclose(state.meas_prob(1), (1, 0))
 
-        hadamard(dm, 1)
-        assert np.allclose(dm.meas_prob(1), (1, 0))
+    def test_cphase(self):
+        state = State([0, 1])
+        lib.cphase(0, 1, angle=pi) @ state
+        assert np.allclose(state.pauli_vector.diagonal(), [1, 0, 0, 0])
+
+        state = State.from_dm([0, 1], np.array([[0, 0, 0, 0],
+                                                [0, 0, 0, 0],
+                                                [0, 0, 0.5, 0.5],
+                                                [0, 0, 0.5, 0.5]]),
+                              basis2)
+        lib.cphase(0, 1, angle=0.5*pi) @ state
+        assert np.allclose(state.to_dm(), [[0, 0, 0, 0],
+                                           [0, 0, 0, 0],
+                                           [0, 0, 0.5, -0.5j],
+                                           [0, 0, 0.5j, 0.5]])
 
     def test_cnot(self):
-        cnot = lib.cnot()
-        qubit_bases = (bases.general(2),
-                       bases.general(2),
-                       bases.general(2))
+        state = State.from_dm([0, 1, 2], np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0]),
+                              basis*3)
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.25, 0.75))
+        assert np.allclose(state.meas_prob(2), (1, 0))
+        lib.cnot(0, 1, foo='bar') @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.25, 0.75))
+        assert np.allclose(state.meas_prob(2), (1, 0))
+        lib.cnot(1, 2) @ state
+        assert np.allclose(state.meas_prob(0), (1, 0))
+        assert np.allclose(state.meas_prob(1), (0.25, 0.75))
+        assert np.allclose(state.meas_prob(2), (0.25, 0.75))
 
-        dm = np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0])
-        s = PauliVector.from_dm(dm, qubit_bases)
-        assert np.allclose(s.meas_prob(0), (1, 0))
-        assert np.allclose(s.meas_prob(1), (0.25, 0.75))
-        assert np.allclose(s.meas_prob(2), (1, 0))
-        cnot(s, 0, 1)
-        assert np.allclose(s.meas_prob(0), (1, 0))
-        assert np.allclose(s.meas_prob(1), (0.25, 0.75))
-        assert np.allclose(s.meas_prob(2), (1, 0))
-        cnot(s, 1, 2)
-        assert np.allclose(s.meas_prob(0), (1, 0))
-        assert np.allclose(s.meas_prob(1), (0.25, 0.75))
-        assert np.allclose(s.meas_prob(2), (0.25, 0.75))
+    def test_swap(self):
+        dm = random_hermitian_matrix(4, 3)
+        unitary = np.array([[1, 0, 0, 0],
+                            [0, 0, 1, 0],
+                            [0, 1, 0, 0],
+                            [0, 0, 0, 1]])
+        dm_res = unitary @ dm @ unitary.conj().T
+
+        state = State.from_dm([0, 1], dm, basis2)
+        lib.swap(0, 1, foo='bar') @ state
+        assert np.allclose(state.to_dm(), dm_res)
+
+    def test_measure(self):
+        povm0 = np.array([[1, 0], [0, 0]])
+        povm1 = np.array([[0, 0], [0, 1]])
+        identity = np.array([[1, 0], [0, 1]])
+
+        dm = random_hermitian_matrix(4, 3)
+        state = State.from_dm([0, 1], dm, basis2)
+
+        povm00 = np.kron(povm0, identity)
+        lib.measure(0, result=0, foo='bar') @ state
+        dm = povm00 @ dm @ povm00
+        assert np.allclose(state.to_dm(), dm)
+        lib.measure(0, result=0) @ state
+        assert np.allclose(state.to_dm(), dm)
+
+        povm11 = np.kron(identity, povm1)
+        lib.measure(1, result=1) @ state
+        dm = povm11 @ dm @ povm11
+        assert np.allclose(state.to_dm(), dm)
+
+        lib.measure(1, result=0) @ state
+        assert np.allclose(state.to_dm(), np.zeros((4, 4)))
+
+        with pytest.raises(ValueError, match='Unknown measurement result: 2'):
+            lib.measure(0, result=2)
+
+    def test_dephase(self):
+        dm = random_hermitian_matrix(2, 777)
+        state = State.from_dm([0], dm, basis)
+        lib.dephase(0, foo='bar') @ state
+        assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))

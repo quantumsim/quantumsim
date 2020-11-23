@@ -7,13 +7,13 @@ import pytest
 import numpy as np
 from pytest import approx
 
-from quantumsim.models.perfect import qubits as lib2
+from quantumsim.models import perfect_qubits as lib2
 from quantumsim import bases, State
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.circuits import Gate
-from quantumsim.pauli_vectors import PauliVectorNumpy as PauliVector
 
 
+# noinspection DuplicatedCode
 class TestOperations:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
@@ -133,11 +133,11 @@ class TestOperations:
 
     def test_lindblad_two_qubit(self):
         b = (bases.general(2),)
-        id = np.array([[1, 0], [0, 1]])
+        identity = np.array([[1, 0], [0, 1]])
         ham1 = random_hermitian_matrix(2, seed=6)
         ham2 = random_hermitian_matrix(2, seed=7)
-        ham = np.kron(ham1, id).reshape(2, 2, 2, 2) + \
-              np.kron(id, ham2).reshape(2, 2, 2, 2)
+        ham = (np.kron(ham1, identity).reshape((2, 2, 2, 2)) +
+               np.kron(identity, ham2).reshape((2, 2, 2, 2)))
         dm = random_hermitian_matrix(4, seed=3)
         op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1)
         op2 = Gate.from_lindblad_form(25, b, hamiltonian=ham2, qubits=1)
@@ -161,8 +161,8 @@ class TestOperations:
             [[0, 0],
              [0, 0.17]],
         ])
-        ops = [np.kron(op, id).reshape(2, 2, 2, 2) for op in ops1] + \
-              [np.kron(id, op).reshape(2, 2, 2, 2) for op in ops2]
+        ops = [np.kron(op, identity).reshape((2, 2, 2, 2)) for op in ops1] + \
+              [np.kron(identity, op).reshape((2, 2, 2, 2)) for op in ops2]
         op1 = Gate.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Gate.from_lindblad_form(25, b, lindblad_ops=ops2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, lindblad_ops=ops)
@@ -188,11 +188,11 @@ class TestOperations:
 
     def test_ptm(self):
         # Some random gate sequence
-        circuit = (lib2.rotate_x(0)(angle=np.pi/2) +
-                   lib2.rotate_y(1)(angle=0.3333) +
-                   lib2.cphase(0, 2)(angle=np.pi) +
-                   lib2.cphase(1, 2)(angle=np.pi) +
-                   lib2.rotate_x(1)(angle=-np.pi/2))
+        circuit = (lib2.rotate_x(0, angle=np.pi/2) +
+                   lib2.rotate_y(1, angle=0.3333) +
+                   lib2.cphase(0, 2, angle=np.pi) +
+                   lib2.cphase(1, 2, angle=np.pi) +
+                   lib2.rotate_x(1, angle=-np.pi/2))
 
         b = (bases.general(2),) * 3
         ptm = circuit.finalize().ptm(b, b)
@@ -206,4 +206,3 @@ class TestOperations:
         circuit @ state1
         op_3q @ state2
         assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
-

@@ -994,7 +994,8 @@ class FinalizedCircuit:
     ----------
     circuit : Circuit
     qubits : list of str
-        List of qubits in the operation, used to fix order.
+        List of qubits in the operation, used to fix order. If `None`,
+        sorted list of `circuit`'s qubits is used.
     bases_in: tuple of quantumsim.PauliBasis, optional
         Input bases for the state. If None, assumed to be a full basis.
     param_funcs: dict, optional
@@ -1006,10 +1007,9 @@ class FinalizedCircuit:
         to the slower computation with higher precision.
     """
 
-    def __init__(self, circuit, qubits, *,
+    def __init__(self, circuit, qubits=None, *,
                  bases_in=None, param_funcs=None, sv_cutoff=1e-5):
-
-        self.qubits = list(qubits)
+        self.qubits = sorted(circuit.qubits) if qubits is None else list(qubits)
         self.circuit = circuit
         self.bases_in = bases_in
         self._params = copy(circuit.free_parameters)

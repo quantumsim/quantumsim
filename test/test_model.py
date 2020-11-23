@@ -4,7 +4,7 @@ from quantumsim import Model, Setup
 from quantumsim.circuits import FinalizedCircuit, Circuit
 from quantumsim.models import WaitingGate
 
-import quantumsim.models.perfect.qubits as lib
+from quantumsim.models import perfect_qubits as lib
 
 
 def test_create_untimed_model():
@@ -17,8 +17,7 @@ def test_create_untimed_model():
 
         @Model.gate()
         def cz(self, qubit_static, qubit_fluxed):
-            # FIXME must be `..., angle=pi)`
-            return lib.cphase(qubit_static, qubit_fluxed)(angle=pi)
+            return lib.cphase(qubit_static, qubit_fluxed, angle=pi)
 
     sample_setup = Setup("""
     setup: []
@@ -28,8 +27,8 @@ def test_create_untimed_model():
     assert len(m.rotate_y('D0').free_parameters) == 1
     assert len(m.rotate_y('D0', angle=0.5*pi).free_parameters) == 0
 
-    cnot = m.rotate_y('D0', angle=0.5*pi) + m.cz('D0', 'D1') + \
-           m.rotate_y('D0', angle=-0.5*pi)
+    _ = m.rotate_y('D0', angle=0.5*pi) + m.cz('D0', 'D1') + \
+        m.rotate_y('D0', angle=-0.5*pi)
 
 
 def test_create_timed_model():
@@ -55,11 +54,11 @@ def test_create_timed_model():
         def strange_duration_gate(self, qubit):
             return lib.rotate_y(qubit, angle=pi)
 
-        def finalize(self, circuit, qubits, bases_in=None):
+        def finalize(self, circuit, bases_in=None, qubits=None):
             # Filter out waiting gates
             # In real life this will be replacing them to idling operators
             gates = [g for g in circuit.operations() if not isinstance(g, WaitingGate)]
-            return FinalizedCircuit(Circuit(gates), qubits, bases_in=bases_in)
+            return FinalizedCircuit(Circuit(gates), qubits=qubits, bases_in=bases_in)
 
     sample_setup = Setup("""
     setup:
@@ -71,7 +70,6 @@ def test_create_timed_model():
             m.cphase('D0', 'D1') +
             m.rotate_y('D0', angle=-0.5*pi))
     assert len(list(cnot.operations())) == 11
-    cnot = m.finalize(cnot, ['D0', 'D1'])
+    cnot = m.finalize(cnot)
     assert len(list(cnot.compiled_circuit.operations())) == 3
     assert len(list(cnot(angle=pi).compiled_circuit.operations())) == 1
-

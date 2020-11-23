@@ -67,7 +67,7 @@ class Setup:
             pass
         raise KeyError(
             'Parameter "{}" is not defined for qubit(s) {}'.format(
-                param, ", ".join(qubits)
+                param, ", ".join((str(q) for q in qubits))
             )
         )
 

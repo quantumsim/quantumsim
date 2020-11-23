@@ -1,8 +1,7 @@
 from .model import Model, WaitingGate
-from .library import IdealModel
+from .library import PerfectQubitModel, PerfectQutritModel
 
-gates = IdealModel()
-# I think this is questionable. I think the gate wrapper
-# should be reformated to be indepedent and gates should be a module
+perfect_qubits = PerfectQubitModel()
+perfect_qutrits = PerfectQutritModel()
 
-__all__ = ["Model", "WaitingGate", "gates"]
+__all__ = ["Model", "WaitingGate", "perfect_qubits", "perfect_qutrits"]

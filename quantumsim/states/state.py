@@ -81,7 +81,7 @@ class State:
         -------
         State
         """
-        pauli_vector = cls._pv_cls(pauli_vector_class).from_dm(bases, pv, force=force)
+        pauli_vector = cls._pv_cls(pauli_vector_class).from_pv(pv, bases, force=force)
         return cls(qubits, dim=pauli_vector.dim_hilbert, pauli_vector=pauli_vector)
 
     def to_dm(self):
