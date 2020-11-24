@@ -32,9 +32,13 @@ COPY requirements*.txt /root/
 # We need to install mpmath from git because in Python 3.8 `smth is 0` gives `SyntaxError`
 # Please, @fredrik-johansson, release :)
 # https://github.com/fredrik-johansson/mpmath/issues/547
-RUN /root/venv/bin/pip install --upgrade --no-cache -r /root/requirements.txt \
-                                     -r /root/requirements-docs.txt && \
-    /root/venv/bin/pip install --upgrade --no-cache -r /root/requirements-cuda.txt
+RUN /root/venv/bin/pip install --upgrade --no-cache \
+        git+https://github.com/fredrik-johansson/mpmath.git && \
+    /root/venv/bin/pip install --upgrade --no-cache \
+        -r /root/requirements.txt \
+        -r /root/requirements-docs.txt && \
+    /root/venv/bin/pip install --upgrade --no-cache \
+        -r /root/requirements-cuda.txt
 
 RUN ssh-keyscan -t rsa gitlab.com >> /etc/ssh/ssh_known_hosts && \
     ssh-keyscan -t rsa github.com >> /etc/ssh/ssh_known_hosts

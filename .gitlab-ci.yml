@@ -35,7 +35,7 @@ build docker image:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       changes:
         - .ci/Dockerfile
-        - /requirements*.txt
+        - requirements*.txt
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 build html documentation:
