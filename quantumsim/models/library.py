@@ -2,15 +2,7 @@ import numpy as np
 
 from .. import bases
 from ..operations.operation import ParametrizedOperation
-from ..operations.qubits import (
-    cnot,
-    cphase,
-    hadamard,
-    rotate_x,
-    rotate_y,
-    rotate_z,
-    swap,
-)
+from ..operations import qubits as qubit_ops
 from ..setups import Setup
 from .model import Model
 
@@ -45,7 +37,7 @@ class IdealModel(Model):
         )
         super().__init__(setup=setup)
 
-    _ptm_project = [rotate_x(0).set_bases(
+    _ptm_project = [qubit_ops.rotate_x(0).set_bases(
         (bases.general(2).subbasis([i]),), (bases.general(2).subbasis([i]),))
         for i in range(2)]
 
@@ -58,7 +50,7 @@ class IdealModel(Model):
         """Rotation around the X-axis by a given angle. Parameters: `angle` (degrees).
         """
         return (
-            ParametrizedOperation(lambda angle: rotate_x(np.deg2rad(angle)), _BASIS).at(
+            ParametrizedOperation(lambda angle: qubit_ops.rotate_x(np.deg2rad(angle)), _BASIS).at(
                 qubit
             ),
         )
@@ -70,7 +62,7 @@ class IdealModel(Model):
         """Rotation around the Y-axis by a given angle. Parameters: `angle` (degrees).
         """
         return (
-            ParametrizedOperation(lambda angle: rotate_y(np.deg2rad(angle)), _BASIS).at(
+            ParametrizedOperation(lambda angle: qubit_ops.rotate_y(np.deg2rad(angle)), _BASIS).at(
                 qubit
             ),
         )
@@ -82,7 +74,7 @@ class IdealModel(Model):
         """Rotation around the Z-axis by a given angle. Parameters: `angle` (degrees).
         """
         return (
-            ParametrizedOperation(lambda angle: rotate_z(np.deg2rad(angle)), _BASIS).at(
+            ParametrizedOperation(lambda angle: qubit_ops.rotate_z(np.deg2rad(angle)), _BASIS).at(
                 qubit
             ),
         )
@@ -110,7 +102,7 @@ class IdealModel(Model):
         """
         return (
             ParametrizedOperation(
-                lambda angle: cphase(np.deg2rad(angle)), _BASIS * 2
+                lambda angle: qubit_ops.cphase(np.deg2rad(angle)), _BASIS * 2
             ).at(control_qubit, target_qubit),
         )
 
@@ -127,7 +119,7 @@ class IdealModel(Model):
     def cnot(self, control_qubit, target_qubit):
         """Conditional NOT on the target qubit depending on the state of the control qubit. Parameters: `angle` (degrees).
         """
-        return (cnot().at(control_qubit, target_qubit),)
+        return (qubit_ops.cnot().at(control_qubit, target_qubit),)
 
     @Model.gate(
         duration="time_2qubit",
@@ -142,7 +134,7 @@ class IdealModel(Model):
     def swap(self, control_qubit, target_qubit):
         """A SWAP gate.
         """
-        return (swap().at(control_qubit, target_qubit),)
+        return (qubit_ops.swap().at(control_qubit, target_qubit),)
 
     @Model.gate(
         duration="time_measure",
