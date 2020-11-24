@@ -41,7 +41,7 @@ build docker image:
 build html documentation:
   stage: build
   script:
-  - python3 setup.py install
+  - /root/venv/bin/python setup.py install
   - cd doc && make html
   artifacts:
     paths:
@@ -51,8 +51,8 @@ build html documentation:
 build distribution packages:
   stage: build
   script:
-  - python3 setup.py check --strict
-  - python3 setup.py sdist bdist_wheel
+  - /root/venv/bin/python setup.py check --strict
+  - /root/venv/bin/python setup.py sdist bdist_wheel
   artifacts:
     paths:
     - dist
@@ -64,8 +64,8 @@ run tests:
     - job: build distribution packages
       artifacts: true
   script:
-  - pip install dist/quantumsim-*-py3-none-any.whl
-  - py.test --cov=quantumsim --cov-report=xml
+  - /root/venv/bin/pip install dist/quantumsim-*-py3-none-any.whl
+  - /root/venv/bin/pytest --cov=quantumsim --cov-report=xml
   artifacts:
     paths:
     - coverage.xml
