@@ -33,7 +33,9 @@ COPY requirements*.txt /root/
 # Please, @fredrik-johansson, release :)
 # https://github.com/fredrik-johansson/mpmath/issues/547
 RUN /root/venv/bin/pip install --upgrade --no-cache \
-        git+https://github.com/fredrik-johansson/mpmath.git && \
+        git+https://github.com/fredrik-johansson/mpmath.git \
+# Issue with tests failing with backslashes in CI
+        git+https://github.com/slavoutich/pytools.git && \
     /root/venv/bin/pip install --upgrade --no-cache \
         -r /root/requirements.txt \
         -r /root/requirements-docs.txt && \
