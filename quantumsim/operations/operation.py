@@ -306,7 +306,7 @@ class Operation(metaclass=abc.ABCMeta):
         from .compiler import compile_operation
         return compile_operation
 
-    def compile(self, bases_in=None, bases_out=None):
+    def compile(self, bases_in=None, bases_out=None, *, sv_cutoff=1e-5):
         """Returns equivalent circuit, optimized for given input and/or
         output bases.
 
@@ -333,7 +333,7 @@ class Operation(metaclass=abc.ABCMeta):
             op = self
         else:
             op = Operation.from_sequence(self)
-        return self._compile(op, bases_in, bases_out, optimize=True)
+        return self._compile(op, bases_in, bases_out, optimize=True, sv_cutoff=sv_cutoff)
 
     def at(self, *indices):
         """Returns a container with the operation, that provides also dumb

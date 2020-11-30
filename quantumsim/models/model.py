@@ -1,19 +1,52 @@
 import abc
+import numpy as np
 from collections import defaultdict
-
+from copy import copy, deepcopy
 from more_itertools import pairwise
-from numpy import nan
 
-from .. import bases
-from ..circuits import Circuit, Gate
+from ..circuits import Gate, Circuit, Box
 from ..operations import Operation, Placeholder
+from .. import bases
+
 from ..operations.operation import IndexedOperation
 
 
-class WaitPlaceholder(Placeholder):
-    def __init__(self, duration, dim):
-        super().__init__((bases.general(dim),))
-        self.duration = duration
+class WaitingGate(Gate):
+    def __init__(self, qubit, duration, dim_hilbert, time_start=0, plot_metadata=None,
+                 **metadata):
+        super().__init__(qubits=[qubit],
+                         dim_hilbert=dim_hilbert,
+                         operation=Placeholder((bases.general(dim_hilbert,),)),
+                         duration=duration,
+                         time_start=time_start,
+                         plot_metadata=plot_metadata or {
+                             "style": "box",
+                             "label": r"$\mathcal{{W}}$"
+        })
+        self.metadata = metadata
+
+    def __copy__(self):
+        other = WaitingGate(self._qubits[0], self.duration, self.dim_hilbert,
+                            self._time_start)
+        other.metadata = deepcopy(self.metadata)
+        return other
+
+    def split(self, time):
+        if time < self.time_start or time > self.time_end:
+            raise ValueError(
+                "time must be between gate's time_start and time_end")
+        return (WaitingGate(self._qubits[0],
+                            time - self.time_start,
+                            self.dim_hilbert,
+                            self.time_start,
+                            deepcopy(self.plot_metadata),
+                            **self.metadata),
+                WaitingGate(self._qubits[0],
+                            self.time_end - time,
+                            self.dim_hilbert,
+                            time,
+                            deepcopy(self.plot_metadata),
+                            **self.metadata))
 
 
 class Model(metaclass=abc.ABCMeta):
@@ -21,36 +54,21 @@ class Model(metaclass=abc.ABCMeta):
     Parameters
     ----------
     setup : quantumsim.Setup
-    seed : int
-        Seed for initializing an internal random number generator.
     """
 
-    def __init__(self, setup, dim=None):
+    def __init__(self, setup):
         self._setup = setup
-        self._dim = dim
 
     def wait(self, qubit, duration):
-        return WaitPlaceholder(duration, self.dim).at(qubit)
-
-    def idle(self, qubit, duration):
-        return Gate(
-            qubit,
-            self.dim,
-            WaitPlaceholder(duration, self.dim),
-            duration,
-            plot_metadata={"style": "marker", "label": "x"},
-        )
+        return WaitingGate(qubit, duration, self.dim)
 
     def p(self, param, *qubits):
         return self._setup.param(param, *qubits)
 
     @property
+    @abc.abstractmethod
     def dim(self):
-        return self._dim
-
-    @property
-    def setup(self):
-        return self._setup
+        pass
 
     @staticmethod
     def _normalize_operation(op, qubits):
@@ -70,8 +88,7 @@ class Model(metaclass=abc.ABCMeta):
                 raise ValueError(
                     "Can't construct an operation from a sequence: "
                     "all operations in multi-qubit gate must provide "
-                    "indices using Operation.at() method."
-                )
+                    "indices using Operation.at() method.")
             return op.at(0)
         elif isinstance(op, IndexedOperation):
             op, ix = op
@@ -79,22 +96,12 @@ class Model(metaclass=abc.ABCMeta):
             return op.at(*ix)
         else:
             raise ValueError(
-                "`op` can be only Operation or IndexedOperation, got {}".format(
-                    type(op)
-                )
-            )
+                "`op` can be only Operation or IndexedOperation, got {}"
+                .format(type(op)))
 
     @staticmethod
-    def gate(duration=nan, plot_metadata=None, param_funcs=None, repr_=None):
+    def gate(duration=0, plot_metadata=None, repr_=None):
         def gate_decorator(func):
-            def make_operation(self, *qubits):
-                sequence = func(self, *qubits)
-                sequence = (sequence if (isinstance(sequence, tuple) or isinstance(sequence, list))
-                            else (sequence,))
-                sequence = [self._normalize_operation(op, qubits)
-                            for op in sequence]
-                return Operation.from_sequence(sequence, qubits)
-
             def wrapper(self, *qubits, **params):
                 if callable(duration):
                     _duration = duration(*qubits, self._setup)
@@ -102,25 +109,21 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = self.p(duration, *qubits)
                 else:
                     _duration = duration
-                return Gate(qubits,
-                            self.dim,
-                            make_operation(self, *qubits),
-                            duration=_duration,
-                            plot_metadata=plot_metadata,
-                            param_funcs=param_funcs,
-                            repr_=repr_)(**params)
+                circuit = func(self, *qubits)
+                circuit.set(**params)
+                return Box(circuit.qubits, circuit.gates, plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper
 
         return gate_decorator
 
-    def add_waiting_gates(self, circuit, time_start=None, time_end=None):
+    def add_waiting_gates(self, circuit):
         """Insert missing waiting placeholders.
 
         Parameters
         ----------
-        circuit : quantumsim.circuits.Circuit
+        circuit : quantumsim.circuits.TimeAware
 
         Returns
         -------
@@ -130,28 +133,25 @@ class Model(metaclass=abc.ABCMeta):
         for gate in circuit.gates:
             for qubit in gate.qubits:
                 gates_dict[qubit].append(gate)
-
-        _time_start = time_start or circuit.time_start
-        _time_end = time_end or circuit.time_end
+        time_start = circuit.time_start
+        time_end = circuit.time_end
         margin = 1e-1
         waiting_gates = []
 
         for qubit, gates in gates_dict.items():
-            duration = gates[0].time_start - _time_start
+            duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_start=_time_start))
-            duration = _time_end - gates[-1].time_end
+                    self.wait(qubit, duration).shift(time_start=time_start))
+            duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_end=_time_end))
+                    self.wait(qubit, duration).shift(time_end=time_end))
             for gate1, gate2 in pairwise(gates):
-                if gate1.time_end >= _time_start and gate2.time_end <= _time_end:
-                    duration = gate2.time_start - gate1.time_end
-                    if duration > margin:
-                        waiting_gates.append(
-                            self.idle(qubit, duration).shift(time_start=gate1.time_end))
-
+                duration = gate2.time_start - gate1.time_end
+                if duration > margin:
+                    waiting_gates.append(self.wait(qubit, duration)
+                                             .shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)

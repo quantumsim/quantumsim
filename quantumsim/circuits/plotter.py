@@ -85,7 +85,7 @@ class MatplotlibPlotter:
 
         Parameters
         ----------
-        gate : quantumsim.circuits.Gate
+        gate : quantumsim.circuits.PlotUnitMixin
 
         Returns
         -------
@@ -99,7 +99,7 @@ class MatplotlibPlotter:
             # TODO: formatting with params (it is tricky)
             # params = gate.params_set()
             # .format(**params)
-            label = metadata.pop('label', r'$\mathcal{G}$')
+            label = metadata.pop('label', r'$\mathcal{{G}}$')
             params = {key: latex(val) for key, val in gate.params.items()}
             label = label.format(**params)
             return self._plot_box_with_label(
