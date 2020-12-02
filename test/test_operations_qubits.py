@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from numpy import pi
 
-from quantumsim import bases, State
+from quantumsim import bases, StateNumpy as State
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.models import perfect_qubits as lib
 

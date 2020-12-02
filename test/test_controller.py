@@ -4,7 +4,7 @@ import xarray as xr
 from pytest import approx
 from numpy import pi
 
-from quantumsim import Controller, gates, State
+from quantumsim import Controller, gates, StateNumpy as State
 
 
 @pytest.mark.xfail(reason="Controller is not yet ported to the refactored system")

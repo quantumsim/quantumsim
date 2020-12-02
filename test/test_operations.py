@@ -8,7 +8,7 @@ import numpy as np
 from pytest import approx
 
 from quantumsim.models import perfect_qubits as lib2
-from quantumsim import bases, State
+from quantumsim import bases, StateNumpy as State
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.circuits import Gate
 

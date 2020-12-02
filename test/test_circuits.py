@@ -7,7 +7,7 @@ from pytest import approx
 from quantumsim.algebra import kraus_to_ptm
 from quantumsim.algebra.tools import random_unitary_matrix, random_hermitian_matrix
 from quantumsim.circuits import Gate, allow_param_repeat
-from quantumsim import bases, State
+from quantumsim import bases, StateNumpy as State
 
 
 def ptm_cphase(angle):

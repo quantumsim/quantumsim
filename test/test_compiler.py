@@ -9,7 +9,7 @@ from numpy import pi
 from pytest import approx
 from scipy.linalg import expm
 
-from quantumsim import bases, State
+from quantumsim import bases, StateNumpy as State
 from quantumsim.algebra import kraus_to_ptm
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.circuits import optimize, Gate, Circuit

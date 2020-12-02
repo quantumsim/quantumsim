@@ -8,7 +8,7 @@ import pytest
 from numpy import pi
 from scipy.linalg import expm
 
-from quantumsim import bases, State
+from quantumsim import bases, StateNumpy as State
 from quantumsim.algebra.tools import random_hermitian_matrix
 from quantumsim.models import perfect_qutrits as lib
 
