@@ -103,7 +103,7 @@ class TestCircuitsCommon:
         dm = random_hermitian_matrix(4, 342)
         gate = Gate.from_ptm(ptm, basis*2, basis*2)
         fgate = gate.finalize()
-        state1 = State.from_dm([0, 1], dm, basis*2)
+        state1 = State.from_dm(dm, basis*2)
         fgate @ state1
         assert fgate.qubits == [0, 1]
         assert fgate.ptm(basis*2) == approx(ptm)
@@ -115,12 +115,12 @@ class TestCircuitsCommon:
 
         gate = Gate.from_ptm(ptm_inv, basis*2, basis*2, qubits=['B', 'A'])
         fgate = gate.finalize()
-        state2 = State.from_dm(['A', 'B'], dm, basis*2)
+        state2 = State.from_dm(dm, basis*2, ['A', 'B'])
         fgate @ state2
         assert fgate.qubits == ['A', 'B']
         assert fgate.ptm(basis*2) == approx(ptm)
         fgate = gate.finalize(qubits=['B', 'A'])
-        state3 = State.from_dm(['A', 'B'], dm, basis*2)
+        state3 = State.from_dm(dm, basis*2, ['A', 'B'])
         fgate @ state3
         assert fgate.qubits == ['B', 'A']
         assert fgate.ptm(basis*2) == approx(ptm_inv)
@@ -133,17 +133,17 @@ class TestCircuitsCommon:
         ptm = kraus_to_ptm(unitary, basis*3, basis*3)
         gate = Gate.from_ptm(ptm, basis*3, basis*3)
         fgate = gate.finalize()
-        state1 = State.from_dm([0, 1, 2], dm, basis*3)
+        state1 = State.from_dm(dm, basis*3)
         fgate @ state1
         assert fgate.qubits == [0, 1, 2]
         assert fgate.ptm(basis*3) == approx(ptm)
         fgate = gate.finalize(qubits=(1, 0, 2))
-        state2 = State.from_dm([0, 1, 2], dm, basis*3)
+        state2 = State.from_dm(dm, basis*3)
         fgate @ state2
         assert fgate.qubits == [1, 0, 2]
         assert fgate.ptm(basis*3) == approx(np.einsum('abcdef->bacedf', ptm))
         fgate = gate.finalize(qubits=(2, 1, 0))
-        state3 = State.from_dm([0, 1, 2], dm, basis*3)
+        state3 = State.from_dm(dm, basis*3)
         fgate @ state3
         assert fgate.qubits == [2, 1, 0]
         assert fgate.ptm(basis*3) == approx(np.einsum('abcdef->cbafed', ptm))

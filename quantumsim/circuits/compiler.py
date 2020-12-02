@@ -14,8 +14,8 @@ def optimize(circuit, bases_in=None, bases_out=None, qubits=None, *,
     Parameters
     ----------
     circuit : quantumsim.Circuit
-    bases_in : quantumsim.PauliBasis, optional
-    bases_out : quantumsim.PauliBasis, optional
+    bases_in : list of quantumsim.PauliBasis, optional
+    bases_out : list of quantumsim.PauliBasis, optional
     qubits : list of hashable, optional
         List of qubit tags, used for ordering. Defaults to the order in `circuit`.
     optimizations : bool
@@ -26,7 +26,7 @@ def optimize(circuit, bases_in=None, bases_out=None, qubits=None, *,
 
     Returns
     -------
-    quantumsim.Circuit
+    quantumsim.Circuit or quantumsim.Gate
     """
     if not isinstance(circuit, GateSetMixin):
         raise ValueError(f"`circuit` must be an instance of Circuit or Gate,"

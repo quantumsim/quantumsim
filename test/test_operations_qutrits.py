@@ -64,7 +64,7 @@ class TestLibrary:
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, 0, sqrt2, 0, 0, 0, 0, 0])
-        state = State.from_pv([0], had_expansion, basis)
+        state = State.from_pv(had_expansion, basis)
 
         lib.rotate_z(0, angle=pi) @ state
         assert np.allclose(state.to_pv(),
@@ -93,7 +93,7 @@ class TestLibrary:
         dm = random_hermitian_matrix(9, 998)
         dm_res = unitary @ dm @ unitary.conj().T
 
-        state = State.from_dm([0, 1], dm, basis*2)
+        state = State.from_dm(dm, basis*2)
         lib.cphase(0, 1, angle=angle, foo='bar') @ state
         assert np.allclose(state.to_dm(), dm_res)
 
@@ -104,7 +104,7 @@ class TestLibrary:
         identity = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 
         dm = random_hermitian_matrix(27, 3)
-        state = State.from_dm([0, 1, 2], dm, basis*3)
+        state = State.from_dm(dm, basis*3)
 
         povm00 = np.kron(np.kron(povm0, identity), identity)
         lib.measure(0, result=0, foo='bar') @ state
@@ -131,6 +131,6 @@ class TestLibrary:
 
     def test_dephase(self):
         dm = random_hermitian_matrix(3, 3)
-        state = State.from_dm([0], dm, basis)
+        state = State.from_dm(dm, basis)
         lib.dephase(0, foo='bar') @ state
         assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))

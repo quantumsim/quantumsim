@@ -129,7 +129,7 @@ class TestCompiler:
         subbases = (b.subbasis([0, 1]),)
         angle = np.pi/5
         circ0 = lib.rotate_x(0, angle=angle) + lib.rotate_x(0, angle=angle)
-        pv0 = State.from_dm([0], dm, bases_full)
+        pv0 = State.from_dm(dm, bases_full)
         circ0 @ pv0
         assert len(circ0.qubits) == 1
         assert len(circ0.gates) == 2
@@ -139,7 +139,7 @@ class TestCompiler:
         assert len(circ0_c.free_parameters) == 0
         assert circ0_c.ptm is not None
         assert len(circ0_c.qubits) == 1
-        pv1 = State.from_dm([0], dm, bases_full)
+        pv1 = State.from_dm(dm, bases_full)
         circ0_c @ pv1
         op_angle = circ0_c
         op_2angle = optimize(lib.rotate_x(0, angle=2*angle), bases_full, bases_full)
@@ -181,8 +181,8 @@ class TestCompiler:
         assert len(circ.gates) == 2
         assert isinstance(circ_c, Gate)
 
-        pv1 = State.from_dm([0, 1], dm, bases_full)
-        pv2 = State.from_dm([0, 1], dm, bases_full)
+        pv1 = State.from_dm(dm, bases_full)
+        pv2 = State.from_dm(dm, bases_full)
         circ @ pv1
         circ_c @ pv2
 
@@ -203,8 +203,8 @@ class TestCompiler:
         assert len(circ.gates) == 2
         assert isinstance(circ_c, Gate)
 
-        pv1 = State.from_dm([0, 1], dm, bases_full)
-        pv2 = State.from_dm([0, 1], dm, bases_full)
+        pv1 = State.from_dm(dm, bases_full)
+        pv2 = State.from_dm(dm, bases_full)
         circ @ pv1
         circ_c @ pv2
 
@@ -316,16 +316,16 @@ class TestCompiler:
         assert op2.bases_out[1] == bases_out[2]
 
         dm = random_hermitian_matrix(3 ** 3, seed=85)
-        state1 = State.from_dm([0, 1, 2], dm, (b01, b01, b0))
-        state2 = State.from_dm([0, 1, 2], dm, (b01, b01, b0))
+        state1 = State.from_dm(dm, (b01, b01, b0))
+        state2 = State.from_dm(dm, (b01, b01, b0))
 
         zz @ state1
         zzc @ state2
 
         # Compiled version still needs to be projected, so we can't compare
         # Pauli vectors, so we can to check only DM diagonals.
-        assert np.allclose(state1.pauli_vector.diagonal(),
-                           state2.pauli_vector.diagonal())
+        assert np.allclose(state1.diagonal(),
+                           state2.diagonal())
 
     def test_compilation_with_placeholders(self):
         b_full = bases.general(3)

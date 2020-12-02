@@ -219,7 +219,7 @@ class GateSetMixin(ABC):
 
         Parameters
         ----------
-        state : quantumsim.State
+        state : quantumsim.states.State
         """
         # To ensure that all indices are present, so that exception is raised before
         # the computation, if there is a mistake.
@@ -836,7 +836,7 @@ class Gate(GatePlaceholder):
 
         Parameters
         ----------
-        state : quantumsim.State
+        state : quantumsim.states.State
 
         Raises
         ------
@@ -861,7 +861,7 @@ class Gate(GatePlaceholder):
                                     for q in qubit_indices]))
                 break
 
-        state.pauli_vector.apply_ptm(op.ptm, *qubit_indices)
+        state.apply_ptm(op.ptm, *op.qubits)
         for q, b in zip(qubit_indices, op.bases_out):
             state.bases[q] = b
 
@@ -1064,7 +1064,7 @@ class FinalizedCircuit:
         """
         Parameters
         ----------
-        state : quantumsim.State
+        state : quantumsim.states.State
         """
         if len(self._params) != 0:
             raise KeyError(*self._params)

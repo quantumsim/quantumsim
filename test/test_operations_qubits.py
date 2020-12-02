@@ -64,7 +64,7 @@ class TestLibrary:
 
         # manually apply a Hadamard gate
         had_expansion = np.array([0.5, 0.5, sqrt2, 0])
-        state = state.from_pv([0], had_expansion, basis)
+        state = state.from_pv(had_expansion, basis)
 
         lib.rotate_z(0, angle=pi) @ state
         assert np.allclose(state.to_pv(), [0.5, 0.5, -sqrt2, 0])
@@ -100,12 +100,12 @@ class TestLibrary:
     def test_cphase(self):
         state = State([0, 1])
         lib.cphase(0, 1, angle=pi) @ state
-        assert np.allclose(state.pauli_vector.diagonal(), [1, 0, 0, 0])
+        assert np.allclose(state.diagonal(), [1, 0, 0, 0])
 
-        state = State.from_dm([0, 1], np.array([[0, 0, 0, 0],
-                                                [0, 0, 0, 0],
-                                                [0, 0, 0.5, 0.5],
-                                                [0, 0, 0.5, 0.5]]),
+        state = State.from_dm(np.array([[0, 0, 0, 0],
+                                        [0, 0, 0, 0],
+                                        [0, 0, 0.5, 0.5],
+                                        [0, 0, 0.5, 0.5]]),
                               basis2)
         lib.cphase(0, 1, angle=0.5*pi) @ state
         assert np.allclose(state.to_dm(), [[0, 0, 0, 0],
@@ -114,7 +114,7 @@ class TestLibrary:
                                            [0, 0, 0.5j, 0.5]])
 
     def test_cnot(self):
-        state = State.from_dm([0, 1, 2], np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0]),
+        state = State.from_dm(np.diag([0.25, 0, 0.75, 0, 0, 0, 0, 0]),
                               basis*3)
         assert np.allclose(state.meas_prob(0), (1, 0))
         assert np.allclose(state.meas_prob(1), (0.25, 0.75))
@@ -136,7 +136,7 @@ class TestLibrary:
                             [0, 0, 0, 1]])
         dm_res = unitary @ dm @ unitary.conj().T
 
-        state = State.from_dm([0, 1], dm, basis2)
+        state = State.from_dm(dm, basis2)
         lib.swap(0, 1, foo='bar') @ state
         assert np.allclose(state.to_dm(), dm_res)
 
@@ -146,7 +146,7 @@ class TestLibrary:
         identity = np.array([[1, 0], [0, 1]])
 
         dm = random_hermitian_matrix(4, 3)
-        state = State.from_dm([0, 1], dm, basis2)
+        state = State.from_dm(dm, basis2)
 
         povm00 = np.kron(povm0, identity)
         lib.measure(0, result=0, foo='bar') @ state
@@ -168,6 +168,6 @@ class TestLibrary:
 
     def test_dephase(self):
         dm = random_hermitian_matrix(2, 777)
-        state = State.from_dm([0], dm, basis)
+        state = State.from_dm(dm, basis)
         lib.dephase(0, foo='bar') @ state
         assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))

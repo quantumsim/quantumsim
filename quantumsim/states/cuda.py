@@ -2,6 +2,7 @@
 # (c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov
 # Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt
 import sys
+from copy import copy
 from itertools import chain
 
 import numpy as np
@@ -19,7 +20,7 @@ import pycuda.reduction
 # noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
-from .pauli_vector import PauliVectorBase, prod
+from .state import State, prod
 
 package_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -57,10 +58,16 @@ sum_along_axis = pycuda.reduction.ReductionKernel(
 )
 
 
-class PauliVectorCuda(PauliVectorBase):
+class StateCuda(State):
+    """An implementation of the :class:`quantumsim.states.State` for NVidia GPUs using
+    CUDA toolkit.
+
+    This implementation is optimized for large density matrices and is recommended for
+    systems with more than six entangled qubits.
+    """
     _gpuarray_cache = {}
 
-    def __init__(self, bases, pv=None, *, force=False):
+    def __init__(self, qubits, pv=None, bases=None, *, dim=2, force=False):
         """Create a new density matrix for several qudits.
 
         Parameters
@@ -73,7 +80,7 @@ class PauliVectorCuda(PauliVectorBase):
             is relevant.  If data is `None`, create a new density matrix with
             all qubits in ground state.
         """
-        super().__init__(bases, pv, force=force)
+        super().__init__(qubits, pv, bases, dim=dim, force=force)
         if pv is not None:
             if self.dim_pauli != pv.shape:
                 raise ValueError(
@@ -82,10 +89,7 @@ class PauliVectorCuda(PauliVectorBase):
                     ' - bases shapes: {}\n - data shape: {}'
                     .format(self.dim_pauli, pv.shape))
         else:
-            pv = np.zeros(self.dim_pauli, np.float64)
-            ground_state_index = [pb.computational_basis_indices[0]
-                                  for pb in self.bases]
-            pv[tuple(ground_state_index)] = 1
+            pv = np.array(1., dtype=np.float64).reshape(self.dim_pauli)
 
         if isinstance(pv, np.ndarray):
             if pv.dtype not in (np.float16, np.float32, np.float64):
@@ -106,14 +110,11 @@ class PauliVectorCuda(PauliVectorBase):
         elif isinstance(pv, ga.GPUArray):
             if pv.dtype != np.float64:
                 raise ValueError(
-                    '`pv` must have float64 data type, got {}'
-                    .format(pv.dtype)
-                )
+                    '`pv` must have float64 data type, got {}'.format(pv.dtype))
             self._data = pv
         else:
-            raise ValueError(
-                "`pv` must be Numpy array, PyCUDA GPU array or "
-                "None, got type `{}`".format(type(pv)))
+            raise ValueError(f"`pv` must be Numpy array, PyCUDA GPU array or None, "
+                             f"got `{type(pv)}`")
 
         self._data.gpudata.size = self._data.nbytes
         self._work_data = ga.empty_like(self._data)
@@ -123,10 +124,12 @@ class PauliVectorCuda(PauliVectorBase):
         return self._data.get()
 
     def apply_ptm(self, ptm, *qubits):
-        if len(qubits) == 1:
-            self._apply_single_qubit_ptm(qubits[0], ptm)
-        elif len(qubits) == 2:
-            self._apply_two_qubit_ptm(qubits[0], qubits[1], ptm)
+        super().apply_ptm(ptm, *qubits)
+        qubit_indices = [self.qubits.index(q) for q in qubits]
+        if len(qubit_indices) == 1:
+            self._apply_single_qubit_ptm(qubit_indices[0], ptm)
+        elif len(qubit_indices) == 2:
+            self._apply_two_qubit_ptm(qubit_indices[0], qubit_indices[1], ptm)
         else:
             raise NotImplementedError('Applying {}-qubit PTM is not '
                                       'implemented in the active backend.')
@@ -166,8 +169,6 @@ class PauliVectorCuda(PauliVectorBase):
         qubit0: int
             Index of second qubit
         """
-        self._validate_qubit(qubit1, 'qubit0')
-        self._validate_qubit(qubit0, 'qubit1')
         if len(ptm.shape) != 4:
             raise ValueError(
                 "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
@@ -202,9 +203,9 @@ class PauliVectorCuda(PauliVectorBase):
 
         # dim_a_out, dim_b_out, d_internal (arbitrary)
         block = (dim0_out, dim1_out, dint)
-        blocksize = dim1_out * dim0_out * dint
+        block_size = dim1_out * dim0_out * dint
         sh_mem_size = dint * dim1_in * dim0_in  # + ptm.size
-        grid_size = max(1, (new_size - 1) // blocksize + 1)
+        grid_size = max(1, (new_size - 1) // block_size + 1)
         grid = (grid_size, 1, 1)
 
         dim_z = prod(self._data.shape[qubit1 + 1:])
@@ -240,7 +241,6 @@ class PauliVectorCuda(PauliVectorBase):
             after the PTM application.
         """
         new_shape = list(self._data.shape)
-        self._validate_qubit(qubit, 'bit')
 
         # TODO Refactor to use self._validate_ptm
         if len(ptm.shape) != 2:
@@ -249,7 +249,6 @@ class PauliVectorCuda(PauliVectorBase):
 
         dim_bit_out, dim_bit_in = ptm.shape
         new_shape[qubit] = dim_bit_out
-        assert new_shape[qubit] == dim_bit_out
         new_size = prod(new_shape)
 
         self._work_data = self._ensure_gpu_array_shape(self._work_data, new_shape)
@@ -258,9 +257,9 @@ class PauliVectorCuda(PauliVectorBase):
 
         dint = min(64, self._data.size // dim_bit_in)
         block = (1, dim_bit_out, dint)
-        blocksize = dim_bit_out * dint
+        block_size = dim_bit_out * dint
         sh_mem_size = dint * dim_bit_in
-        grid_size = max(1, (new_size - 1) // blocksize + 1)
+        grid_size = max(1, (new_size - 1) // block_size + 1)
         grid = (grid_size, 1, 1)
 
         dim_z = prod(self._data.shape[qubit + 1:])
@@ -286,11 +285,11 @@ class PauliVectorCuda(PauliVectorBase):
 
         Parameters
         ----------
-        target_array : None or pycuda.gpuarray.array
-            An already-allocated GPU array to which the data will be copied.
-            If `None`, make a new GPU array.
         get_data : boolean
             Whether the data should be copied from the GPU.
+        target_array : pycuda.gpuarray.array, optional
+            An already-allocated GPU array to which the data will be copied.
+            If `None`, make a new GPU array.
         flatten : boolean
             TODO docstring
         """
@@ -358,21 +357,15 @@ class PauliVectorCuda(PauliVectorBase):
                                   "in Numpy backend.")
 
     def meas_prob(self, qubit):
-        """ Return the diagonal of the reduced density matrix of a qubit.
-
-        Parameters
-        ----------
-        qubit: int
-            Index of the qubit.
-        """
-        self._validate_qubit(qubit, 'qubit')
+        super().meas_prob(qubit)
+        qubit_index = self.qubits.index(qubit)
 
         # TODO on graphics card, optimize for tracing out?
         diag = self.diagonal(get_data=False)
 
         res = []
-        stride = diag.strides[qubit] // 8
-        dim = diag.shape[qubit]
+        stride = diag.strides[qubit_index] // 8
+        dim = diag.shape[qubit_index]
         for offset in range(dim):
             pt = sum_along_axis(diag, stride, dim, offset)
             res.append(pt)
@@ -385,14 +378,14 @@ class PauliVectorCuda(PauliVectorBase):
             # from the basis
             it = iter(out)
             return [next(it) if qbi is not None else 0.
-                    for qbi in self.bases[qubit]
-                    .computational_basis_indices.values()]
+                    for qbi in self.bases[qubit_index]
+                                   .computational_basis_indices.values()]
 
     def renormalize(self):
         """Renormalize to trace one."""
         tr = self.trace()
         if tr > 1e-8:
-            self._data *= np.float(1 / tr)
+            self._data *= np.float(1. / tr)
         else:
             warnings.warn(
                 "Density matrix trace is 0; likely your further computation "
@@ -400,8 +393,9 @@ class PauliVectorCuda(PauliVectorBase):
         return tr
 
     def copy(self):
-        """Return a deep copy of this Density."""
-        return self.__class__(self.bases, pv=self._data.copy())
+        """Return a deep copy of this state."""
+        return self.__class__(copy(self.qubits), self._data.copy(), copy(self.bases),
+                              force=True)
 
     def _cached_gpuarray(self, array):
         """
@@ -423,8 +417,3 @@ class PauliVectorCuda(PauliVectorBase):
         # for testing: read_back_and_check!
 
         return array_gpu
-
-    def _check_cache(self):
-        for k, v in self._gpuarray_cache.items():
-            a = v.get().tobytes()
-            assert hash(a) == k

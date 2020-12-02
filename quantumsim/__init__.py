@@ -1,23 +1,29 @@
-# noinspection PyUnresolvedReferences,PyProtectedMember
+# noinspection PyProtectedMember
 from ._version import __version__
-from . import pauli_vectors, bases
+from .bases import PauliBasis
+from .circuits import Gate, Box, Circuit, FinalizedCircuit
 from .setups import Setup
-from .states import State
+from .states import State, StateNumpy
 from .models import Model, perfect_qubits as gates
 from .controllers import Controller
 
-PauliVector = pauli_vectors.Default
-
 __all__ = [
-    'bases',
-    'pauli_vectors',
+    'PauliBasis',
     'Model',
-    'PauliVector',
     'Setup',
     'State',
+    'StateNumpy',
     'Controller',
     'gates',
 ]
+
+try:
+    # noinspection PyUnresolvedReferences
+    from .states import StateCuda
+    __all__ += 'StateCuda'
+    State = StateCuda
+except ImportError:
+    State = StateNumpy
 
 
 def test(verbose=True):

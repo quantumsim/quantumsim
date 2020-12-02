@@ -1,51 +1,87 @@
-from itertools import product
-
+import abc
 import numpy as np
-import xarray as xr
+from functools import reduce
 
-from quantumsim.algebra import sigma
-from .. import bases
-from ..pauli_vectors import PauliVectorBase
-import numpy as np
+from quantumsim.algebra import pv_to_dm, sigma, dm_to_pv
+from quantumsim.bases import general
 
 
-class State:
-    """
+def prod(iterable):
+    # From Python 3.8 this function can be replaced to math.prod
+    from operator import mul
+    return reduce(mul, iterable, 1)
+
+
+class State(metaclass=abc.ABCMeta):
+    """A metaclass, that defines standard interface for Quantumsim density
+    matrix backend.
+
+    Every instance, that implements the interface of this class, should call
+    `super().__init__` in the beginning of its execution, because a lot of
+    sanity checks are done here.
+
     Parameters
     ----------
-    qubits : list of hashable
-        Tags of qubits in state
-    dim : int
-        Hilbert dimensionality of a single-qubit subspace
-    pauli_vector_class : class or None
-        A class to store the system state. Must be a derivative of
-        :class:`quantumsim.pauli_vectors.pauli_vector.PauliVectorBase`.
+    qubits: list of hashable or int
+        Tags of the qubits in the state. If integer is provided,
+        list of qubits is initialized as `list(range(qubits))`.
+    pv: array-like, optional
+        Pauli vector, that represents the density matrix in the selected
+        bases. If `None`, density matrix is initialized in
+        :math:`\\left| 0 \\cdots 0 \\right\\rangle` state.
+    bases: list of quantumsim.bases.PauliBasis, optional
+        A description of the basis for the qubits. Required if `pv` is provided,
+        otherwise must be left empty. If not provided, defaults to the subbasis of all
+        qubits in :math:`\\left| 0 \\cdots 0 \\right\\rangle` state.
+    dim: int, optional
+        Hilbert dimensionality of qubits in the state. If `bases` are provided, has no
+        effect.
+    force: bool
+        By default creation of too large density matrix (more than
+        :math:`2^22` elements currently) is not allowed. Set this to `True`
+        if you know what you are doing.
     """
+    _size_max = 2**22
 
-    def __init__(self, qubits, *, dim=2, pauli_vector_class=None, pauli_vector=None):
-        self.qubits = list(qubits)
-        if pauli_vector is not None:
-            self.pauli_vector = pauli_vector
+    @abc.abstractmethod
+    def __init__(self, qubits, pv=None, bases=None, *, dim=2, force=False):
+        if isinstance(qubits, int):
+            self.qubits = list(range(qubits))
         else:
-            bases_ = (bases.general(dim).subbasis([0]),) * len(self.qubits)
-            self.pauli_vector = self._pv_cls(pauli_vector_class)(bases_)
+            self.qubits = list(qubits)
+        if (pv is None) ^ (bases is None):
+            raise ValueError('Both `pv` and `bases` must be provided simultaneously.')
+        if bases is not None:
+            self.bases = list(bases)
+            self.dim_hilbert = self.bases[0].dim_hilbert
+            if not all(basis.dim_hilbert == self.dim_hilbert for basis in self.bases):
+                raise ValueError('All basis elements must have the same Hilbert '
+                                 'dimensionality')
+        else:
+            self.dim_hilbert = dim
+            self.bases = [general(self.dim_hilbert).subbasis([0])] * len(self.qubits)
+        if self.size > self._size_max and not force:
+            raise ValueError(
+                'Density matrix of the system is going to have {} items. It '
+                'is probably too much. If you know what you are doing, '
+                'pass `force=True` argument to the constructor.')
+        # Pauli vector storage must be initialized in the derived class
 
     @classmethod
-    def from_dm(cls, qubits, dm, bases, *, pauli_vector_class=None, force=False):
-        """
-        Constructs a new State from an existing Pauli vector array and bases.
+    def from_pv(cls, pv, bases, qubits=None, *, force=False):
+        """Construct a new State instance from existing data in a form of expansion of 
+        the density matrix in a basis of (generalized) Pauli matrices.
 
         Parameters
         ----------
-        qubits: list of hashable
-            Tags of the qubits.
-        dm: array
-            Density matrix of the state.
-        bases: list of quantumsim.bases.PauliBasis
-            Bases to store the state.
-        pauli_vector_class: class, optional
-            Class used for storage of Pauli vector
-        force : bool
+        pv: array-like
+            Pauli vector in a form of a numpy array
+        bases: list of quantumsim.PauliBasis
+            Basis for the `pv`.
+        qubits: list of hashable, optional
+            Tags of the qubits in the state. If not provided, defaults to 
+            `list(range(len(bases)))`
+        force: bool, optional
             By default creation of too large density matrix (more than
             :math:`2^22` elements currently) is not allowed. Set this to `True`
             if you know what you are doing.
@@ -54,25 +90,35 @@ class State:
         -------
         State
         """
-        pauli_vector = cls._pv_cls(pauli_vector_class).from_dm(dm, bases, force=force)
-        return cls(qubits, dim=pauli_vector.dim_hilbert, pauli_vector=pauli_vector)
+        bases = list(bases)
+        if not qubits:
+            qubits = len(bases)
+        return cls(qubits, pv, bases, force=force)
+
+    @abc.abstractmethod
+    def to_pv(self):
+        """Get data in a form of Numpy array
+
+        Returns
+        -------
+        array
+        """
+        pass
 
     @classmethod
-    def from_pv(cls, qubits, pv, bases, *, pauli_vector_class=None, force=False):
-        """
-        Constructs a new State from an existing Pauli vector array and bases.
+    def from_dm(cls, dm, bases=None, qubits=None, *, force=False):
+        """Construct a new State instance from a density matrix.
 
         Parameters
         ----------
-        qubits: list of hashable
-            Tags of the qubits
-        pv: array
-            Pauli vector
-        bases: list of quantumsim.bases.PauliBasis
-            Bases of the `pv`
-        pauli_vector_class: class, optional
-            Class used for storage of Pauli vector
-        force : bool
+        dm: array-like
+            Density matrix
+        bases: quantumsim.PauliBasis or list of quantumsim.PauliBasis
+            Basis for storing the state.
+        qubits: list of hashable, optional
+            Tags of the qubits in the state. If not provided, defaults to the range
+            from 0 to number of qubits minus 1.
+        force: bool, optional
             By default creation of too large density matrix (more than
             :math:`2^22` elements currently) is not allowed. Set this to `True`
             if you know what you are doing.
@@ -81,66 +127,133 @@ class State:
         -------
         State
         """
-        pauli_vector = cls._pv_cls(pauli_vector_class).from_pv(pv, bases, force=force)
-        return cls(qubits, dim=pauli_vector.dim_hilbert, pauli_vector=pauli_vector)
+        if not hasattr(bases, '__iter__'):
+            n_qubits = len(dm) // bases.dim_hilbert
+            bases = [bases] * n_qubits
+        if not qubits:
+            qubits = len(bases)
+        return cls(qubits, dm_to_pv(dm, bases), bases, force=force)
 
     def to_dm(self):
         """
-        Returns a density matrix, that corresponds to this state.
+        Return data in a form of density matrix.
 
         Returns
         -------
         array
         """
-        return self.pauli_vector.to_dm()
-
-    def to_pv(self):
-        """
-        Returns a Pauli vector, that corresponds to this state, in the internal basis of
-        the state (can be obtained via `State.bases_in` and `State.bases_out`
-        properties).
-
-        Returns
-        -------
-        array
-        """
-        return self.pauli_vector.to_pv()
+        return pv_to_dm(self.to_pv(), self.bases)
 
     @property
-    def bases(self):
-        return self.pauli_vector.bases
+    def dim_pauli(self):
+        """(tuple of int) Number of basis elements for each of the qubit."""
+        return tuple(pb.dim_pauli for pb in self.bases)
 
-    @staticmethod
-    def _pv_cls(pauli_vector_class):
-        """
+    @property
+    def size(self):
+        """(int) Size (number of floating point numbers in it) of the data array."""
+        return prod(self.dim_pauli)
+
+    @abc.abstractmethod
+    def apply_ptm(self, ptm, *qubits):
+        """Applies a Pauli transfer matrix (PTM) to this state.
 
         Parameters
         ----------
-        pauli_vector_class: class or None
+        ptm: array
+            A PTM, expanded in the current basis of the state
+        q1, ..., qN: hashable
+            Qubits to apply PTM to
+        """
+        self._validate_qubits(qubits)
+        if len(ptm.shape) != 2 * len(qubits):
+            raise ValueError(f'{len(qubits)}-qubit PTM must have {2*len(qubits)} '
+                             f'dimensions, got {len(ptm.shape)}')
+
+    @abc.abstractmethod
+    def diagonal(self):
+        """Compute the diagonal elements of the density matrix.
 
         Returns
         -------
-        class
-            A resolved subclass of PauliVectorBase
+        array
         """
-        if pauli_vector_class is None:
-            from ..pauli_vectors import Default
-            return Default
-        else:
-            if not issubclass(pauli_vector_class, PauliVectorBase):
-                raise ValueError(
-                    "pauli_vector_class must be a subclass of "
-                    "quantumsim.pauli_vectors.PauliVectorBase")
-            return pauli_vector_class
+        pass
+
+    @abc.abstractmethod
+    def trace(self):
+        """Compute the trace of the density matrix.
+
+        Returns
+        -------
+        float
+        """
+        pass
+
+    @abc.abstractmethod
+    def partial_trace(self, *qubits):
+        """Trace out all of the qubits in the state, except mentioned in arguments.
+
+        Parameters
+        ----------
+        q1, ..., qN: hashable
+            Qubits to leave in the resulting state.
+
+        Returns
+        -------
+        State
+        """
+        self._validate_qubits(qubits)
+
+    @abc.abstractmethod
+    def meas_prob(self, qubit):
+        """Computes measurement probabilities of each of the possible measurement
+        outcomes for a qubit.
+
+        Measurement probabilities of 0, 1,... are returned in a formed of an array .
+        If the state is not normalized (trace :math:`< 1`), resulting array is also not
+        normalized. If normalized, can be supplied as `p` argument to
+        :func:`numpy.random.choice` to get a random measurement result.
+
+        Parameters
+        ----------
+        qubit: hashable
+            Qubit tag
+
+        Returns
+        -------
+        array of float
+        """
+        self._validate_qubits([qubit])
+
+    @abc.abstractmethod
+    def renormalize(self):
+        """Rescale the state to the trace :math:`= 1`.
+
+        Returns
+        -------
+        tr: int
+            Trace of the density matrix before rescaling.
+        """
+        pass
+
+    @abc.abstractmethod
+    def copy(self):
+        """Return copy of this state.
+
+        Returns
+        -------
+        State
+        """
+        pass
 
     def __copy__(self):
         return self.copy()
 
-    def copy(self):
-        return State(self.qubits, pauli_vector=self.pauli_vector.copy())
-
     def exp_value(self, operator, sigma_dict=None):
-        """
+        r"""
+        Return an expectation value of an operator :math:`\hat{\mathcal{O}}`
+        (:math:`\text{tr} \hat{\rho} \hat{\mathcal{O}}`).
 
         Parameters
         ----------
@@ -151,9 +264,9 @@ class State:
             correspondent Pauli. Must have the same length, as the number of
             qubits in the state.
         sigma_dict: dict or None
-            A dictionary of Pauli matrices or other operators, that are containded in
+            A dictionary of Pauli matrices or other operators, that are contained in
             `operator` and denoted by a single symbol.
-            Default is `quantumsim.algebra.sigma`.
+            Default is `quantumsim.   algebra.sigma`.
 
         Returns
         -------
@@ -162,7 +275,7 @@ class State:
         """
         einsum_args = []
         sigma_dict = sigma_dict or sigma
-        n = self.pauli_vector.n_qubits
+        n = self.n_qubits
         if isinstance(operator, str):
             if n != len(operator):
                 raise ValueError("Operator string must have the same length as "
@@ -177,89 +290,27 @@ class State:
         else:
             einsum_args.append(operator)
             einsum_args.append(list(range(2*n)))
-        einsum_args.append(self.pauli_vector.to_pv())
+        einsum_args.append(self.to_pv())
         einsum_args.append([2*n+i for i in range(n)])
-        for i, basis in enumerate(self.pauli_vector.bases):
+        for i, basis in enumerate(self.bases):
             einsum_args.append(basis.vectors)
             einsum_args.append([2*n+i, n+i, i])
-        return np.einsum(*einsum_args, optimize=True)
+        return np.einsum(*einsum_args, optimize='greedy')
 
-    def trace(self):
-        return self.pauli_vector.trace()
+    def _validate_qubits(self, qubits):
+        qubits_set = set(qubits)
+        if len(qubits_set) < len(qubits):
+            raise ValueError("Qubit tags can't repeat")
+        absent_qubits = qubits_set - set(self.qubits)
+        if len(absent_qubits) > 0:
+            raise ValueError(f"Qubits {', '.join(absent_qubits)} are not present in "
+                             f"the state")
 
-    def renormalize(self):
-        self.pauli_vector.renormalize()
-
-    @property
-    def diagonal(self):
-        diag = self.pauli_vector.diagonal()
-
-        bases_labels = (basis.superbasis.computational_subbasis().labels
-                        for basis in self.pauli_vector.bases)
-
-        def tuple_to_string(tup):
-            state = "".join(str(x) for x in tup)
-            return state
-
-        state_labels = [tuple_to_string(label)
-                        for label in product(*bases_labels)]
-
-        outcome = xr.DataArray(
-            data=diag,
-            dims=["state_label"],
-            coords={"state_label": state_labels})
-        outcome.name = "state_diags"
-        return outcome
-
-    @property
-    def density_matrix(self):
-        density_mat = self.pauli_vector.to_dm()
-
-        bases_labels = (basis.superbasis.computational_subbasis().labels
-                        for basis in self.pauli_vector.bases)
-
-        def tuple_to_string(tup):
-            state = "".join(str(x) for x in tup)
-            return state
-
-        state_labels = [tuple_to_string(label)
-                        for label in product(*bases_labels)]
-
-        outcome = xr.DataArray(
-            data=density_mat,
-            dims=["row_state_label", "col_state_label"],
-            coords={"row_state_label": state_labels,
-                    "col_state_label": state_labels})
-        outcome.name = "state_density_mat"
-        return outcome
-
-    def partial_trace(self, *qubits):
-        """Traces out all qubits, except provided, and returns the resulting
-        state.
-
-        Parameters
-        ----------
-        q0, q1, ... : str
-            Names of qubits to preserve in the state.
-        """
-        return State(qubits, pauli_vector=self.pauli_vector.partial_trace(
-            *[self.qubits.index(q) for q in qubits]))
-
-    def meas_prob(self, qubit):
-        """
-        Returns an array of probabilities to measure each state of a `qubit`.
-        May not be normalized to 1.
-
-        Parameters
-        ----------
-        qubit: hashable
-            Tag of a qubit
-
-        Returns
-        -------
-        array
-        """
-        try:
-            return self.pauli_vector.meas_prob(self.qubits.index(qubit))
-        except ValueError as ex:
-            raise ValueError(f'Qubit {qubit} is not in the state') from ex
+    # noinspection PyMethodMayBeStatic
+    def _validate_ptm_shape(self, ptm, target_shape, name):
+        if ptm.shape != target_shape:
+            raise ValueError(
+                "`{name}` shape must be {target_shape}, got {real_shape}"
+                .format(name=name,
+                        target_shape=target_shape,
+                        real_shape=ptm.shape))

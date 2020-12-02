@@ -112,8 +112,8 @@ class TestOperations:
         op = Gate.from_lindblad_form(t1+t2, b1, hamiltonian=ham,
                                      lindblad_ops=lindblad_ops)
         dm = random_hermitian_matrix(2, seed=3)
-        state1 = State.from_dm([0, 1], dm, b1)
-        state2 = State.from_dm([0, 1], dm, b1)
+        state1 = State.from_dm(dm, b1)
+        state2 = State.from_dm(dm, b1)
 
         op1 @ state1
         op2 @ state1
@@ -126,7 +126,7 @@ class TestOperations:
         op_plus = Gate.from_lindblad_form(20, b, hamiltonian=ham)
         op_minus = Gate.from_lindblad_form(20, b, hamiltonian=-ham)
         dm = random_hermitian_matrix(2, seed=5)
-        state = State.from_dm([0], dm, b)
+        state = State.from_dm(dm, b)
         op_plus @ state
         op_minus @ state
         assert np.allclose(state.to_dm(), dm)
@@ -142,12 +142,12 @@ class TestOperations:
         op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1)
         op2 = Gate.from_lindblad_form(25, b, hamiltonian=ham2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham)
-        state1 = State.from_dm([0, 1], dm, b*2)
-        state2 = State.from_dm([0, 1], dm, b*2)
+        state1 = State.from_dm(dm, b*2)
+        state2 = State.from_dm(dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+        assert np.allclose(state1.to_pv(), state2.to_pv())
 
         ops1 = np.array([
             [[0, 0.1],
@@ -166,12 +166,12 @@ class TestOperations:
         op1 = Gate.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Gate.from_lindblad_form(25, b, lindblad_ops=ops2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, lindblad_ops=ops)
-        state1 = State.from_dm([0, 1], dm, b*2)
-        state2 = State.from_dm([0, 1], dm, b*2)
+        state1 = State.from_dm(dm, b*2)
+        state2 = State.from_dm(dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+        assert np.allclose(state1.to_pv(), state2.to_pv())
 
         op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1,
                                       lindblad_ops=ops1)
@@ -179,12 +179,12 @@ class TestOperations:
                                       lindblad_ops=ops2, qubits=1)
         op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham,
                                      lindblad_ops=ops)
-        state1 = State.from_dm([0, 1], dm, b*2)
-        state2 = State.from_dm([0, 1], dm, b*2)
+        state1 = State.from_dm(dm, b*2)
+        state2 = State.from_dm(dm, b*2)
         op1 @ state1
         op2 @ state1
         op @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+        assert np.allclose(state1.to_pv(), state2.to_pv())
 
     def test_ptm(self):
         # Some random gate sequence
@@ -200,9 +200,9 @@ class TestOperations:
 
         op_3q = Gate.from_ptm(ptm, b)
         dm = random_hermitian_matrix(8, seed=93)
-        state1 = State.from_dm([0, 1, 2], dm, b)
-        state2 = State.from_dm([0, 1, 2], dm, b)
+        state1 = State.from_dm(dm, b)
+        state2 = State.from_dm(dm, b)
 
         circuit @ state1
         op_3q @ state2
-        assert np.allclose(state1.pauli_vector.to_pv(), state2.pauli_vector.to_pv())
+        assert np.allclose(state1.to_pv(), state2.to_pv())
