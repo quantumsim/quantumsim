@@ -275,7 +275,7 @@ class State(metaclass=abc.ABCMeta):
         """
         einsum_args = []
         sigma_dict = sigma_dict or sigma
-        n = self.n_qubits
+        n = len(self.qubits)
         if isinstance(operator, str):
             if n != len(operator):
                 raise ValueError("Operator string must have the same length as "
@@ -309,8 +309,4 @@ class State(metaclass=abc.ABCMeta):
     # noinspection PyMethodMayBeStatic
     def _validate_ptm_shape(self, ptm, target_shape, name):
         if ptm.shape != target_shape:
-            raise ValueError(
-                "`{name}` shape must be {target_shape}, got {real_shape}"
-                .format(name=name,
-                        target_shape=target_shape,
-                        real_shape=ptm.shape))
+            raise ValueError(f"`{name}` shape must be {target_shape}, got {ptm.shape}")

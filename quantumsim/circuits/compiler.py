@@ -194,7 +194,6 @@ def try_merge_prev(graph, node):
 
     for qubit, node_next in node.next.items():
         other.next[qubit] = node_next
-        assert other.bases_out_dict[qubit] == node.bases_in_dict[qubit]
         other.bases_out_dict[qubit] = node.bases_out_dict[qubit]
         if node_next is None:
             graph.ends[qubit] = other
@@ -245,13 +244,15 @@ class Node:
         order = np.argsort(self.qubit_indices)
         self.qubit_indices = [self.qubit_indices[i] for i in order]
         qubits = [self.op.qubits[i] for i in order]
-        # FIXME: just assign new PTM, when it is stored in the gate itself
-        # FIXME: introduce Gate.reorder() function?
+        self.op._qubits = qubits
+        self.op.ptm = new_ptm
+        self.op.bases_in = self.bases_in_tuple
+        self.op.bases_out = self.bases_out_tuple
         self.op = Gate.from_ptm(new_ptm, self.bases_in_tuple, self.bases_out_tuple,
                                 qubits=qubits, duration=self.op.duration,
                                 time_start=self.op.time_start,
                                 plot_metadata=self.op.plot_metadata,
-                                repr_=self.op._repr)
+                                repr_=self.op.repr)
 
 
 class CompilerQueue:
@@ -273,6 +274,9 @@ class CompilerQueue:
 
 
 class CircuitGraph:
+    starts: list[Node]
+    ends: list[Node]
+
     # noinspection PyTypeChecker
     def __init__(self, circuit, qubits, bases_in=None, bases_out=None):
         self.qubits = qubits
@@ -317,24 +321,24 @@ class CircuitGraph:
 
 
 def optimal_bases(node, *, sv_cutoff=1e-5):
-    """Based on input or output bases provided, determine an optimal
-    basis, throwing away all basis elements, that are guaranteed not to
-    contribute to the result of PTM application.
+    """Based on input or output bases provided, determine an optimal basis, throwing
+    away all basis elements, that are guaranteed not to contribute to the result of PTM
+    application.
 
-    Circuits provide some restrictions on input and output basis. For
-    example, after the ideal initialization gate system is guaranteed to
-    stay in :math:`|0\rangle` state, which means that input basis will
-    consist of a single element. Similarly, if after the gate application
-    qubit will be measured, only :math:`|0\rangle` and :math:`|1\rangle`
-    states need to be computed, therefore we may reduce output basis to
-    the classical subbasis. This method is used to perform such sort of
-    optimization: usage of subbasis instead of a full basis in a density
-    matrix will exponentially reduce memory consumption and computational
-    time.
+    Circuits provide some restrictions on input and output basis. For example, after the
+    ideal initialization gate system is guaranteed to stay in :math:`|0\rangle` state,
+    which means that input basis will consist of a single element. Similarly, if after
+    the gate application qubit will be measured, only :math:`|0\rangle` and
+    :math:`|1\rangle` states need to be computed, therefore we may reduce output basis
+    to the classical subbasis. This method is used to perform such sort of optimization:
+    usage of subbasis instead of a full basis in a density matrix will exponentially
+    reduce memory consumption and computational time.
 
     Parameters
     ----------
     node : Node
+    sv_cutoff : float
+        Singular values smaller than cutoff are discarded and treated as zeros.
 
     Returns
     -------

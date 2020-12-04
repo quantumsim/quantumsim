@@ -67,6 +67,7 @@ def gell_mann(dim_hilbert):
     .. [2] https://en.wikipedia.org/wiki/Gell-Mann_matrices
     """
 
+    # noinspection PyShadowingNames
     def diagonal(index, zeros):
         if index == 0:
             diag = np.ones(dim_hilbert) / np.sqrt(dim_hilbert)
@@ -79,6 +80,7 @@ def gell_mann(dim_hilbert):
         for i, d in enumerate(diag):
             zeros[i, i] = d
 
+    # noinspection PyShadowingNames
     def off_diagonal(i, j, zeros):
         if i < j:
             zeros[i, j] = _sqrt2i
@@ -103,20 +105,3 @@ def gell_mann(dim_hilbert):
                 off_diagonal(i, j, vectors[num])
 
     return PauliBasis(vectors, labels)
-
-
-twolevel_0xy1 = PauliBasis(
-    vectors=np.array([[[1, 0], [0, 0]],
-                      _sqrt2i * np.array([[0, 1], [1, 0]]),
-                      _sqrt2i * np.array([[0, -1j], [1j, 0]]),
-                      [[0, 0], [0, 1]]]),
-    labels=np.array(("0", "X", "Y", "1"), dtype=object)
-)
-
-twolevel_ixyz = PauliBasis(
-    vectors=_sqrt2i * np.array([[[1, 0], [0, 1]],
-                                [[0, 1], [1, 0]],
-                                [[0, -1j], [1j, 0]],
-                                [[1, 0], [0, -1]]]),
-    labels=np.array(("I", "X", "Y", "Z"), dtype=object)
-)

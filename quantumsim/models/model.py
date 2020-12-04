@@ -1,6 +1,6 @@
 import abc
 from collections import defaultdict
-from copy import copy, deepcopy
+from copy import deepcopy
 from itertools import tee
 
 from ..circuits.circuit import GatePlaceholder, Circuit, Box
@@ -123,7 +123,7 @@ class Model(metaclass=abc.ABCMeta):
                                              .shift(time_start=gate1.time_end))
         gates = sorted(circuit.gates + waiting_gates,
                        key=lambda g: g.time_start)
-        return Circuit(circuit.qubits, gates)
+        return Circuit(gates)
 
     def finalize(self, circuit, bases_in=None, qubits=None):
         """

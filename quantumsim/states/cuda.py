@@ -1,7 +1,6 @@
 # This file is part of quantumsim. (https://gitlab.com/quantumsim/quantumsim)
 # (c) 2020 Brian Tarasinski, Viacheslav Ostroukh, Boris Varbanov
 # Distributed under the GNU GPLv3. See LICENSE or https://www.gnu.org/licenses/gpl.txt
-import sys
 from copy import copy
 from itertools import chain
 
@@ -27,26 +26,26 @@ package_path = os.path.dirname(os.path.realpath(__file__))
 mod = None
 DEFAULT_NVCC_FLAGS.append("-Wno-deprecated-gpu-targets")
 
-for kernel_file in [sys.prefix + "/pycudakernels/primitives.cu",
-                    package_path + "/primitives.cu"]:
-    try:
-        with open(kernel_file, "r") as kernel_source_file:
-            mod = SourceModule(
-                kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
-                    "--default-stream", "per-thread", "-lineinfo"])
-            break
-    except FileNotFoundError:
-        pass
+kernel_file = package_path + "/primitives.cu"
+try:
+    with open(kernel_file, "r") as kernel_source_file:
+        mod = SourceModule(
+            kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
+                "--default-stream", "per-thread", "-lineinfo"])
+except FileNotFoundError:
+    pass
 
 if mod is None:
-    raise ImportError("could not find primitives.cu")
+    raise ImportError("Could not import CUDA kernels from primitives.cu")
 
 pycuda.autoinit.context.set_shared_config(
     drv.shared_config.EIGHT_BYTE_BANK_SIZE)
 
 _two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
+# noinspection SpellCheckingInspection
 _two_qubit_general_ptm.prepare("PPPIIIII")
 _multitake = mod.get_function("multitake")
+# noinspection SpellCheckingInspection
 _multitake.prepare("PPPPPPI")
 
 sum_along_axis = pycuda.reduction.ReductionKernel(
@@ -68,18 +67,6 @@ class StateCuda(State):
     _gpuarray_cache = {}
 
     def __init__(self, qubits, pv=None, bases=None, *, dim=2, force=False):
-        """Create a new density matrix for several qudits.
-
-        Parameters
-        ----------
-        bases : list of quantumsim.bases.PauliBasis
-            Dimensions of qubits in the system.
-
-        pv : array or None.
-            Must be of size (2**no_qubits, 2**no_qubits). Only upper triangle
-            is relevant.  If data is `None`, create a new density matrix with
-            all qubits in ground state.
-        """
         super().__init__(qubits, pv, bases, dim=dim, force=force)
         if pv is not None:
             if self.dim_pauli != pv.shape:
@@ -176,12 +163,11 @@ class StateCuda(State):
         # bit0 must be the more significant bit (bit 0 is msb)
         if qubit0 > qubit1:
             qubit0, qubit1 = qubit1, qubit0
+            # noinspection SpellCheckingInspection
             ptm = np.einsum("abcd -> badc", ptm)
 
         new_shape = list(self._data.shape)
         dim0_out, dim1_out, dim0_in, dim1_in = ptm.shape
-        assert new_shape[qubit1] == dim1_in
-        assert new_shape[qubit0] == dim0_in
         new_shape[qubit1] = dim1_out
         new_shape[qubit0] = dim0_out
         new_size = prod(new_shape)

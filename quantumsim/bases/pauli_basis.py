@@ -31,7 +31,7 @@ class PauliBasis:
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
-            "xii -> ix", self.vectors, optimize=True)
+            "xii -> ix", self.vectors, optimize='greedy')
 
         # make hint on how to efficiently
         # extract the diagonal
@@ -40,7 +40,7 @@ class PauliBasis:
             for i, cb in enumerate(self.computational_basis_vectors)}
 
         # make hint on how to trace
-        traces = (np.einsum("xii", self.vectors, optimize=True) /
+        traces = (np.einsum("xii", self.vectors, optimize='greedy') /
                   np.sqrt(self.dim_hilbert))
 
         self.trace_index = self._to_unit_vector(traces)
@@ -89,12 +89,19 @@ class PauliBasis:
         return self.subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
-        return np.einsum("xab, ba -> x", self.vectors, rho, optimize=True)
+        return np.einsum("xab, ba -> x", self.vectors, rho, optimize='greedy')
 
     def is_orthonormal(self):
+        """
+        Check if the Pauli basis is orthonormal
+
+        Returns
+        -------
+        bool
+        """
         i = np.einsum("xab, yba -> xy", self.vectors,
-                      self.vectors, optimize=True)
-        assert np.allclose(i, np.eye(self.dim_pauli))
+                      self.vectors, optimize='greedy')
+        return np.allclose(i, np.eye(self.dim_pauli))
 
     @staticmethod
     def _to_unit_vector(v):

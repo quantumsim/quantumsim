@@ -51,10 +51,6 @@ def sympy_to_native(expr):
     # noinspection PyTypeChecker
     if not np.allclose(c, f):
         return c
-    try:
-        c = int(expr)
-    except TypeError:
-        c = np.nan
     i = int(expr)
     if not np.allclose(i, f):
         return f
@@ -316,7 +312,7 @@ class CircuitUnitMixin(ABC):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.plot_metadata = {}
-        self._repr = "gate"
+        self.repr = "gate"
 
     @property
     @abstractmethod
@@ -329,15 +325,21 @@ class CircuitUnitMixin(ABC):
         pass
 
     @property
+    @abstractmethod
+    def qubits(self):
+        """(list of hashable) A list of qubit tags of this circuit."""
+        pass
+
+    @property
     def gates(self):
-        """A list of gates (logical units) of this circuit."""
+        """(list of Gate) A list of gates (logical units) of this circuit."""
         return [self]
 
     def __repr__(self):
-        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+        return self.repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
 
     def __str__(self):
-        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+        return self.repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
 
 
 class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
@@ -391,7 +393,7 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
         if repr_:
             if not isinstance(repr_, str):
                 raise ValueError(f"repr_ must be a LaTeX-formatted string, got {repr_}")
-            self._repr = repr_
+            self.repr = repr_
         self._duration = duration
         self._time_start = time_start
 
@@ -402,18 +404,15 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
             duration=self._duration,
             time_start=self._time_start,
             plot_metadata=self.plot_metadata,
-            repr_=self._repr,
+            repr_=self.repr,
             bases_in=self.bases_in,
             bases_out=self.bases_out
         )
 
     @property
     def shape(self):
-        out = tuple((basis.dim_pauli for basis in chain(self.bases_out, self.bases_in)))
-        # This is just a sanity check and can be removed, when the code is tested
-        if getattr(self, 'ptm', None) is not None:
-            assert self.ptm.shape == out, "Quantumsim error: PTM shape is inconsistent"
-        return out
+        return tuple((basis.dim_pauli
+                      for basis in chain(self.bases_out, self.bases_in)))
 
     @property
     def qubits(self):
@@ -546,7 +545,7 @@ class Gate(GatePlaceholder):
             duration=self._duration,
             time_start=self._time_start,
             plot_metadata=self.plot_metadata,
-            repr_=self._repr,
+            repr_=self.repr,
             bases_in=self.bases_in,
             bases_out=self.bases_out
         )
@@ -566,24 +565,24 @@ class Gate(GatePlaceholder):
             Pauli transfer matrix in a form of Numpy array.
         bases_in: tuple of quantumsim.bases.PauliBasis
             Input bases of qubits.
-        bases_out: tuple of quantumsim.bases.PauliBasis
-            Output bases of qubits. If None, assumed to be the same as input
+        bases_out: tuple of quantumsim.bases.PauliBasis, optional
+            Output bases of qubits. If not provided, assumed to be the same as input
             bases.
-        qubits: list of hashable, hashable or None
-            List of qubit tags for the operation. Tags must be able to serve as `dict` keys.
-            If `None`, integer tags are picked starting from 0.
-        duration: float
-            Duration of the operation.
-        time_start: float
-            Starting time of the operation.
-        plot_metadata : None or dict
+        qubits: list of hashable or hashable, optional
+            List of qubit tags for the operation. Tags must be able to serve as `dict`
+            keys. If `None`, integer tags are picked starting from 0.
+        duration: float, optional
+            Duration of the operation. Default is 0.
+        time_start: float, optional
+            Starting time of the operation. Default is 0.
+        plot_metadata : dict, optional
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
-        repr_ : None or str
+        repr_ : str, optional
             Pretty-printable representation of the gate, used in `Gate.__repr__`
             and `Gate.__str__`. Can contain Python formatting syntax, then parameters
             are picked from the Gate parameters when displayed.
-            If `None`, defaults to `"gate"`.
+            If not set, defaults to `"gate"`.
 
         Returns
         -------
@@ -615,19 +614,19 @@ class Gate(GatePlaceholder):
         bases_in : tuple of PauliBasis or int
             Input bases for generated PTMs. If `int` is provided, it is treated as a
             Hilbert space dimensionality, and default basis is picked accordingly to it.
-        bases_out : tuple of PauliBasis or None
+        bases_out : tuple of PauliBasis, optional
             Output bases for generated PTMs. If None, defaults to `bases_in`.
-        qubits: list of hashable, hashable or None
-            List of qubit tags for the operation. Tags must be able to serve as `dict` keys.
-            If `None`, integer tags are picked starting from 0.
-        duration: float
-            Duration of the operation.
+        qubits: list of hashable, hashable, optional
+            List of qubit tags for the operation. Tags must be able to serve as `dict`
+            keys. If not provided, integer tags are picked starting from 0.
+        duration: float, optional
+            Duration of the operation. Defaults to 0.
         time_start: float
-            Starting time of the operation.
-        plot_metadata : None or dict
+            Starting time of the operation. Default to 0.
+        plot_metadata : dict, optional
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
-        repr_ : None or str
+        repr_ : str, optional
             Pretty-printable representation of the gate, used in `Gate.__repr__`
             and `Gate.__str__`. Can contain Python formatting syntax, then parameters
             are picked from the Gate parameters when displayed.
@@ -636,7 +635,6 @@ class Gate(GatePlaceholder):
         Returns
         -------
         Gate
-            Resulting operation
         """
         if not isinstance(kraus, np.ndarray):
             kraus = np.array(kraus)
@@ -686,12 +684,17 @@ class Gate(GatePlaceholder):
             Hilbert space dimensionality, and default basis is picked accordingly to it.
         bases_out : tuple of PauliBasis or None
             Output bases for generated PTMs. If None, defaults to `bases_in`.
-        hamiltonian: array or None
+        hamiltonian : array or None
             Hamiltonian for a Lindblad equation. In units :math:`\\hbar = 1`.
             If `None`, assumed to be zero.
-        lindblad_ops: array or list of arrays
+        lindblad_ops : array or list of arrays
             Lindblad jump operators. In units :math:`\\hbar = 1`.
             If `None`, assumed to be zero.
+        qubits : list of hashable, optional
+        duration : float, optional
+        time_start : float, optional
+        plot_metadata : dict, optional
+        repr_ : str, optional
 
         Returns
         -------
@@ -727,21 +730,6 @@ class Gate(GatePlaceholder):
             return out.set_bases(bases_out=bases_out)
         else:
             return out
-
-    # noinspection PyUnresolvedReferences
-    def operation_sympified(self):
-        if isinstance(self._operation, ParametrizedOperation):
-            new_op = copy(self._operation)
-            new_op.params = tuple(
-                self._params[p] if p in self._params.keys() else p
-                for p in self._operation.params)
-            if len(self.free_parameters) == 0:
-                # We can convert to a normal operation
-                op_params = tuple(sympy_to_native(p) for p in new_op.params)
-                new_op = new_op.set_params(op_params).substitute()
-            return new_op.at(*self.qubits)
-        else:
-            return self._operation.at(*self.qubits)
 
     @property
     def params(self):
@@ -939,13 +927,13 @@ class Box(CircuitUnitMixin, Circuit):
         if plot_metadata:
             self.plot_metadata = plot_metadata
         if repr_:
-            self._repr = repr_
+            self.repr = repr_
 
     def __copy__(self):
         other = Box(self._qubits,
                     (copy(gate) for gate in self._gates),
                     plot_metadata=deepcopy(self.plot_metadata),
-                    repr_=self._repr)
+                    repr_=self.repr)
         other._params_cache = self._params_cache
         return other
 
