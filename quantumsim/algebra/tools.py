@@ -1,17 +1,6 @@
 import numpy as np
 from scipy.stats import unitary_group
 
-sigma = {
-    'I': np.array([[1., 0.],
-                   [0., 1.]], dtype=complex),
-    'X': np.array([[0., 1.],
-                   [1., 0.]], dtype=complex),
-    'Y': np.array([[0., -1j],
-                   [1j, 0.]], dtype=complex),
-    'Z': np.array([[1., 0.],
-                   [0., -1.]], dtype=complex),
-}
-
 
 def random_hermitian_matrix(dim: int, seed: int):
     rng = np.random.RandomState(seed)
@@ -29,7 +18,6 @@ def random_unitary_matrix(dim: int, seed: int):
 
 
 def verify_kraus_unitarity(kraus_ops, *, tbw_tol=1e-6):
-    assert len(kraus_ops.shape) in (2, 3)
     dim_hilbert = kraus_ops.shape[1]
     op_products = np.sum([kraus.conj().T.dot(kraus)
                           for kraus in kraus_ops], axis=0)
@@ -37,7 +25,6 @@ def verify_kraus_unitarity(kraus_ops, *, tbw_tol=1e-6):
 
 
 def verify_ptm_trace_pres(ptm_op, *, rtol=1e-5, atol=1e-8):
-    assert len(ptm_op.shape) == 2
     dim_pauli = ptm_op.shape[0]
     expected_row = np.zeros(dim_pauli)
     expected_row[0] = 1

@@ -50,6 +50,9 @@ class WaitingGate(GatePlaceholder):
 
 class Model(metaclass=abc.ABCMeta):
     """
+    An abstract class that defines a basic interface to define a gate set with its
+    error model.
+
     Parameters
     ----------
     setup : quantumsim.Setup

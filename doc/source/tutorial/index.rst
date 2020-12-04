@@ -8,4 +8,3 @@ Low-level interface
    :maxdepth: 1
 
    t1t2
-   controller

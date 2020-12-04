@@ -1,7 +1,7 @@
-:mod:`quantumsim.pauli_vectors` -- representation of density matrices
+:mod:`quantumsim.states` -- representation of density matrices
 =====================================================================
 
-.. module:: quantumsim.pauli_vectors
+.. module:: quantumsim.states
 
 Pauli vector interface
 ----------------------
@@ -9,18 +9,17 @@ Pauli vector interface
 .. autosummary::
    :toctree: generated/
 
-   pauli_vector.PauliVectorBase
+   state.State
 
 Built-in realizations
 ---------------------
 
 Quantumsim will export its default PauliVector class implementation as
-`quantumsim.PauliVector`. By default CUDA backend is picked, though, for small
+`quantumsim.State`. By default CUDA backend is picked, though, for small
 number of qubits Numpy backend may be faster.
 
 .. autosummary::
    :toctree: generated/
 
-   PauliVectorNumpy
-   PauliVectorCuda
-
+   StateNumpy
+   StateCuda
