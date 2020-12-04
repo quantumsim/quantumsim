@@ -3,7 +3,7 @@ import os
 import pytest
 
 from quantumsim import Setup
-from quantumsim.setups.setup import SetupLoadError
+from quantumsim.models.setup import SetupLoadError
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 

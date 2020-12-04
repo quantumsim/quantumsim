@@ -4,8 +4,7 @@ from scipy.linalg import expm
 from .. import bases
 from ..algebra import kraus_to_ptm
 from ..circuits import Gate
-from ..setups import Setup
-from .model import Model
+from . import Model, Setup
 
 BASIS21 = (bases.general(2),)
 BASIS22 = BASIS21 * 2

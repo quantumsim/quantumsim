@@ -2,9 +2,8 @@
 from ._version import __version__
 from .bases import PauliBasis
 from .circuits import Gate, Box, Circuit, FinalizedCircuit
-from .setups import Setup
 from .states import State, StateNumpy
-from .models import Model, perfect_qubits as gates
+from .models import Model, Setup, perfect_qubits as gates
 
 __all__ = [
     'PauliBasis',
