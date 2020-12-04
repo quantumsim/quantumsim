@@ -280,7 +280,7 @@ class StateCuda(State):
 
         self._data, self._work_data = self._work_data, self._data
 
-    def diagonal(self, *, get_data=True, target_array=None, flatten=True):
+    def diagonal(self, *, get_data=True, target_array=None):
         """Obtain the diagonal of the density matrix.
 
         Parameters
@@ -290,8 +290,6 @@ class StateCuda(State):
         target_array : pycuda.gpuarray.array, optional
             An already-allocated GPU array to which the data will be copied.
             If `None`, make a new GPU array.
-        flatten : boolean
-            TODO docstring
         """
         diag_bases = [pb.computational_subbasis() for pb in self.bases]
         diag_shape = [db.dim_pauli for db in diag_bases]
@@ -340,16 +338,26 @@ class StateCuda(State):
             )
 
         if get_data:
-            if flatten:
-                return target_array.get().ravel()[:diag_size]
+            diag = target_array.get().ravel()[:diag_size]
+            target_size = self.dim_hilbert ** len(self.qubits)
+            if diag_size == target_size:
+                return diag
             else:
-                return (target_array.get().ravel()[:diag_size]
-                        .reshape(diag_shape))
+                # Some computational basis indices are missing from the state.
+                # Their correspondent elements need to be filled with zero in the
+                # diagonal, otherwise it is very hard to understand which elements of
+                # the diagonal are missing.
+                out = np.zeros((self.dim_hilbert,)*len(self.qubits), dtype=np.float64)
+                ix_args = [[i for i in range(self.dim_hilbert)
+                            if basis.computational_basis_indices[i] is not None]
+                           for basis in self.bases]
+                out[np.ix_(*ix_args)] = diag.reshape(diag_shape)
+                return out.reshape(target_size)
         else:
             return target_array
 
     def trace(self):
-        # TODO: there is a smarter way of doing this with pauli-dirac basis
+        # TODO: there is a smarter way of doing this with Pauli-Dirac basis
         return np.sum(self.diagonal())
 
     def partial_trace(self, *qubits):
