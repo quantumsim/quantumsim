@@ -2,7 +2,7 @@ import warnings
 from copy import copy
 
 import numpy as np
-from .state import State, prod
+from .state import State
 
 
 class StateNumpy(State):

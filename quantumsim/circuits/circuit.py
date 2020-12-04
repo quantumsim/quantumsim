@@ -280,10 +280,8 @@ class GateSetMixin(ABC):
         FinalizedCircuit
             Finalized version of this circuit
         """
-        param_funcs = self._param_funcs_sympified()
         # noinspection PyTypeChecker
-        return FinalizedCircuit(self, qubits or sorted(self.qubits),
-                                param_funcs=param_funcs, bases_in=bases_in)
+        return FinalizedCircuit(self, qubits or sorted(self.qubits), bases_in=bases_in)
 
     def _qubit_time_start(self, qubit):
         for gate in self.gates:
@@ -489,8 +487,7 @@ class Gate(GatePlaceholder):
     }
 
     def __init__(self, qubits, dim_hilbert, operation_func, duration=0., time_start=0.,
-                 param_funcs=None, plot_metadata=None, repr_=None,
-                 bases_in=None, bases_out=None):
+                 plot_metadata=None, repr_=None, bases_in=None, bases_out=None):
         """Gate
 
         Parameters
@@ -507,9 +504,6 @@ class Gate(GatePlaceholder):
             Duration of the operation.
         time_start: float
             Starting time of the operation.
-        param_funcs: None or dict
-            Functions to provide default selectors for the parameters.
-            TODO: elaborate
         plot_metadata : None or dict
             Metadata, that describes how to represent a gate on a plot.
             TODO: link documentation, when plotting is ready.
@@ -543,7 +537,6 @@ class Gate(GatePlaceholder):
         self._params = OrderedDict(((param, symbols(param)) for param in argspec.args))
         if len(self._params) == 0:
             self._resolve_ptm()
-        self._param_funcs = param_funcs or {}
 
     def __copy__(self):
         other = self.__class__(
@@ -552,7 +545,6 @@ class Gate(GatePlaceholder):
             operation_func=self._operation_func,
             duration=self._duration,
             time_start=self._time_start,
-            param_funcs=copy(self._param_funcs),
             plot_metadata=self.plot_metadata,
             repr_=self._repr,
             bases_in=self.bases_in,
@@ -561,15 +553,6 @@ class Gate(GatePlaceholder):
         other.ptm = copy(self.ptm)
         other._params = copy(self._params)
         return other
-
-    def _param_funcs_sympified(self):
-        param_funcs = {}
-        for param, func in self._param_funcs.items():
-            if param in self._params.keys():
-                param_funcs[self._params[param]] = func
-            else:
-                param_funcs[param] = func
-        return param_funcs
 
     @classmethod
     def from_ptm(cls, ptm, bases_in, bases_out=None, *, qubits=None,
@@ -613,7 +596,7 @@ class Gate(GatePlaceholder):
         if qubits is None:
             qubits = list(range(num_qubits))
         return Gate(qubits, bases_in[0].dim_hilbert, lambda: (ptm, bases_in, bases_out),
-                    duration, time_start, None, plot_metadata, repr_,
+                    duration, time_start, plot_metadata, repr_,
                     bases_in, bases_out)
 
     @classmethod
@@ -910,12 +893,6 @@ class Circuit(GateSetMixin):
                                              for g in self._gates)))
         return self._params_cache
 
-    def _param_funcs_sympified(self):
-        param_funcs = {}
-        for gate in self._gates:
-            param_funcs.update(gate._param_funcs_sympified())
-        return param_funcs
-
     def set(self, **kwargs):
         for gate in self._gates:
             gate.set(**kwargs)
@@ -998,9 +975,6 @@ class FinalizedCircuit:
         sorted list of `circuit`'s qubits is used.
     bases_in: tuple of quantumsim.PauliBasis, optional
         Input bases for the state. If None, assumed to be a full basis.
-    param_funcs: dict, optional
-        Functions, used to extract unset parameters.
-        TODO: expand description.
     sv_cutoff: float, optional
         A control parameter, used for truncation of small singular values of the Pauli
         transfer matrices during the optimization of the circuit. Smaller value leads
@@ -1008,7 +982,7 @@ class FinalizedCircuit:
     """
 
     def __init__(self, circuit, qubits=None, *,
-                 bases_in=None, param_funcs=None, sv_cutoff=1e-5):
+                 bases_in=None, sv_cutoff=1e-5):
         self.qubits = sorted(circuit.qubits) if qubits is None else list(qubits)
         self.circuit = circuit
         self.bases_in = bases_in
@@ -1018,16 +992,6 @@ class FinalizedCircuit:
         from . import optimize
         self.compiled_circuit = optimize(self.circuit, self.bases_in,
                                          qubits=self.qubits, sv_cutoff=self._sv_cutoff)
-
-        if param_funcs:
-            _param_funcs = dict(zip(_to_str(param_funcs.keys()), param_funcs.values()))
-            self._param_funcs = {
-                param: func
-                for param, func in _param_funcs.items()
-                if param in self._params
-            }
-        else:
-            self._param_funcs = dict()
 
     @property
     def params(self):
@@ -1049,13 +1013,11 @@ class FinalizedCircuit:
         if len(self._params) > 0:
             out = FinalizedCircuit(self.compiled_circuit(**params), self.qubits,
                                    bases_in=self.bases_in,
-                                   param_funcs=self._param_funcs,
                                    sv_cutoff=self._sv_cutoff)
             # Store the copy of the original circuit
             out.circuit = self.circuit
-            unset_params = out._params - out._param_funcs.keys()
-            if len(unset_params) != 0:
-                raise KeyError(*unset_params)
+            if len(out._params) != 0:
+                raise KeyError(*out._params)
             return out
         else:
             return self

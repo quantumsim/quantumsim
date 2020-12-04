@@ -5,7 +5,6 @@ from .circuits import Gate, Box, Circuit, FinalizedCircuit
 from .setups import Setup
 from .states import State, StateNumpy
 from .models import Model, perfect_qubits as gates
-from .controllers import Controller
 
 __all__ = [
     'PauliBasis',
@@ -13,7 +12,6 @@ __all__ = [
     'Setup',
     'State',
     'StateNumpy',
-    'Controller',
     'gates',
 ]
 

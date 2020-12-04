@@ -16,20 +16,9 @@ BASIS32 = BASIS31 * 2
 BASIS31_CLASSICAL = (bases.general(3).subbasis([0, 1, 2]),)
 
 
-def _born_projection(indices, state, rng, *, atol=1e-08):
-    if len(indices) != 1:
-        raise ValueError("Measure should only act on a single qubit")
-    meas_probabilities = np.array(state.pauli_vector.meas_prob(*indices))
-    meas_probabilities[np.abs(meas_probabilities) < atol] = 0
-    meas_probabilities /= np.sum(meas_probabilities)
-    result = rng.choice(len(meas_probabilities), p=meas_probabilities)
-    return result
-
-
 class PerfectQubitModel(Model):
-    """
-    A model for an ideal error model, where gates are
-    instantaneous and perfect, while the qubits experiences no noise.
+    """A model for an ideal error model, where gates are instantaneous and perfect,
+    while the qubits experiences no noise.
     """
     dim = 2
 
@@ -319,8 +308,7 @@ class PerfectQubitModel(Model):
                     duration=0,
                     plot_metadata={"style": "box",
                                    "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
-                    repr_='measure',
-                    param_funcs={"result": _born_projection})
+                    repr_='measure')
         gate.set(**params)
         return gate
 
@@ -341,7 +329,8 @@ class PerfectQubitModel(Model):
         """
 
         def _dephase():
-            return np.array([[[1., 0.], [0., 1.]]]), BASIS21_CLASSICAL, BASIS21_CLASSICAL
+            return np.array([[[1., 0.], [0., 1.]]]),\
+                   BASIS21_CLASSICAL, BASIS21_CLASSICAL
 
         return Gate(qubit,
                     self.dim,
@@ -447,7 +436,7 @@ class PerfectQutritModel(Model):
         """
         def _rotate_z(angle):
             exp = np.exp(-1j * angle / 2)
-            return kraus_to_ptm(np.diag([exp, exp.conj(), 1]).reshape(1, 3, 3),
+            return kraus_to_ptm(np.diag([exp, exp.conj(), 1]).reshape((1, 3, 3)),
                                 BASIS31, BASIS31), BASIS31, BASIS31
 
         gate = Gate(qubit,
@@ -563,8 +552,7 @@ class PerfectQutritModel(Model):
                     duration=0,
                     plot_metadata={"style": "box",
                                    "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
-                    repr_='measure',
-                    param_funcs={"result": _born_projection})
+                    repr_='measure')
         gate.set(**params)
         return gate
 

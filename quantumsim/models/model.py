@@ -69,7 +69,7 @@ class Model(metaclass=abc.ABCMeta):
         return self._dim
 
     @staticmethod
-    def gate(duration=0, param_funcs=None, plot_metadata=None, repr_=None):
+    def gate(duration=0, plot_metadata=None, repr_=None):
         def gate_decorator(func):
             def wrapper(self, *qubits, **params):
                 if callable(duration):
@@ -80,13 +80,7 @@ class Model(metaclass=abc.ABCMeta):
                     _duration = duration
                 circuit = func(self, *qubits)
                 circuit.set(**params)
-                if param_funcs:
-                    ops = [copy(g) for g in circuit.operations()]
-                    for op in ops:
-                        op._param_funcs.update(param_funcs)
-                else:
-                    ops = circuit.gates
-                return Box(qubits, ops, plot_metadata, repr_)
+                return Box(qubits, circuit.gates, plot_metadata, repr_)
 
             wrapper.__name__ = func.__name__
             return wrapper
