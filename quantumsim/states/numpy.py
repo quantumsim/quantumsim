@@ -98,11 +98,12 @@ class StateNumpy(State):
     def renormalize(self):
         tr = self.trace()
         if tr > 1e-8:
-            self._data *= self.trace() ** -1
+            self._data *= tr ** -1
         else:
             warnings.warn(
-                "Density matrix trace is 0; likely your further computation "
-                "will fail. Have you projected DM on a state with zero weight?")
+                "Density matrix trace is (close to) 0. Not renormalizing, because loss "
+                "of significance is likely. Have you projected the density matrix on a "
+                "state with zero weight?")
         return tr
 
     def copy(self):

@@ -382,8 +382,9 @@ class StateCuda(State):
             self._data *= np.float(1. / tr)
         else:
             warnings.warn(
-                "Density matrix trace is 0; likely your further computation "
-                "will fail. Have you projected DM on a state with zero weight?")
+                "Density matrix trace is (close to) 0. Not renormalizing, because loss "
+                "of significance is likely. Have you projected the density matrix on a "
+                "state with zero weight?")
         return tr
 
     def copy(self):
