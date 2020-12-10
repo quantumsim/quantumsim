@@ -55,8 +55,8 @@ class PerfectQubitModel(Model):
                     self.dim,
                     _rotate_x,
                     duration=0,
-                    plot_metadata={"style": "box", "label": "$X({theta})$"},
-                    repr_="X({theta})")
+                    plot_metadata={"style": "box", "label": "$X({angle})$"},
+                    repr_="X({angle})")
         gate.set(**params)
         return gate
 
@@ -384,8 +384,8 @@ class PerfectQutritModel(Model):
                     self.dim,
                     _rotate_x,
                     duration=0,
-                    plot_metadata={"style": "box", "label": "$X({theta})$"},
-                    repr_="X({theta})")
+                    plot_metadata={"style": "box", "label": "$X({angle})$"},
+                    repr_="X({angle})")
         gate.set(**params)
         return gate
 
@@ -413,8 +413,8 @@ class PerfectQutritModel(Model):
                     self.dim,
                     _rotate_y,
                     duration=0,
-                    plot_metadata={"style": "box", "label": "$Y({theta})$"},
-                    repr_="Y({theta})")
+                    plot_metadata={"style": "box", "label": "$Y({angle})$"},
+                    repr_="Y({angle})")
         gate.set(**params)
         return gate
 
@@ -442,8 +442,8 @@ class PerfectQutritModel(Model):
                     self.dim,
                     _rotate_z,
                     duration=0,
-                    plot_metadata={"style": "box", "label": "$Z({theta})$"},
-                    repr_="Z({theta})")
+                    plot_metadata={"style": "box", "label": "$Z({angle})$"},
+                    repr_="Z({angle})")
         gate.set(**params)
         return gate
 
