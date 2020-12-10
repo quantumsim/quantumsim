@@ -1,4 +1,5 @@
 from collections import deque
+from typing import List
 
 import numpy as np
 
@@ -216,7 +217,6 @@ class Node:
         qubit_indices : tuple of int
         """
         self.op = op
-        # FIXME: Will fail for actual placeholders
         self.is_placeholder = op.ptm is None
         self.qubit_indices = list(qubit_indices)
         self.prev = {i: None for i in qubit_indices}
@@ -244,10 +244,6 @@ class Node:
         order = np.argsort(self.qubit_indices)
         self.qubit_indices = [self.qubit_indices[i] for i in order]
         qubits = [self.op.qubits[i] for i in order]
-        self.op._qubits = qubits
-        self.op.ptm = new_ptm
-        self.op.bases_in = self.bases_in_tuple
-        self.op.bases_out = self.bases_out_tuple
         self.op = Gate.from_ptm(new_ptm, self.bases_in_tuple, self.bases_out_tuple,
                                 qubits=qubits, duration=self.op.duration,
                                 time_start=self.op.time_start,
@@ -274,8 +270,8 @@ class CompilerQueue:
 
 
 class CircuitGraph:
-    starts: list[Node]
-    ends: list[Node]
+    starts: List[Node]
+    ends: List[Node]
 
     # noinspection PyTypeChecker
     def __init__(self, circuit, qubits, bases_in=None, bases_out=None):
