@@ -67,7 +67,7 @@ class TestStates:
         pauli_vector = np.random.random_sample(target_shape)
         bases = [quantumsim.bases.general(dim_hilbert)] * num_qubits
 
-        state = state_cls(num_qubits, dim=dim_hilbert)
+        state = state_cls(num_qubits, dim_hilbert=dim_hilbert)
         assert state.qubits == list(range(num_qubits))
         assert state.dim_hilbert == dim_hilbert
         assert state.dim_pauli == (1,) * num_qubits
@@ -275,7 +275,7 @@ class TestStates:
 
     def test_get_diagonal(self, state_cls, dim_hilbert):
         # Default initialization
-        dm = state_cls(2, dim=dim_hilbert)
+        dm = state_cls(2, dim_hilbert=dim_hilbert)
         diag = dm.diagonal()
         diag_ref = np.zeros(dim_hilbert**2)
         diag_ref[0] = 1.

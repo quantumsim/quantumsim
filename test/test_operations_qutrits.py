@@ -18,7 +18,7 @@ basis = (bases.general(3),)
 # noinspection DuplicatedCode
 class TestLibrary:
     def test_rotate_x(self):
-        state = State([0, 1, 2], dim=3)
+        state = State([0, 1, 2], dim_hilbert=3)
 
         lib.rotate_x(1, angle=pi/2, foo='bar') @ state
         lib.rotate_x(2, angle=pi) @ state
@@ -36,7 +36,7 @@ class TestLibrary:
         assert np.allclose(state.meas_prob(0), (1, 0, 0))
 
     def test_rotate_y(self):
-        state = State([0, 1, 2], dim=3)
+        state = State([0, 1, 2], dim_hilbert=3)
 
         lib.rotate_y(1, angle=pi/2, foo='bar') @ state
         lib.rotate_y(2, angle=pi) @ state
@@ -55,7 +55,7 @@ class TestLibrary:
 
     def test_rotate_z(self):
         sqrt2 = np.sqrt(2)
-        state = State([0], dim=3)
+        state = State([0], dim_hilbert=3)
 
         lib.rotate_z(0, angle=pi/2) @ state
         assert np.allclose(state.to_pv(), [1] + [0] * 8)

@@ -33,7 +33,7 @@ class State(metaclass=abc.ABCMeta):
         A description of the basis for the qubits. Required if `pv` is provided,
         otherwise must be left empty. If not provided, defaults to the subbasis of all
         qubits in :math:`\\left| 0 \\cdots 0 \\right\\rangle` state.
-    dim: int, optional
+    dim_hilbert: int, optional
         Hilbert dimensionality of qubits in the state. If `bases` are provided, has no
         effect.
     force: bool
@@ -44,7 +44,7 @@ class State(metaclass=abc.ABCMeta):
     _size_max = 2**22
 
     @abc.abstractmethod
-    def __init__(self, qubits, pv=None, bases=None, *, dim=2, force=False):
+    def __init__(self, qubits, pv=None, bases=None, *, dim_hilbert=2, force=False):
         if isinstance(qubits, int):
             self.qubits = list(range(qubits))
         else:
@@ -58,7 +58,7 @@ class State(metaclass=abc.ABCMeta):
                 raise ValueError('All basis elements must have the same Hilbert '
                                  'dimensionality')
         else:
-            self.dim_hilbert = dim
+            self.dim_hilbert = dim_hilbert
             self.bases = [general(self.dim_hilbert).subbasis([0])] * len(self.qubits)
         if self.size > self._size_max and not force:
             raise ValueError(

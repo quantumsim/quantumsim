@@ -66,8 +66,8 @@ class StateCuda(State):
     """
     _gpuarray_cache = {}
 
-    def __init__(self, qubits, pv=None, bases=None, *, dim=2, force=False):
-        super().__init__(qubits, pv, bases, dim=dim, force=force)
+    def __init__(self, qubits, pv=None, bases=None, *, dim_hilbert=2, force=False):
+        super().__init__(qubits, pv, bases, dim_hilbert=dim_hilbert, force=force)
         if pv is not None:
             if self.dim_pauli != pv.shape:
                 raise ValueError(

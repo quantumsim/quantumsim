@@ -266,7 +266,7 @@ class GateSetMixin(ABC):
 
         Parameters
         ----------
-        bases_in : tuple of quantumsim.bases.PauliBasis
+        bases_in : tuple of quantumsim.PauliBasis
         qubits : list of hashable, optional
             List of qubits in the state, to set order. Defaults to sorted list of qubits
             in the circuit.
@@ -363,11 +363,11 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
         and `Gate.__str__`. Can contain Python formatting syntax, then parameters
         are picked from the Gate parameters when displayed.
         If `None`, defaults to `"gate"`.
-    bases_in: tuple of quantumsim.bases.PauliBasis or None
+    bases_in: tuple of quantumsim.PauliBasis, optional
         Input bases for the operation. Used to force reduce the basis set to a
         subset of full basis, for example for the purpose of constructing
         a dephasing operation. If None, assumed to be a default full basis.
-    bases_out: tuple of quantumsim.bases.PauliBasis or None
+    bases_out: tuple of quantumsim.PauliBasis, optional
         Input bases for the operation. Used to force reduce the basis set to a
         subset of full basis, for example for the purpose of constructing
         a dephasing operation. If None, assumed to be a default full basis.
@@ -563,9 +563,9 @@ class Gate(GatePlaceholder):
         ----------
         ptm: array-like
             Pauli transfer matrix in a form of Numpy array.
-        bases_in: tuple of quantumsim.bases.PauliBasis
+        bases_in: tuple of quantumsim.PauliBasis
             Input bases of qubits.
-        bases_out: tuple of quantumsim.bases.PauliBasis, optional
+        bases_out: tuple of quantumsim.PauliBasis, optional
             Output bases of qubits. If not provided, assumed to be the same as input
             bases.
         qubits: list of hashable or hashable, optional
@@ -599,8 +599,9 @@ class Gate(GatePlaceholder):
                     bases_in, bases_out)
 
     @classmethod
-    def from_kraus(cls, kraus, bases_in=2, bases_out=None, *, qubits=None,
-                   duration=0, time_start=0., plot_metadata=None, repr_=None):
+    def from_kraus(cls, kraus, bases_in=None, bases_out=None, *, qubits=None,
+                   duration=0, time_start=0., plot_metadata=None, repr_=None,
+                   dim_hilbert=2):
         """Construct an operation from a set of Kraus matrices.
 
         TODO: elaborate on Kraus matrices format.
@@ -611,9 +612,9 @@ class Gate(GatePlaceholder):
             Pauli transfer matrix in a form of Numpy array. If a function is
             provided, it must return a Kraus and its parameters are treated as gate's
             named parameters.
-        bases_in : tuple of PauliBasis or int
-            Input bases for generated PTMs. If `int` is provided, it is treated as a
-            Hilbert space dimensionality, and default basis is picked accordingly to it.
+        bases_in : tuple of PauliBasis, optional
+            Input bases for generated PTMs. If not provided, the default basis of
+            Hilbert dimensionality `dim_hilbert` is used.
         bases_out : tuple of PauliBasis, optional
             Output bases for generated PTMs. If None, defaults to `bases_in`.
         qubits: list of hashable, hashable, optional
@@ -631,6 +632,9 @@ class Gate(GatePlaceholder):
             and `Gate.__str__`. Can contain Python formatting syntax, then parameters
             are picked from the Gate parameters when displayed.
             If `None`, defaults to `"gate"`.
+        dim_hilbert : int, optional
+            Hilbert dimensionality of the gate's bases. Ignored if bases are provided
+            explicitly.
 
         Returns
         -------
@@ -645,8 +649,7 @@ class Gate(GatePlaceholder):
                 '`kraus` should be a 2D or 3D array, got shape {}'
                 .format(kraus.shape))
         kraus_size = kraus.shape[1]
-        if isinstance(bases_in, int):
-            dim_hilbert = bases_in
+        if bases_in is None:
             bases_in = cls._default_bases(kraus_size, dim_hilbert)
             bases_out = bases_out or bases_in
         else:
@@ -666,10 +669,10 @@ class Gate(GatePlaceholder):
                             repr_=repr_)
 
     @classmethod
-    def from_lindblad_form(cls, time, bases_in, bases_out=None, *,
+    def from_lindblad_form(cls, time, bases_in=None, bases_out=None, *,
                            hamiltonian=None, lindblad_ops=None, qubits=None,
                            duration=None, time_start=0., plot_metadata=None,
-                           repr_=None):
+                           repr_=None, dim_hilbert=2):
         """Construct and operation from a list of Lindblad operators.
 
         TODO: elaborate on Lindblad operators format
@@ -679,10 +682,10 @@ class Gate(GatePlaceholder):
         time : float
             Duration of an evolution, driven by Lindblad equation,
             in arbitrary units.
-        bases_in : tuple of PauliBasis or int
-            Input bases for generated PTMs. If `int` is provided, it is treated as a
-            Hilbert space dimensionality, and default basis is picked accordingly to it.
-        bases_out : tuple of PauliBasis or None
+        bases_in : tuple of PauliBasis, optional
+            Input bases for generated PTMs. If not provided, the default basis of
+            Hilbert dimensionality `dim_hilbert` is used.
+        bases_out : tuple of PauliBasis, optional
             Output bases for generated PTMs. If None, defaults to `bases_in`.
         hamiltonian : array or None
             Hamiltonian for a Lindblad equation. In units :math:`\\hbar = 1`.
@@ -690,11 +693,24 @@ class Gate(GatePlaceholder):
         lindblad_ops : array or list of arrays
             Lindblad jump operators. In units :math:`\\hbar = 1`.
             If `None`, assumed to be zero.
-        qubits : list of hashable, optional
-        duration : float, optional
-        time_start : float, optional
+        qubits: list of hashable, hashable, optional
+            List of qubit tags for the operation. Tags must be able to serve as `dict`
+            keys. If not provided, integer tags are picked starting from 0.
+        duration: float, optional
+            Duration of the operation. Defaults to 0.
+        time_start: float
+            Starting time of the operation. Default to 0.
         plot_metadata : dict, optional
+            Metadata, that describes how to represent a gate on a plot.
+            TODO: link documentation, when plotting is ready.
         repr_ : str, optional
+            Pretty-printable representation of the gate, used in `Gate.__repr__`
+            and `Gate.__str__`. Can contain Python formatting syntax, then parameters
+            are picked from the Gate parameters when displayed.
+            If `None`, defaults to `"gate"`.
+        dim_hilbert : int, optional
+            Hilbert dimensionality of the gate's bases. Ignored if bases are provided
+            explicitly.
 
         Returns
         -------
@@ -702,12 +718,12 @@ class Gate(GatePlaceholder):
         """
         summands = []
         if hamiltonian is not None:
-            if isinstance(bases_in, int):
-                bases_in = cls._default_bases(len(hamiltonian), bases_in)
+            if bases_in is None:
+                bases_in = cls._default_bases(len(hamiltonian), dim_hilbert)
             summands.append(plm_hamiltonian_part(hamiltonian, bases_in))
         if lindblad_ops is not None:
-            if isinstance(bases_in, int):
-                bases_in = cls._default_bases(len(hamiltonian), bases_in)
+            if bases_in is None:
+                bases_in = cls._default_bases(len(hamiltonian), dim_hilbert)
             if isinstance(lindblad_ops, np.ndarray) and \
                     len(lindblad_ops.shape) == 2:
                 lindblad_ops = (lindblad_ops,)
