@@ -263,15 +263,15 @@ class TestStates:
 
         diag = np.array([0.25, 0.5, 0, 0, 0, 0, 0, 0])
         dm = np.diag(diag)
-        s = state_cls.from_dm(dm, bases)
+        s = state_cls.from_dm(dm, bases, qubits=['x', 'y', 'z'])
         assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
         assert s.trace() == approx(0.75)
-        assert np.allclose(s.meas_prob(0), (0.75, 0.))
-        assert np.allclose(s.meas_prob(1), (0.75, 0.))
-        assert np.allclose(s.meas_prob(2), (0.25, 0.5))
+        assert np.allclose(s.meas_prob('x'), (0.75, 0.))
+        assert np.allclose(s.meas_prob('y'), (0.75, 0.))
+        assert np.allclose(s.meas_prob('z'), (0.25, 0.5))
 
     def test_get_diagonal(self, state_cls, dim_hilbert):
         # Default initialization

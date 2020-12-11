@@ -92,7 +92,7 @@ class StateNumpy(State):
         for i, b in enumerate(self.bases):
             einsum_args.append(b.vectors)
             einsum_args.append([i, num_qubits+i, num_qubits+i])
-        einsum_args.append([num_qubits + qubit])
+        einsum_args.append([num_qubits + self.qubits.index(qubit)])
         return np.einsum(*einsum_args, optimize='greedy').real
 
     def renormalize(self):
