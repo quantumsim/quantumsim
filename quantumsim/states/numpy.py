@@ -82,8 +82,8 @@ class StateNumpy(State):
                 einsum_args.append(b.vectors)
                 einsum_args.append([i, num_qubits+i, num_qubits+i])
         einsum_args.append(qubit_indices)
-        traced_dm = np.einsum(*einsum_args, optimize='greedy').real
-        return self.__class__([self.bases[q] for q in qubit_indices], traced_dm)
+        pv_traced = np.einsum(*einsum_args, optimize='greedy').real
+        return self.__class__(qubits, pv_traced, [self.bases[q] for q in qubit_indices])
 
     def meas_prob(self, qubit):
         super().meas_prob(qubit)

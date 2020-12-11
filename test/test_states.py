@@ -275,16 +275,16 @@ class TestStates:
 
     def test_get_diagonal(self, state_cls, dim_hilbert):
         # Default initialization
-        dm = state_cls(2, dim_hilbert=dim_hilbert)
-        diag = dm.diagonal()
+        state = state_cls(2, dim_hilbert=dim_hilbert)
+        diag = state.diagonal()
         diag_ref = np.zeros(dim_hilbert**2)
         diag_ref[0] = 1.
         assert diag == approx(diag_ref)
 
         # Random initialization in general basis
-        dm = random_hermitian_matrix(dim_hilbert**2, 7654)
-        diag_ref = np.diagonal(dm)
-        state = state_cls.from_dm(dm, (quantumsim.bases.general(dim_hilbert),)*2)
+        state = random_hermitian_matrix(dim_hilbert**2, 7654)
+        diag_ref = np.diagonal(state)
+        state = state_cls.from_dm(state, (quantumsim.bases.general(dim_hilbert),)*2)
         assert state.diagonal() == approx(diag_ref)
 
     @pytest.mark.parametrize(
@@ -310,3 +310,22 @@ class TestStates:
         assert s.bases[0] == bases[0]
         assert s.bases[1] == bases[1]
         assert np.allclose(s.diagonal(), diag)
+
+    def test_partial_trace(self, state_cls, dim_hilbert):
+        if state_cls.__name__ == 'StateCuda':
+            pytest.xfail('StateCuda.partial_trace() is not implemented')
+
+        dm = random_hermitian_matrix(dim_hilbert**3, 826)
+        bases = (quantumsim.bases.general(dim_hilbert),)*3
+
+        # Check without reordering
+        state = state_cls.from_dm(dm, bases)
+        dm_traced = np.einsum('abcdec->abde', dm.reshape((dim_hilbert,)*6))\
+                      .reshape(dim_hilbert**2, dim_hilbert**2)
+        assert state.partial_trace(0, 1).to_dm() == approx(dm_traced)
+
+        # Check with reordering and with symbolic qubit tags
+        state = state_cls.from_dm(dm, bases, qubits=['a', 'b', 'c'])
+        dm_traced = np.einsum('abcdbf->cafd', dm.reshape((dim_hilbert,)*6)) \
+            .reshape(dim_hilbert**2, dim_hilbert**2)
+        assert state.partial_trace('c', 'a').to_dm() == approx(dm_traced)
