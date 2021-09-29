@@ -52,8 +52,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
             " one of the standard built-in colormaps in matplotlib")
 
     n_qubits = len(state.qubits)
-    pv = state.pauli_vector
-    _rho = pv.to_dm()
+    _rho = state.to_dm()
     _rho /= np.trace(_rho)
 
     if truncate_levels is not None:
@@ -66,16 +65,16 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
         rho += ((1 - trace) * np.identity(2**n_qubits) *
                 truncate_levels ** -n_qubits)
         assert np.allclose(np.trace(rho), 1)
-        dim = [truncate_levels] * n_qubits
+        dim = truncate_levels
     else:
+        dim = state.dim_hilbert
         rho = _rho
-        dim = pv.dim_hilbert
 
     def tuple_to_string(tup):
         state_ = ''.join(str(x) for x in tup)
         return r'$\left| %s \right\rangle$' % state_
 
-    labels = [tuple_to_string(x) for x in product(*(range(d) for d in dim))]
+    labels = [tuple_to_string(x) for x in product(*(range(dim) for _ in range(n_qubits)))]
 
     if phase_limits and isinstance(phase_limits, (list, tuple)):
         assert len(phase_limits) == 2
