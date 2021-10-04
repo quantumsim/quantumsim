@@ -95,7 +95,7 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     ypos = ypos.flatten()
     zpos = 0
     dx = dy = 0.5 * np.ones(rho.size)
-    dz = np.real(rho.flatten())
+    dz = np.abs(np.real(rho.flatten()))
 
     ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color=colors)
     ax.set_zlim3d(amp_limits)
