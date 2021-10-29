@@ -350,6 +350,10 @@ class StateCuda(State):
         raise NotImplementedError("Currently this method is implemented only "
                                   "in Numpy backend.")
 
+    def reset(self, *qubits):
+        raise NotImplementedError("Currently this method is implemented only "
+                                  "in Numpy backend.")
+
     def meas_prob(self, qubit):
         super().meas_prob(qubit)
         qubit_index = self.qubits.index(qubit)

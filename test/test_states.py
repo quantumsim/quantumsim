@@ -329,3 +329,31 @@ class TestStates:
         dm_traced = np.einsum('abcdbf->cafd', dm.reshape((dim_hilbert,)*6)) \
             .reshape(dim_hilbert**2, dim_hilbert**2)
         assert state.partial_trace('c', 'a').to_dm() == approx(dm_traced)
+
+    @pytest.mark.parametrize('qubits', [[1], [0, 2]])
+    def test_reset(self, state_cls, dim_hilbert, qubits):
+        if state_cls.__name__ == 'StateCuda':
+            pytest.xfail('StateCuda.partial_trace() is not implemented')
+
+        num_qubits = 3
+        dm = random_hermitian_matrix(dim_hilbert**3, 826)
+        bases = (quantumsim.bases.general(dim_hilbert),)*num_qubits
+
+        # Check without reordering
+        state = state_cls.from_dm(dm, bases)
+        qubits_left = [i for i in range(num_qubits) if i not in qubits]
+        traced_before = state.partial_trace(*qubits_left)
+        state.reset(*qubits)
+        traced_after = state.partial_trace(*qubits_left)
+        assert traced_before.to_pv() == approx(traced_after.to_pv())
+        expected_meas_prob = np.zeros((dim_hilbert,), dtype=float)
+        expected_meas_prob[0] = 1.
+        for q in qubits:
+            assert state.meas_prob(q) == approx(expected_meas_prob)
+
+
+        # Check with reordering and with symbolic qubit tags
+        state = state_cls.from_dm(dm, bases, qubits=['a', 'b', 'c'])
+        dm_traced = np.einsum('abcdbf->cafd', dm.reshape((dim_hilbert,)*6)) \
+            .reshape(dim_hilbert**2, dim_hilbert**2)
+        assert state.partial_trace('c', 'a').to_dm() == approx(dm_traced)

@@ -156,7 +156,7 @@ class State(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def apply_ptm(self, ptm, *qubits):
-        """Applies a Pauli transfer matrix (PTM) to this state.
+        """Applies a Pauli transfer matrix (PTM) to this state inline.
 
         Parameters
         ----------
@@ -169,6 +169,18 @@ class State(metaclass=abc.ABCMeta):
         if len(ptm.shape) != 2 * len(qubits):
             raise ValueError(f'{len(qubits)}-qubit PTM must have {2*len(qubits)} '
                              f'dimensions, got {len(ptm.shape)}')
+
+    @abc.abstractmethod
+    def reset(self, *qubits):
+        """
+        Reset qubits to ground state inline.
+
+        Parameters
+        ----------
+        q1, ..., qN: str
+            Qubits to reset
+        """
+        self._validate_qubits(qubits)
 
     @abc.abstractmethod
     def diagonal(self):
