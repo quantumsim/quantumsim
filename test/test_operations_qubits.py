@@ -171,3 +171,10 @@ class TestLibrary:
         state = State.from_dm(dm, basis)
         lib.dephase(0, foo='bar') @ state
         assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))
+
+    def test_reset(self):
+        dm = random_hermitian_matrix(2**3, 876)
+        state = State.from_dm(dm, basis*3)
+        qubit = 0
+        lib.reset(qubit, bra='ket') @ state
+        assert state.meas_prob(qubit) == pytest.approx([1, 0])

@@ -3,7 +3,7 @@ from scipy.linalg import expm
 
 from .. import bases
 from ..algebra import kraus_to_ptm
-from ..circuits import Gate
+from ..circuits import Gate, ResetOperation
 from . import Model, Setup
 
 BASIS21 = (bases.general(2),)
@@ -339,6 +339,23 @@ class PerfectQubitModel(Model):
                                    "label": r"$Z$"},
                     repr_='dephase')
 
+    # noinspection PyUnusedLocal
+    def reset(self, qubit, **params):
+        """A perfect reset operation.
+
+        Parameters
+        ----------
+        qubit: hashable
+            Qubit tag
+        **params
+            Named parameters for the circuit. All of them are ignored.
+
+        Returns
+        -------
+        Gate
+        """
+        return ResetOperation([qubit], self.dim, duration=0)
+
 
 class PerfectQutritModel(Model):
     """
@@ -582,3 +599,20 @@ class PerfectQutritModel(Model):
                     plot_metadata={"style": "box",
                                    "label": r"$Z$"},
                     repr_='dephase')
+
+    # noinspection PyUnusedLocal
+    def reset(self, qubit, **params):
+        """A perfect reset operation.
+
+        Parameters
+        ----------
+        qubit: hashable
+            Qubit tag
+        **params
+            Named parameters for the circuit. All of them are ignored.
+
+        Returns
+        -------
+        Gate
+        """
+        return ResetOperation([qubit], self.dim, duration=0)

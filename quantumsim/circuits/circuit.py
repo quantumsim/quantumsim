@@ -224,14 +224,6 @@ class GateSetMixin(ABC):
         for op in self.operations():
             op @ state
 
-    def _qubit_indices_in_state(self, state):
-        try:
-            return [state.qubits.index(q) for q in self.qubits]
-        except ValueError as ex:
-            raise ValueError(
-                'Qubit {} is not present in the state'
-                .format(ex.args[0].split()[0]))
-
     @abstractmethod
     def set_bases(self, bases_in=None, bases_out=None):
         """Return a circuit or gate with an updated bases.
@@ -306,6 +298,14 @@ class GateSetMixin(ABC):
                         "Expected bases with Hilbert dimensionality {}, "
                         "but {} has elements with Hilbert dimensionality {}."
                         .format(self.dim_hilbert, name, b.dim_hilbert))
+
+    def _qubit_indices_in_state(self, state):
+        try:
+            return [state.qubits.index(q) for q in self.qubits]
+        except ValueError as ex:
+            raise ValueError(
+                'Qubit {} is not present in the state'
+                .format(ex.args[0].split()[0]))
 
 
 class CircuitUnitMixin(ABC):
@@ -851,6 +851,61 @@ class Gate(GatePlaceholder):
         state.apply_ptm(op.ptm, *op.qubits)
         for q, b in zip(qubit_indices, op.bases_out):
             state.bases[q] = b
+
+
+class ResetOperation(GatePlaceholder):
+    """Operation that resets specified qubits to ground state
+
+    Parameters
+    ----------
+    qubits : list of hashable or hashable
+        Tags of the involved qubits
+    dim_hilbert : int
+        Hilbert dimensionality of the correspondent operations
+    duration: float
+        Duration of the operation.
+    time_start: float
+        Starting time of the operation.
+    plot_metadata : None or dict
+        Metadata, that describes how to represent a gate on a plot.
+        TODO: link documentation, when plotting is ready.
+    repr_ : None or str
+        Pretty-printable representation of the gate, used in `Gate.__repr__`
+        and `Gate.__str__`. Can contain Python formatting syntax, then parameters
+        are picked from the Gate parameters when displayed.
+        If `None`, defaults to `"gate"`.
+    """
+    def __init__(
+        self,
+        qubits,
+        dim_hilbert,
+        duration=0.,
+        time_start=0.,
+        plot_metadata=None,
+        repr_=None,
+    ):
+        bases_in = (bases.general(dim_hilbert),) * len(qubits)
+        bases_out = (bases.general(dim_hilbert).subbasis([0]),) * len(qubits)
+        plot_metadata = plot_metadata or {"style": "box", "label": r'$\mathcal{{R}}$'}
+        repr_ = repr_ or 'reset'
+        super().__init__(qubits, dim_hilbert, duration, time_start,
+                         plot_metadata=plot_metadata, repr_=repr_,
+                         bases_in=bases_in, bases_out=bases_out)
+
+    def __matmul__(self, state):
+        """
+
+        Parameters
+        ----------
+        state : quantumsim.states.State
+        """
+        # To ensure that all indices are present, so that exception is raised before
+        # the computation, if there is a mistake.
+        for qubit in self.qubits:
+            if qubit not in state.qubits:
+                raise ValueError(f"Qubit {qubit} is not present in state. "
+                                 "List of qubits in state: {state.qubits}")
+        state.reset(*self.qubits)
 
 
 class Circuit(GateSetMixin):
