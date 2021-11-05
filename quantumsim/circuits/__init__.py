@@ -1,8 +1,10 @@
 from .circuit import (
     Box,
     Circuit,
+    CircuitUnitMixin,
     FinalizedCircuit,
     Gate,
+    GateSetMixin,
     ResetOperation,
     allow_param_repeat,
 )
@@ -12,8 +14,10 @@ from .plotter import plot
 __all__ = [
     "Box",
     "Circuit",
+    "CircuitUnitMixin",
     "FinalizedCircuit",
     "Gate",
+    "GateSetMixin",
     "ResetOperation",
     "allow_param_repeat",
     "optimize",

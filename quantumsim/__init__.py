@@ -1,7 +1,7 @@
 # noinspection PyProtectedMember
 from ._version import __version__
 from .bases import PauliBasis
-from .circuits import Gate, Box, Circuit, FinalizedCircuit
+from .circuits import Gate, Box, Circuit, FinalizedCircuit, ResetOperation
 from .states import State, StateNumpy
 from .models import Model, Setup, perfect_qubits as gates
 
