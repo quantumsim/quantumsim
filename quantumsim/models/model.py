@@ -22,7 +22,8 @@ class WaitingGate(GatePlaceholder):
                          plot_metadata=plot_metadata or {
                              "style": "box",
                              "label": r"$\mathcal{{W}}$"
-                         })
+                         },
+                         repr_=f"wait(duration={duration})")
         self.metadata = metadata
 
     def __copy__(self):
