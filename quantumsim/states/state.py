@@ -3,7 +3,7 @@ import numpy as np
 from functools import reduce
 
 from quantumsim.algebra import pv_to_dm, sigma, dm_to_pv
-from quantumsim.bases import general
+from quantumsim.bases import PauliBasis, general
 
 
 def prod(iterable):
@@ -69,7 +69,7 @@ class State(metaclass=abc.ABCMeta):
 
     @classmethod
     def from_pv(cls, pv, bases, qubits=None, *, force=False):
-        """Construct a new State instance from existing data in a form of expansion of 
+        """Construct a new State instance from existing data in a form of expansion of
         the density matrix in a basis of (generalized) Pauli matrices.
 
         Parameters
@@ -79,7 +79,7 @@ class State(metaclass=abc.ABCMeta):
         bases: list of quantumsim.PauliBasis
             Basis for the `pv`.
         qubits: list of hashable, optional
-            Tags of the qubits in the state. If not provided, defaults to 
+            Tags of the qubits in the state. If not provided, defaults to
             `list(range(len(bases)))`
         force: bool, optional
             By default creation of too large density matrix (more than
@@ -106,7 +106,7 @@ class State(metaclass=abc.ABCMeta):
         pass
 
     @classmethod
-    def from_dm(cls, dm, bases=None, qubits=None, *, force=False):
+    def from_dm(cls, dm, bases, qubits=None, *, force=False):
         """Construct a new State instance from a density matrix.
 
         Parameters
@@ -127,7 +127,7 @@ class State(metaclass=abc.ABCMeta):
         -------
         State
         """
-        if not hasattr(bases, '__iter__'):
+        if isinstance(bases, PauliBasis):
             n_qubits = len(dm) // bases.dim_hilbert
             bases = [bases] * n_qubits
         if not qubits:
