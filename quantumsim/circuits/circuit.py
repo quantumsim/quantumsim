@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import copy
 from itertools import chain
+from quantumsim.operations import operation
 from sympy import symbols, sympify
 import re
 import numpy as np
@@ -248,7 +249,7 @@ class Gate(CircuitBase):
         time_start=0.0,
         plot_metadata=None,
         param_funcs=None,
-        repr_=None
+        label=None
     ):
         """Gate
 
@@ -287,7 +288,7 @@ class Gate(CircuitBase):
                 "Number of qubits in operation does not match " "one in `qubits`."
             )
         self.plot_metadata = plot_metadata or {}
-        self._repr = repr_ or 'gate'
+        self.label = label or 'Gate'
         self._params = {
             param: symbols(param) for param in self._operation_params(self._operation)
         }
@@ -297,23 +298,29 @@ class Gate(CircuitBase):
 
     def __copy__(self):
         other = self.__class__(
-            self._qubits,
-            self.dim_hilbert,
-            copy(self._operation),
-            self._duration,
-            self._time_start,
-            self.plot_metadata,
-            repr_=self._repr
+            qubits=self._qubits,
+            dim_hilbert=self.dim_hilbert,
+            operation=copy(self._operation),
+            duration=self._duration,
+            time_start=self._time_start,
+            plot_metadata=self.plot_metadata,
+            label=self.label
         )
         other._params = copy(self._params)
         other._param_funcs = copy(self._param_funcs)
         return other
 
     def __repr__(self):
-        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+        if self.params:
+            param_str = ",".join([f"{par} = {val}" for par, val in self.params.items()])
+            return f"{self.label} ({param_str}) @ {self.qubits}"
+        return f"{self.label} @ {self.qubits}"
 
     def __str__(self):
-        return self._repr.format(**self.params) + " @ (" + ", ".join(self.qubits) + ")"
+        if self.params:
+            param_str = ",".join([f"{par} = {val}" for par, val in self.params.items()])
+            return f"{self.label} ({param_str}) @ {self.qubits}"
+        return f"{self.label} @ {self.qubits}"
 
     @property
     def time_start(self):

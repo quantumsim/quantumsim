@@ -85,7 +85,7 @@ class Model(metaclass=abc.ABCMeta):
             )
 
     @staticmethod
-    def gate(duration=nan, plot_metadata=None, param_funcs=None, repr_=None):
+    def gate(label=None, duration=nan, plot_metadata=None, param_funcs=None):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
@@ -108,7 +108,7 @@ class Model(metaclass=abc.ABCMeta):
                             duration=_duration,
                             plot_metadata=plot_metadata,
                             param_funcs=param_funcs,
-                            repr_=repr_)(**params)
+                            label=label)(**params)
 
             wrapper.__name__ = func.__name__
             return wrapper
