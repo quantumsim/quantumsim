@@ -892,6 +892,16 @@ class ResetOperation(GatePlaceholder):
                          plot_metadata=plot_metadata, repr_=repr_,
                          bases_in=bases_in, bases_out=bases_out)
 
+    def __copy__(self):
+        return self.__class__(
+            qubits=self.qubits,
+            dim_hilbert=self._dim_hilbert,
+            duration=self._duration,
+            time_start=self._time_start,
+            plot_metadata=self.plot_metadata,
+            repr_=self.repr,
+        )
+
     def __matmul__(self, state):
         """
 
