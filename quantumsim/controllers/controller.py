@@ -286,11 +286,9 @@ class Controller:
             The data array containing the values of the realized free parameter values for this circuit
         """
         if len(circuit.params) != 0:
-            outcome = xr.DataArray(
-                dims=["param"], coords={"param": list(circuit.params)}
-            )
+            outcomes = dict()
         else:
-            outcome = None
+            outcomes = None
 
         for operation, inds in circuit.operation.units():
             # Extract the indices for this operation from the state
@@ -325,14 +323,10 @@ class Controller:
                     _eval_params.values())
 
             # Apply each operation, which now should have all parameters fixed
-            operation(self._state.pauli_vector, *op_inds)
+            operation(self.state.pauli_vector, *op_inds)
 
-            # If operation was not trace perserving, renormalize state.
-            # Not sure if I should add this here?
-            # if not np.isclose(self._state.trace(), 1):
-            #    self._state.renormalize()
 
-        return outcome
+        return outcomes
 
     def _rng_required(self, param_funcs):
         """
