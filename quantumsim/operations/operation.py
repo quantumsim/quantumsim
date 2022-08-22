@@ -1,16 +1,15 @@
 import abc
 import inspect
 import re
+from collections import namedtuple
+from copy import copy
+from itertools import chain as chain_
 
 import numpy as np
 from scipy.linalg import expm
-from collections import namedtuple
-from itertools import chain as chain_
 
-from copy import copy
-
-from ..algebra.algebra import (kraus_to_ptm, ptm_convert_basis,
-                               plm_lindbladian_part, plm_hamiltonian_part)
+from ..algebra.algebra import (kraus_to_ptm, plm_hamiltonian_part,
+                               plm_lindbladian_part, ptm_convert_basis)
 
 
 class OperationNotDefinedError(RuntimeError):
