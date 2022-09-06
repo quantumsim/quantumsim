@@ -42,7 +42,7 @@ class Model(metaclass=abc.ABCMeta):
             plot_metadata={"style": "marker", "label": "x"},
         )
 
-    def p(self, param, *qubits):
+    def get_param(self, param, *qubits):
         return self._setup.param(param, *qubits)
 
     @property
@@ -86,30 +86,39 @@ class Model(metaclass=abc.ABCMeta):
             )
 
     @staticmethod
-    def gate(label=None, duration: Union[str, float]=nan, plot_metadata=None, param_funcs=None):
+    def gate(
+        label=None,
+        duration: Union[str, float] = nan,
+        plot_metadata=None,
+        param_funcs=None,
+    ):
         def gate_decorator(func):
             def make_operation(self, *qubits):
                 sequence = func(self, *qubits)
-                sequence = (sequence if (isinstance(sequence, tuple) or isinstance(sequence, list))
-                            else (sequence,))
-                sequence = [self._normalize_operation(op, qubits)
-                            for op in sequence]
+                sequence = (
+                    sequence
+                    if (isinstance(sequence, tuple) or isinstance(sequence, list))
+                    else (sequence,)
+                )
+                sequence = [self._normalize_operation(op, qubits) for op in sequence]
                 return Operation.from_sequence(sequence, qubits)
 
             def wrapper(self, *qubits, **params):
                 if callable(duration):
                     _duration = duration(*qubits, self._setup)
                 elif isinstance(duration, str):
-                    _duration = self.p(duration, *qubits)
+                    _duration = self.get_param(duration, *qubits)
                 else:
                     _duration = duration
-                return Gate(qubits,
-                            self.dim,
-                            make_operation(self, *qubits),
-                            duration=_duration,
-                            plot_metadata=plot_metadata,
-                            param_funcs=param_funcs,
-                            label=label)(**params)
+                return Gate(
+                    qubits,
+                    self.dim,
+                    make_operation(self, *qubits),
+                    duration=_duration,
+                    plot_metadata=plot_metadata,
+                    param_funcs=param_funcs,
+                    label=label,
+                )(**params)
 
             wrapper.__name__ = func.__name__
             return wrapper
@@ -141,20 +150,22 @@ class Model(metaclass=abc.ABCMeta):
             duration = gates[0].time_start - _time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_start=_time_start))
+                    self.idle(qubit, duration).shift(time_start=_time_start)
+                )
             duration = _time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.idle(qubit, duration).shift(time_end=_time_end))
+                    self.idle(qubit, duration).shift(time_end=_time_end)
+                )
             for gate1, gate2 in pairwise(gates):
                 if gate1.time_end >= _time_start and gate2.time_end <= _time_end:
                     duration = gate2.time_start - gate1.time_end
                     if duration > margin:
                         waiting_gates.append(
-                            self.idle(qubit, duration).shift(time_start=gate1.time_end))
+                            self.idle(qubit, duration).shift(time_start=gate1.time_end)
+                        )
 
-        gates = sorted(circuit.gates + waiting_gates,
-                       key=lambda g: g.time_start)
+        gates = sorted(circuit.gates + waiting_gates, key=lambda g: g.time_start)
         return Circuit(circuit.qubits, gates)
 
     def finalize(self, circuit, bases_in=None):
