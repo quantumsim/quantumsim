@@ -212,17 +212,20 @@ class GateSetMixin(ABC):
 
     def __matmul__(self, state):
         """
+        Apply a gate onto a state.
 
         Parameters
         ----------
         state : quantumsim.states.State
+            A state.
+
+        Raises
+        ------
         """
-        # To ensure that all indices are present, so that exception is raised before
-        # the computation, if there is a mistake.
-        _ = self._qubit_indices_in_state(state)
-        # noinspection PyTypeChecker
-        for op in self.operations():
-            op @ state
+        raise RuntimeError(
+            f"Instances of {type(self)} can't be applied to a state, because their"
+            " method __matmul__ is not implemented"
+        )
 
     @abstractmethod
     def set_bases(self, bases_in=None, bases_out=None):
@@ -997,6 +1000,14 @@ class Circuit(GateSetMixin):
 
         from .compiler import optimize
         return optimize(self, bases_in, bases_out, self.qubits, optimizations=False)
+
+    def __matmul__(self, state):
+        # To ensure that all indices are present, so that exception is raised before
+        # the computation, if there is a mistake.
+        _ = self._qubit_indices_in_state(state)
+        # noinspection PyTypeChecker
+        for op in self.operations():
+            op @ state
 
 
 class Box(CircuitUnitMixin, Circuit):
