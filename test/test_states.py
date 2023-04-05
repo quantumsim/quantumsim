@@ -273,8 +273,9 @@ class TestStates:
         ],
     )
     def test_diagonal_meas_prob(self, state_cls, bases):
-        diag = np.array([0.25, 0, 0.75, 0, 0, 0, 0, 0])
-        dm = np.diag(diag)
+        base_shape = (2, 2, 2)
+        diag = np.array([0.25, 0, 0.75, 0, 0, 0, 0, 0]).reshape(base_shape)
+        dm = np.diag(diag.reshape(-1)).reshape(base_shape * 2)
         s = state_cls.from_dm(dm, bases)
         assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
@@ -285,8 +286,8 @@ class TestStates:
         assert np.allclose(s.meas_prob(1), (0.25, 0.75))
         assert np.allclose(s.meas_prob(0), (1, 0))
 
-        diag = np.array([0.25, 0.5, 0, 0, 0, 0, 0, 0])
-        dm = np.diag(diag)
+        diag = np.array([0.25, 0.5, 0, 0, 0, 0, 0, 0]).reshape(base_shape)
+        dm = np.diag(diag.reshape(-1)).reshape(base_shape * 2)
         s = state_cls.from_dm(dm, bases, qubits=["x", "y", "z"])
         assert s.to_pv().shape == tuple(b.dim_pauli for b in bases)
         assert s.bases[0] == bases[0]
@@ -299,15 +300,16 @@ class TestStates:
 
     def test_get_diagonal(self, state_cls, dim_hilbert):
         # Default initialization
+        base_shape = (dim_hilbert, dim_hilbert)
         state = state_cls(2, dim_hilbert=dim_hilbert)
         diag = state.diagonal()
-        diag_ref = np.zeros(dim_hilbert**2)
-        diag_ref[0] = 1.0
+        diag_ref = np.zeros(dim_hilbert**2).reshape(base_shape)
+        diag_ref[0, 0] = 1.0
         assert diag == approx(diag_ref)
 
         # Random initialization in general basis
         state = random_hermitian_matrix(dim_hilbert**2, 7654)
-        diag_ref = np.diagonal(state)
+        diag_ref = np.diagonal(state).reshape(base_shape)
         state = state_cls.from_dm(state, (quantumsim.bases.general(dim_hilbert),) * 2)
         assert state.diagonal() == approx(diag_ref)
 
@@ -337,7 +339,7 @@ class TestStates:
         )
         # dm = np.array([[min(i, j)*10 + max(i, j) for i in range(1, 5)]
         #                for j in range(1, 5)])
-        diag = np.diag(dm)
+        diag = np.diag(dm).reshape((2, 2, 2))
 
         s = state_cls.from_dm(dm, bases)
         # assert s.expansion().shape == tuple(b.dim_pauli for b in bases)

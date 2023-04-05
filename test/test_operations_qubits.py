@@ -102,7 +102,7 @@ class TestLibrary:
     def test_cphase(self):
         state = State([0, 1])
         lib.cphase(0, 1, angle=pi) @ state
-        assert np.allclose(state.diagonal(), [1, 0, 0, 0])
+        assert np.allclose(state.diagonal(), [[1, 0], [0, 0]])
 
         state = State.from_dm(
             np.array([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0.5, 0.5], [0, 0, 0.5, 0.5]]),

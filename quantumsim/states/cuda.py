@@ -350,9 +350,9 @@ class StateCuda(State):
             )
 
         if get_data:
-            diag = target_array.get().ravel()[:diag_size]
-            target_size = self.dim_hilbert ** len(self.qubits)
-            if diag_size == target_size:
+            diag = target_array.get().ravel()[:diag_size].reshape(diag_shape)
+            target_shape = (self.dim_hilbert,) * len(self.qubits)
+            if diag_shape == target_shape:
                 return diag
             else:
                 # Some computational basis indices are missing from the state.
@@ -369,7 +369,7 @@ class StateCuda(State):
                     for basis in self.bases
                 ]
                 out[np.ix_(*ix_args)] = diag.reshape(diag_shape)
-                return out.reshape(target_size)
+                return out.reshape(target_shape)
         else:
             return target_array
 

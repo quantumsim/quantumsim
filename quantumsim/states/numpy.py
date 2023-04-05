@@ -75,7 +75,7 @@ class StateNumpy(State):
         complex_dm_dimension = self.dim_hilbert**num_qubits
         return np.einsum(
             self._data, indices, *trace_argument, out_indices, optimize="greedy"
-        ).real.reshape(complex_dm_dimension)
+        ).real
 
     def trace(self):
         # TODO: can be made more effective
