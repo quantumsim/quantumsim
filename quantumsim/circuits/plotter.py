@@ -50,7 +50,7 @@ class MatplotlibPlotter:
         elif hasattr(qubit_order, "__iter__"):
             self.qubits = tuple(qubit_order)
         elif qubit_order is None:
-            self.qubits = circuit.qubits
+            self.qubits = sorted(circuit.qubits)
         else:
             raise ValueError("Qubit order must be a list, callable or None")
 
