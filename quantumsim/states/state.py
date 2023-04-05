@@ -9,6 +9,7 @@ from quantumsim.bases import PauliBasis, general
 def prod(iterable):
     # From Python 3.8 this function can be replaced to math.prod
     from operator import mul
+
     return reduce(mul, iterable, 1)
 
 
@@ -41,6 +42,7 @@ class State(metaclass=abc.ABCMeta):
         :math:`2^22` elements currently) is not allowed. Set this to `True`
         if you know what you are doing.
     """
+
     _size_max = 2**22
 
     @abc.abstractmethod
@@ -50,21 +52,23 @@ class State(metaclass=abc.ABCMeta):
         else:
             self.qubits = list(qubits)
         if (pv is None) ^ (bases is None):
-            raise ValueError('Both `pv` and `bases` must be provided simultaneously.')
+            raise ValueError("Both `pv` and `bases` must be provided simultaneously.")
         if bases is not None:
             self.bases = list(bases)
             self.dim_hilbert = self.bases[0].dim_hilbert
             if not all(basis.dim_hilbert == self.dim_hilbert for basis in self.bases):
-                raise ValueError('All basis elements must have the same Hilbert '
-                                 'dimensionality')
+                raise ValueError(
+                    "All basis elements must have the same Hilbert " "dimensionality"
+                )
         else:
             self.dim_hilbert = dim_hilbert
             self.bases = [general(self.dim_hilbert).subbasis([0])] * len(self.qubits)
         if self.size > self._size_max and not force:
             raise ValueError(
-                'Density matrix of the system is going to have {} items. It '
-                'is probably too much. If you know what you are doing, '
-                'pass `force=True` argument to the constructor.')
+                "Density matrix of the system is going to have {} items. It "
+                "is probably too much. If you know what you are doing, "
+                "pass `force=True` argument to the constructor."
+            )
         # Pauli vector storage must be initialized in the derived class
 
     @classmethod
@@ -167,8 +171,10 @@ class State(metaclass=abc.ABCMeta):
         """
         self._validate_qubits(qubits)
         if len(ptm.shape) != 2 * len(qubits):
-            raise ValueError(f'{len(qubits)}-qubit PTM must have {2*len(qubits)} '
-                             f'dimensions, got {len(ptm.shape)}')
+            raise ValueError(
+                f"{len(qubits)}-qubit PTM must have {2*len(qubits)} "
+                f"dimensions, got {len(ptm.shape)}"
+            )
 
     @abc.abstractmethod
     def reset(self, *qubits):
@@ -290,24 +296,26 @@ class State(metaclass=abc.ABCMeta):
         n = len(self.qubits)
         if isinstance(operator, str):
             if n != len(operator):
-                raise ValueError("Operator string must have the same length as "
-                                 "a number of qubits in the state")
+                raise ValueError(
+                    "Operator string must have the same length as "
+                    "a number of qubits in the state"
+                )
             try:
                 sigmas = [sigma_dict[ch.upper()] for ch in operator]
             except KeyError as ex:
                 raise ValueError("sigma_dict does not contain a key specified") from ex
             for i, s in enumerate(sigmas):
                 einsum_args.append(s)
-                einsum_args.append([i, n+i])
+                einsum_args.append([i, n + i])
         else:
             einsum_args.append(operator)
-            einsum_args.append(list(range(2*n)))
+            einsum_args.append(list(range(2 * n)))
         einsum_args.append(self.to_pv())
-        einsum_args.append([2*n+i for i in range(n)])
+        einsum_args.append([2 * n + i for i in range(n)])
         for i, basis in enumerate(self.bases):
             einsum_args.append(basis.vectors)
-            einsum_args.append([2*n+i, n+i, i])
-        return np.einsum(*einsum_args, optimize='greedy')
+            einsum_args.append([2 * n + i, n + i, i])
+        return np.einsum(*einsum_args, optimize="greedy")
 
     def _validate_qubits(self, qubits):
         qubits_set = set(qubits)
@@ -315,8 +323,9 @@ class State(metaclass=abc.ABCMeta):
             raise ValueError("Qubit tags can't repeat")
         absent_qubits = qubits_set - set(self.qubits)
         if len(absent_qubits) > 0:
-            raise ValueError(f"Qubits {', '.join(absent_qubits)} are not present in "
-                             f"the state")
+            raise ValueError(
+                f"Qubits {', '.join(absent_qubits)} are not present in " f"the state"
+            )
 
     # noinspection PyMethodMayBeStatic
     def _validate_ptm_shape(self, ptm, target_shape, name):

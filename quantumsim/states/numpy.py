@@ -13,29 +13,31 @@ class StateNumpy(State):
     It is not focused on the performance, mainly used as a reference implementation.
     However, for small circuits it outperforms GPU implementations.
     """
+
     def __init__(self, qubits, pv=None, bases=None, *, dim_hilbert=2, force=False):
         super().__init__(qubits, pv, bases, dim_hilbert=dim_hilbert, force=force)
         if pv is not None:
             if self.dim_pauli != pv.shape:
                 raise ValueError(
-                    '`bases` Pauli dimensionality should be the same as the '
-                    'shape of `data` array.\n'
-                    ' - bases shapes: {}\n - data shape: {}'
-                    .format(self.dim_pauli, pv.shape))
+                    "`bases` Pauli dimensionality should be the same as the "
+                    "shape of `data` array.\n"
+                    " - bases shapes: {}\n - data shape: {}".format(
+                        self.dim_pauli, pv.shape
+                    )
+                )
             if pv.dtype not in (np.float16, np.float32, np.float64):
                 raise ValueError(
-                    '`pv` must have floating point data type, got {}'
-                    .format(pv.dtype)
+                    "`pv` must have floating point data type, got {}".format(pv.dtype)
                 )
 
         if isinstance(pv, np.ndarray):
             self._data = pv
         elif pv is None:
-            self._data = np.array(1., dtype=float).reshape(self.dim_pauli)
+            self._data = np.array(1.0, dtype=float).reshape(self.dim_pauli)
         else:
             raise ValueError(
-                "`pv` should be a numpy array or None, got type `{}`"
-                .format(type(pv)))
+                "`pv` should be a numpy array or None, got type `{}`".format(type(pv))
+            )
 
     def to_pv(self):
         return self._data.copy()
@@ -51,8 +53,13 @@ class StateNumpy(State):
         for i_in, i_out in zip(ptm_in_idx, ptm_out_idx):
             dm_out_idx[i_in] = i_out
         self._data = np.einsum(
-            self._data, dm_in_idx, ptm, ptm_out_idx + ptm_in_idx, dm_out_idx,
-            optimize='greedy')
+            self._data,
+            dm_in_idx,
+            ptm,
+            ptm_out_idx + ptm_in_idx,
+            dm_out_idx,
+            optimize="greedy",
+        )
 
     def diagonal(self, *, get_data=True):
         no_trace_tensors = [basis.computational_basis_vectors for basis in self.bases]
@@ -65,9 +72,10 @@ class StateNumpy(State):
 
         indices = list(range(num_qubits))
         out_indices = list(range(num_qubits, 2 * num_qubits))
-        complex_dm_dimension = self.dim_hilbert ** num_qubits
-        return np.einsum(self._data, indices, *trace_argument, out_indices,
-                         optimize='greedy').real.reshape(complex_dm_dimension)
+        complex_dm_dimension = self.dim_hilbert**num_qubits
+        return np.einsum(
+            self._data, indices, *trace_argument, out_indices, optimize="greedy"
+        ).real.reshape(complex_dm_dimension)
 
     def trace(self):
         # TODO: can be made more effective
@@ -104,7 +112,7 @@ class StateNumpy(State):
                 einsum_args.append(b.vectors)
                 einsum_args.append([i, num_qubits + i, num_qubits + i])
         einsum_args.append(qubit_indices)
-        pv_traced = np.einsum(*einsum_args, optimize='greedy').real
+        pv_traced = np.einsum(*einsum_args, optimize="greedy").real
         return pv_traced
 
     def meas_prob(self, qubit):
@@ -113,21 +121,23 @@ class StateNumpy(State):
         einsum_args = [self._data, list(range(num_qubits))]
         for i, b in enumerate(self.bases):
             einsum_args.append(b.vectors)
-            einsum_args.append([i, num_qubits+i, num_qubits+i])
+            einsum_args.append([i, num_qubits + i, num_qubits + i])
         einsum_args.append([num_qubits + self.qubits.index(qubit)])
-        return np.einsum(*einsum_args, optimize='greedy').real
+        return np.einsum(*einsum_args, optimize="greedy").real
 
     def renormalize(self):
         tr = self.trace()
         if tr > 1e-8:
-            self._data *= tr ** -1
+            self._data *= tr**-1
         else:
             warnings.warn(
                 "Density matrix trace is (close to) 0. Not renormalizing, because loss "
                 "of significance is likely. Have you projected the density matrix on a "
-                "state with zero weight?")
+                "state with zero weight?"
+            )
         return tr
 
     def copy(self):
-        return self.__class__(copy(self.qubits), self._data.copy(), copy(self.bases),
-                              force=True)
+        return self.__class__(
+            copy(self.qubits), self._data.copy(), copy(self.bases), force=True
+        )

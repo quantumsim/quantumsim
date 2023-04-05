@@ -4,11 +4,17 @@ from typing import List
 import numpy as np
 
 from quantumsim.circuits import Gate, Circuit
-from quantumsim.circuits.circuit import GateSetMixin
 
 
-def optimize(circuit, bases_in=None, bases_out=None, qubits=None, *,
-             optimizations=True, sv_cutoff=1e-5):
+def optimize(
+    circuit,
+    bases_in=None,
+    bases_out=None,
+    qubits=None,
+    *,
+    optimizations=True,
+    sv_cutoff=1e-5,
+):
     """
     Returns an optimized for efficient computation version of a circuit.
 
@@ -29,9 +35,6 @@ def optimize(circuit, bases_in=None, bases_out=None, qubits=None, *,
     -------
     quantumsim.Circuit or quantumsim.Gate
     """
-    if not isinstance(circuit, GateSetMixin):
-        raise ValueError(f"`circuit` must be an instance of Circuit or Gate,"
-                         f" got {type(circuit)}")
     graph = CircuitGraph(circuit, qubits or sorted(circuit.qubits), bases_in, bases_out)
     compile_graph(graph, optimizations=optimizations, sv_cutoff=sv_cutoff)
     return graph.to_circuit()
@@ -45,8 +48,9 @@ def compile_graph(graph, *, optimizations=True, sv_cutoff=1e-5):
 def stage_align_bases(graph, *, optimizations=True, sv_cutoff=1e-5):
     queue = CompilerQueue(graph.nodes)
     while len(queue) > 0:
-        compile_next_node_in_queue(queue, optimizations=optimizations,
-                                   sv_cutoff=sv_cutoff)
+        compile_next_node_in_queue(
+            queue, optimizations=optimizations, sv_cutoff=sv_cutoff
+        )
 
 
 def stage_merge_nodes(graph):
@@ -79,23 +83,24 @@ def compile_next_node_in_queue(queue, *, optimizations=True, sv_cutoff=1e-5):
     """
     node = queue.get()
     b_in = node.bases_in_tuple
-    b_out = tuple(bo or bi.superbasis for bo, bi in
-                  zip(node.bases_out_tuple, node.bases_in_tuple))
+    b_out = tuple(
+        bo or bi.superbasis for bo, bi in zip(node.bases_out_tuple, node.bases_in_tuple)
+    )
     node.op = node.op.set_bases(b_in, b_out)
     if optimizations:
         b_in, b_out = optimal_bases(node, sv_cutoff=sv_cutoff)
         node.op = node.op.set_bases(b_in, b_out)
 
-    for qubit, bi, bo in zip(node.qubit_indices, node.op.bases_in,
-                             node.op.bases_out):
+    for qubit, bi, bo in zip(node.qubit_indices, node.op.bases_in, node.op.bases_out):
         node.bases_in_dict[qubit] = bi
         node.bases_out_dict[qubit] = bo
-        if (node.prev[qubit] is not None and
-                node.prev[qubit].bases_out_dict[qubit] != bi):
+        if (
+            node.prev[qubit] is not None
+            and node.prev[qubit].bases_out_dict[qubit] != bi
+        ):
             node.prev[qubit].bases_out_dict[qubit] = bi
             queue.add(node.prev[qubit])
-        if (node.next[qubit] is not None and
-                node.next[qubit].bases_in_dict[qubit] != bo):
+        if node.next[qubit] is not None and node.next[qubit].bases_in_dict[qubit] != bo:
             node.next[qubit].bases_in_dict[qubit] = bo
             queue.add(node.next[qubit])
 
@@ -125,8 +130,7 @@ def try_merge_next(graph, node):
     d_node = len(node.qubit_indices)
     d_other = len(other.qubit_indices)
 
-    contr_indices = [other.qubit_indices.index(qubit)
-                     for qubit in node.qubit_indices]
+    contr_indices = [other.qubit_indices.index(qubit) for qubit in node.qubit_indices]
     other_out = list(range(d_other))
     other_in = list(range(d_other, 2 * d_other))
     node_out = list(range(2 * d_other, 2 * d_other + d_node))
@@ -134,9 +138,13 @@ def try_merge_next(graph, node):
     for i, j in zip(contr_indices, node_out):
         other_in[i] = j
 
-    other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                          other.op.ptm, other_out + other_in,
-                          optimize='greedy')
+    other_ptm = np.einsum(
+        node.op.ptm,
+        node_out + node_in,
+        other.op.ptm,
+        other_out + other_in,
+        optimize="greedy",
+    )
 
     time_start = min(node.op.time_start, other.op.time_start)
     time_end = max(node.op.time_end, other.op.time_end)
@@ -149,9 +157,14 @@ def try_merge_next(graph, node):
         else:
             node_prev.next[qubit] = other
 
-    other.op = Gate.from_ptm(other_ptm, other.bases_in_tuple, other.bases_out_tuple,
-                             qubits=other.op.qubits, time_start=time_start,
-                             duration=time_end-time_start)
+    other.op = Gate.from_ptm(
+        other_ptm,
+        other.bases_in_tuple,
+        other.bases_out_tuple,
+        qubits=other.op.qubits,
+        time_start=time_start,
+        duration=time_end - time_start,
+    )
     node.merged = True
 
 
@@ -177,8 +190,7 @@ def try_merge_prev(graph, node):
     d_node = len(node.qubit_indices)
     d_other = len(other.qubit_indices)
 
-    contr_indices = [other.qubit_indices.index(qubit)
-                     for qubit in node.qubit_indices]
+    contr_indices = [other.qubit_indices.index(qubit) for qubit in node.qubit_indices]
     other_out = list(range(d_other))
     other_in = list(range(d_other, 2 * d_other))
     node_in = list(range(2 * d_other, 2 * d_other + d_node))
@@ -186,9 +198,13 @@ def try_merge_prev(graph, node):
     for i, j in zip(contr_indices, node_in):
         other_out[i] = j
 
-    other_ptm = np.einsum(node.op.ptm, node_out + node_in,
-                          other.op.ptm, other_out + other_in,
-                          optimize='greedy')
+    other_ptm = np.einsum(
+        node.op.ptm,
+        node_out + node_in,
+        other.op.ptm,
+        other_out + other_in,
+        optimize="greedy",
+    )
 
     time_start = min(node.op.time_start, other.op.time_start)
     time_end = max(node.op.time_end, other.op.time_end)
@@ -201,9 +217,14 @@ def try_merge_prev(graph, node):
         else:
             node_next.prev[qubit] = other
 
-    other.op = Gate.from_ptm(other_ptm, other.bases_in_tuple, other.bases_out_tuple,
-                             qubits=other.op.qubits, time_start=time_start,
-                             duration=time_end-time_start)
+    other.op = Gate.from_ptm(
+        other_ptm,
+        other.bases_in_tuple,
+        other.bases_out_tuple,
+        qubits=other.op.qubits,
+        time_start=time_start,
+        duration=time_end - time_start,
+    )
     node.merged = True
 
 
@@ -244,11 +265,16 @@ class Node:
         order = np.argsort(self.qubit_indices)
         self.qubit_indices = [self.qubit_indices[i] for i in order]
         qubits = [self.op.qubits[i] for i in order]
-        self.op = Gate.from_ptm(new_ptm, self.bases_in_tuple, self.bases_out_tuple,
-                                qubits=qubits, duration=self.op.duration,
-                                time_start=self.op.time_start,
-                                plot_metadata=self.op.plot_metadata,
-                                repr_=self.op.repr)
+        self.op = Gate.from_ptm(
+            new_ptm,
+            self.bases_in_tuple,
+            self.bases_out_tuple,
+            qubits=qubits,
+            duration=self.op.duration,
+            time_start=self.op.time_start,
+            plot_metadata=self.op.plot_metadata,
+            repr_=self.op.repr,
+        )
 
 
 class CompilerQueue:
@@ -279,7 +305,7 @@ class CircuitGraph:
         if qubits:
             for q in circuit.qubits:
                 if q not in qubits:
-                    raise ValueError(f"Qubit \"{q}\" is not present in `qubits` list")
+                    raise ValueError(f'Qubit "{q}" is not present in `qubits` list')
         self.starts = [None for _ in range(len(circuit.qubits))]
         self.ends = [None for _ in range(len(circuit.qubits))]
         self.nodes = []
@@ -310,7 +336,7 @@ class CircuitGraph:
         elif len(self.nodes) == 1:
             return self.nodes[0].op
         else:
-            raise RuntimeError('No operations in the graph.')
+            raise RuntimeError("No operations in the graph.")
 
     def filter_merged(self):
         self.nodes = [node for node in self.nodes if not node.merged]
@@ -346,24 +372,26 @@ def optimal_bases(node, *, sv_cutoff=1e-5):
 
     d_in = np.prod([b.dim_pauli for b in node.op.bases_in])
     d_out = np.prod([b.dim_pauli for b in node.op.bases_out])
-    u, s, vh = np.linalg.svd(node.op.ptm
-                             .reshape(d_out, d_in), full_matrices=False)
+    u, s, vh = np.linalg.svd(node.op.ptm.reshape(d_out, d_in), full_matrices=False)
     truncate_index = np.sum(s > sv_cutoff)
 
-    mask_in = np.any(
-        np.abs(vh[:truncate_index]) > 1e-13, axis=0) \
-        .reshape(tuple(b.dim_pauli for b in node.op.bases_in)) \
+    mask_in = (
+        np.any(np.abs(vh[:truncate_index]) > 1e-13, axis=0)
+        .reshape(tuple(b.dim_pauli for b in node.op.bases_in))
         .nonzero()
-    mask_out = np.any(
-        np.abs(u[:, :truncate_index]) > 1e-13, axis=1) \
-        .reshape(tuple(b.dim_pauli for b in node.op.bases_out)) \
+    )
+    mask_out = (
+        np.any(np.abs(u[:, :truncate_index]) > 1e-13, axis=1)
+        .reshape(tuple(b.dim_pauli for b in node.op.bases_out))
         .nonzero()
+    )
 
     opt_bases_in = []
     opt_bases_out = []
     for opt_bases, bases, mask in (
-            (opt_bases_in, node.op.bases_in, mask_in),
-            (opt_bases_out, node.op.bases_out, mask_out)):
+        (opt_bases_in, node.op.bases_in, mask_in),
+        (opt_bases_out, node.op.bases_out, mask_out),
+    ):
         for basis, involved_indices in zip(bases, mask):
             # Figure out what single-qubit basis elements are not
             # involved at all

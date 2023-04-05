@@ -22,8 +22,10 @@ class PauliBasis:
     def __init__(self, vectors, labels, superbasis=None):
         if vectors.shape[1] != vectors.shape[2]:
             raise ValueError(
-                "Pauli basis vectors must be square matrices, got shape {}x{}"
-                .format(vectors.shape[1], vectors.shape[2]))
+                "Pauli basis vectors must be square matrices, got shape {}x{}".format(
+                    vectors.shape[1], vectors.shape[2]
+                )
+            )
 
         self.vectors = vectors
         self.labels = labels
@@ -31,24 +33,28 @@ class PauliBasis:
 
         # TODO: rename? Or may be refactor to avoid needs to hint?
         self.computational_basis_vectors = np.einsum(
-            "xii -> ix", self.vectors, optimize='greedy')
+            "xii -> ix", self.vectors, optimize="greedy"
+        )
 
         # make hint on how to efficiently
         # extract the diagonal
         self.computational_basis_indices = {
             i: self._to_unit_vector(cb)
-            for i, cb in enumerate(self.computational_basis_vectors)}
+            for i, cb in enumerate(self.computational_basis_vectors)
+        }
 
         # make hint on how to trace
-        traces = (np.einsum("xii", self.vectors, optimize='greedy') /
-                  np.sqrt(self.dim_hilbert))
+        traces = np.einsum("xii", self.vectors, optimize="greedy") / np.sqrt(
+            self.dim_hilbert
+        )
 
         self.trace_index = self._to_unit_vector(traces)
 
     def __eq__(self, other):
         if isinstance(other, PauliBasis):
-            return (self.vectors.shape == other.vectors.shape and
-                    np.allclose(self.vectors, other.vectors))
+            return self.vectors.shape == other.vectors.shape and np.allclose(
+                self.vectors, other.vectors
+            )
         else:
             return False
 
@@ -79,17 +85,20 @@ class PauliBasis:
         -------
         PauliBasis
         """
-        return PauliBasis(self.vectors[list(indices)],
-                          [self.labels[i] for i in indices], self)
+        return PauliBasis(
+            self.vectors[list(indices)], [self.labels[i] for i in indices], self
+        )
 
     def computational_subbasis(self):
-        idxes = [idx
-                 for st, idx in self.computational_basis_indices.items()
-                 if idx is not None]
+        idxes = [
+            idx
+            for st, idx in self.computational_basis_indices.items()
+            if idx is not None
+        ]
         return self.subbasis(idxes)
 
     def hilbert_to_pauli_vector(self, rho):
-        return np.einsum("xab, ba -> x", self.vectors, rho, optimize='greedy')
+        return np.einsum("xab, ba -> x", self.vectors, rho, optimize="greedy")
 
     def is_orthonormal(self):
         """
@@ -99,15 +108,14 @@ class PauliBasis:
         -------
         bool
         """
-        i = np.einsum("xab, yba -> xy", self.vectors,
-                      self.vectors, optimize='greedy')
+        i = np.einsum("xab, yba -> xy", self.vectors, self.vectors, optimize="greedy")
         return np.allclose(i, np.eye(self.dim_pauli))
 
     @staticmethod
     def _to_unit_vector(v):
         if np.allclose(np.sum(v), 1):
             rounded = np.round(v, 8)
-            nz, = np.nonzero(rounded)
+            (nz,) = np.nonzero(rounded)
             if len(nz) == 1:
                 return nz[0]
         return None
@@ -121,7 +129,5 @@ class PauliBasis:
             bvn_string = "unnamed basis"
 
         return s.format(
-            self.__class__.__name__,
-            self.dim_hilbert,
-            self.dim_pauli,
-            bvn_string)
+            self.__class__.__name__, self.dim_hilbert, self.dim_pauli, bvn_string
+        )

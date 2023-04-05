@@ -6,18 +6,19 @@ from .states import State, StateNumpy
 from .models import Model, Setup, perfect_qubits as gates
 
 __all__ = [
-    'PauliBasis',
-    'Model',
-    'Setup',
-    'State',
-    'StateNumpy',
-    'gates',
+    "PauliBasis",
+    "Model",
+    "Setup",
+    "State",
+    "StateNumpy",
+    "gates",
 ]
 
 try:
     # noinspection PyUnresolvedReferences
     from .states import StateCuda
-    __all__ += 'StateCuda'
+
+    __all__ += "StateCuda"
     State = StateCuda
 except ImportError:
     State = StateNumpy
@@ -26,5 +27,7 @@ except ImportError:
 def test(verbose=True):
     from pytest import main
     from os.path import dirname, abspath, join
-    return main([dirname(abspath(join(__file__, '..'))), "-s"] +
-                (['-v'] if verbose else []))
+
+    return main(
+        [dirname(abspath(join(__file__, ".."))), "-s"] + (["-v"] if verbose else [])
+    )

@@ -10,12 +10,16 @@ import warnings
 
 # noinspection PyUnresolvedReferences
 import pycuda.autoinit
+
 # noinspection PyUnresolvedReferences
 import pycuda.driver as drv
+
 # noinspection PyUnresolvedReferences
 import pycuda.gpuarray as ga
+
 # noinspection PyUnresolvedReferences
 import pycuda.reduction
+
 # noinspection PyUnresolvedReferences
 from pycuda.compiler import SourceModule, DEFAULT_NVCC_FLAGS
 
@@ -30,16 +34,17 @@ kernel_file = package_path + "/primitives.cu"
 try:
     with open(kernel_file, "r") as kernel_source_file:
         mod = SourceModule(
-            kernel_source_file.read(), options=DEFAULT_NVCC_FLAGS + [
-                "--default-stream", "per-thread", "-lineinfo"])
+            kernel_source_file.read(),
+            options=DEFAULT_NVCC_FLAGS
+            + ["--default-stream", "per-thread", "-lineinfo"],
+        )
 except FileNotFoundError:
     pass
 
 if mod is None:
     raise ImportError("Could not import CUDA kernels from primitives.cu")
 
-pycuda.autoinit.context.set_shared_config(
-    drv.shared_config.EIGHT_BYTE_BANK_SIZE)
+pycuda.autoinit.context.set_shared_config(drv.shared_config.EIGHT_BYTE_BANK_SIZE)
 
 _two_qubit_general_ptm = mod.get_function("two_qubit_general_ptm")
 # noinspection SpellCheckingInspection
@@ -50,10 +55,11 @@ _multitake.prepare("PPPPPPI")
 
 sum_along_axis = pycuda.reduction.ReductionKernel(
     dtype_out=np.float64,
-    neutral="0", reduce_expr="a+b",
+    neutral="0",
+    reduce_expr="a+b",
     map_expr="(i/stride) % dim == offset ? in[i] : 0",
     arguments="const double *in, unsigned int stride, unsigned int dim, "
-              "unsigned int offset",
+    "unsigned int offset",
 )
 
 
@@ -64,6 +70,7 @@ class StateCuda(State):
     This implementation is optimized for large density matrices and is recommended for
     systems with more than six entangled qubits.
     """
+
     _gpuarray_cache = {}
 
     def __init__(self, qubits, pv=None, bases=None, *, dim_hilbert=2, force=False):
@@ -71,18 +78,19 @@ class StateCuda(State):
         if pv is not None:
             if self.dim_pauli != pv.shape:
                 raise ValueError(
-                    '`bases` Pauli dimensionality should be the same as the '
-                    'shape of `data` array.\n'
-                    ' - bases shapes: {}\n - data shape: {}'
-                    .format(self.dim_pauli, pv.shape))
+                    "`bases` Pauli dimensionality should be the same as the "
+                    "shape of `data` array.\n"
+                    " - bases shapes: {}\n - data shape: {}".format(
+                        self.dim_pauli, pv.shape
+                    )
+                )
         else:
-            pv = np.array(1., dtype=np.float64).reshape(self.dim_pauli)
+            pv = np.array(1.0, dtype=np.float64).reshape(self.dim_pauli)
 
         if isinstance(pv, np.ndarray):
             if pv.dtype not in (np.float16, np.float32, np.float64):
                 raise ValueError(
-                    '`pv` must have float64 data type, got {}'
-                    .format(pv.dtype)
+                    "`pv` must have float64 data type, got {}".format(pv.dtype)
                 )
 
             # Looks like there are some issues with ordering, so the line
@@ -90,18 +98,22 @@ class StateCuda(State):
             # self._data = ga.to_gpu(pv.astype(np.float64))
 
             self._work_data = ga.to_gpu(
-                pv.reshape(pv.size, order='C').astype(np.float64))
-            self._data = ga.empty(pv.shape, dtype=np.float64, order='C')
+                pv.reshape(pv.size, order="C").astype(np.float64)
+            )
+            self._data = ga.empty(pv.shape, dtype=np.float64, order="C")
             self._data.set(self._work_data.reshape(pv.shape))
             self._work_data.gpudata.free()
         elif isinstance(pv, ga.GPUArray):
             if pv.dtype != np.float64:
                 raise ValueError(
-                    '`pv` must have float64 data type, got {}'.format(pv.dtype))
+                    "`pv` must have float64 data type, got {}".format(pv.dtype)
+                )
             self._data = pv
         else:
-            raise ValueError(f"`pv` must be Numpy array, PyCUDA GPU array or None, "
-                             f"got `{type(pv)}`")
+            raise ValueError(
+                f"`pv` must be Numpy array, PyCUDA GPU array or None, "
+                f"got `{type(pv)}`"
+            )
 
         self._data.gpudata.size = self._data.nbytes
         self._work_data = ga.empty_like(self._data)
@@ -118,8 +130,9 @@ class StateCuda(State):
         elif len(qubit_indices) == 2:
             self._apply_two_qubit_ptm(qubit_indices[0], qubit_indices[1], ptm)
         else:
-            raise NotImplementedError('Applying {}-qubit PTM is not '
-                                      'implemented in the active backend.')
+            raise NotImplementedError(
+                "Applying {}-qubit PTM is not " "implemented in the active backend."
+            )
 
     def _ensure_gpu_array_shape(self, arr, shape):
         new_size = prod(shape)
@@ -131,8 +144,10 @@ class StateCuda(State):
                 out = ga.empty(shape, np.float64)
                 out.gpudata.size = self._work_data.nbytes
             except Exception as ex:
-                raise RuntimeError(f"Could not allocate a GPU array of shape {shape} "
-                                   f"and size {new_size_bytes} bytes") from ex
+                raise RuntimeError(
+                    f"Could not allocate a GPU array of shape {shape} "
+                    f"and size {new_size_bytes} bytes"
+                ) from ex
         else:
             # reallocation not required,
             # reshape but reuse allocation
@@ -157,8 +172,7 @@ class StateCuda(State):
             Index of second qubit
         """
         if len(ptm.shape) != 4:
-            raise ValueError(
-                "`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
+            raise ValueError("`ptm` must be a 4D array, got {}D".format(len(ptm.shape)))
 
         # bit0 must be the more significant bit (bit 0 is msb)
         if qubit0 > qubit1:
@@ -194,8 +208,8 @@ class StateCuda(State):
         grid_size = max(1, (new_size - 1) // block_size + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = prod(self._data.shape[qubit1 + 1:])
-        dim_y = prod(self._data.shape[qubit0 + 1:qubit1])
+        dim_z = prod(self._data.shape[qubit1 + 1 :])
+        dim_y = prod(self._data.shape[qubit0 + 1 : qubit1])
         dim_rho = new_size  # self.data.size
 
         _two_qubit_general_ptm.prepared_call(
@@ -204,11 +218,13 @@ class StateCuda(State):
             self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
-            dim0_in, dim1_in,
+            dim0_in,
+            dim1_in,
             dim_z,
             dim_y,
             dim_rho,
-            shared_size=8 * sh_mem_size)
+            shared_size=8 * sh_mem_size,
+        )
 
         self._data, self._work_data = self._work_data, self._data
 
@@ -230,8 +246,7 @@ class StateCuda(State):
 
         # TODO Refactor to use self._validate_ptm
         if len(ptm.shape) != 2:
-            raise ValueError(
-                "`ptm` must be a 2D array, got {}D".format(len(ptm.shape)))
+            raise ValueError("`ptm` must be a 2D array, got {}D".format(len(ptm.shape)))
 
         dim_bit_out, dim_bit_in = ptm.shape
         new_shape[qubit] = dim_bit_out
@@ -248,7 +263,7 @@ class StateCuda(State):
         grid_size = max(1, (new_size - 1) // block_size + 1)
         grid = (grid_size, 1, 1)
 
-        dim_z = prod(self._data.shape[qubit + 1:])
+        dim_z = prod(self._data.shape[qubit + 1 :])
         dim_y = prod(self._data.shape[:qubit])
         dim_rho = new_size  # self.data.size
 
@@ -258,11 +273,13 @@ class StateCuda(State):
             self._data.gpudata,
             self._work_data.gpudata,
             ptm_gpu.gpudata,
-            1, dim_bit_in,
+            1,
+            dim_bit_in,
             dim_z,
             dim_y,
             dim_rho,
-            shared_size=8 * sh_mem_size)
+            shared_size=8 * sh_mem_size,
+        )
 
         self._data, self._work_data = self._work_data, self._data
 
@@ -288,14 +305,18 @@ class StateCuda(State):
             if target_array.size < diag_size:
                 raise ValueError(
                     "Size of `target_gpu_array` is too small ({}).\n"
-                    "Should be at least {}."
-                    .format(target_array.size, diag_size))
+                    "Should be at least {}.".format(target_array.size, diag_size)
+                )
             target_array = self._ensure_gpu_array_shape(target_array, diag_shape)
 
-        idx = [[pb.computational_basis_indices[i]
+        idx = [
+            [
+                pb.computational_basis_indices[i]
                 for i in range(pb.dim_hilbert)
-                if pb.computational_basis_indices[i] is not None]
-               for pb in self.bases]
+                if pb.computational_basis_indices[i] is not None
+            ]
+            for pb in self.bases
+        ]
 
         idx_j = np.array(list(chain(*idx))).astype(np.uint32)
         idx_i = np.cumsum([0] + [len(i) for i in idx][:-1]).astype(np.uint32)
@@ -309,18 +330,23 @@ class StateCuda(State):
         idx_i_gpu = self._cached_gpuarray(idx_i)
         idx_j_gpu = self._cached_gpuarray(idx_j)
 
-        block = (2 ** 8, 1, 1)
-        grid = (max(1, (diag_size - 1) // 2 ** 8 + 1), 1, 1)
+        block = (2**8, 1, 1)
+        grid = (max(1, (diag_size - 1) // 2**8 + 1), 1, 1)
 
         if len(yshape) == 0:
             # brain-dead case, but should be handled according to exp.
             target_array.set(self._data.get())
         else:
             _multitake.prepared_call(
-                grid, block, self._data.gpudata, target_array.gpudata,
-                idx_i_gpu.gpudata, idx_j_gpu.gpudata,
-                xshape_gpu.gpudata, yshape_gpu.gpudata,
-                np.uint32(len(yshape))
+                grid,
+                block,
+                self._data.gpudata,
+                target_array.gpudata,
+                idx_i_gpu.gpudata,
+                idx_j_gpu.gpudata,
+                xshape_gpu.gpudata,
+                yshape_gpu.gpudata,
+                np.uint32(len(yshape)),
             )
 
         if get_data:
@@ -333,10 +359,15 @@ class StateCuda(State):
                 # Their correspondent elements need to be filled with zero in the
                 # diagonal, otherwise it is very hard to understand which elements of
                 # the diagonal are missing.
-                out = np.zeros((self.dim_hilbert,)*len(self.qubits), dtype=np.float64)
-                ix_args = [[i for i in range(self.dim_hilbert)
-                            if basis.computational_basis_indices[i] is not None]
-                           for basis in self.bases]
+                out = np.zeros((self.dim_hilbert,) * len(self.qubits), dtype=np.float64)
+                ix_args = [
+                    [
+                        i
+                        for i in range(self.dim_hilbert)
+                        if basis.computational_basis_indices[i] is not None
+                    ]
+                    for basis in self.bases
+                ]
                 out[np.ix_(*ix_args)] = diag.reshape(diag_shape)
                 return out.reshape(target_size)
         else:
@@ -347,12 +378,14 @@ class StateCuda(State):
         return np.sum(self.diagonal())
 
     def partial_trace(self, *qubits):
-        raise NotImplementedError("Currently this method is implemented only "
-                                  "in Numpy backend.")
+        raise NotImplementedError(
+            "Currently this method is implemented only " "in Numpy backend."
+        )
 
     def reset(self, *qubits):
-        raise NotImplementedError("Currently this method is implemented only "
-                                  "in Numpy backend.")
+        raise NotImplementedError(
+            "Currently this method is implemented only " "in Numpy backend."
+        )
 
     def meas_prob(self, qubit):
         super().meas_prob(qubit)
@@ -375,26 +408,29 @@ class StateCuda(State):
             # We need to insert zeros at the basis elements, that are missing
             # from the basis
             it = iter(out)
-            return [next(it) if qbi is not None else 0.
-                    for qbi in self.bases[qubit_index]
-                                   .computational_basis_indices.values()]
+            return [
+                next(it) if qbi is not None else 0.0
+                for qbi in self.bases[qubit_index].computational_basis_indices.values()
+            ]
 
     def renormalize(self):
         """Renormalize to trace one."""
         tr = self.trace()
         if tr > 1e-8:
-            self._data *= np.float(1. / tr)
+            self._data *= np.float(1.0 / tr)
         else:
             warnings.warn(
                 "Density matrix trace is (close to) 0. Not renormalizing, because loss "
                 "of significance is likely. Have you projected the density matrix on a "
-                "state with zero weight?")
+                "state with zero weight?"
+            )
         return tr
 
     def copy(self):
         """Return a deep copy of this state."""
-        return self.__class__(copy(self.qubits), self._data.copy(), copy(self.bases),
-                              force=True)
+        return self.__class__(
+            copy(self.qubits), self._data.copy(), copy(self.bases), force=True
+        )
 
     def _cached_gpuarray(self, array):
         """

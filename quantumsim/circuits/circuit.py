@@ -13,8 +13,11 @@ from sympy import symbols, sympify
 
 from .. import bases
 from ..algebra import kraus_to_ptm
-from ..algebra.algebra import plm_hamiltonian_part, plm_lindbladian_part, \
-    ptm_convert_basis
+from ..algebra.algebra import (
+    plm_hamiltonian_part,
+    plm_lindbladian_part,
+    ptm_convert_basis,
+)
 
 PARAM_REPEAT_ALLOWED = False
 
@@ -155,14 +158,14 @@ class GateSetMixin(ABC):
         GateSetMixin
         """
         if time_start is not None and time_end is not None:
-            raise ValueError('Only one argument is accepted.')
+            raise ValueError("Only one argument is accepted.")
         copy_ = copy(self)
         if time_start is not None:
             copy_.time_start = time_start
         elif time_end is not None:
             copy_.time_end = time_end
         else:
-            raise ValueError('Specify time_start or time_end')
+            raise ValueError("Specify time_start or time_end")
         return copy_
 
     def __add__(self, other):
@@ -179,8 +182,7 @@ class GateSetMixin(ABC):
         """
         global PARAM_REPEAT_ALLOWED  # pylint: disable=global-statement
         if not PARAM_REPEAT_ALLOWED:
-            common_params = self.free_parameters.intersection(
-                other.free_parameters)
+            common_params = self.free_parameters.intersection(other.free_parameters)
             if len(common_params) > 0:
                 raise RuntimeError(
                     "The following free parameters are common for the circuits "
@@ -189,17 +191,24 @@ class GateSetMixin(ABC):
                     "   {}\n"
                     "Rename these parameters in one of the circuits, or use "
                     "`quantumsim.circuits.allow_param_repeat` "
-                    "context manager, if this is intended behaviour."
-                    .format(", ".join((str(p) for p in common_params))))
+                    "context manager, if this is intended behaviour.".format(
+                        ", ".join((str(p) for p in common_params))
+                    )
+                )
         shared_qubits = set(self.qubits).intersection(other.qubits)
         if len(shared_qubits) > 0:
-            other_shifted = other.shift(time_start=max(
-                (self._qubit_time_end(q) - other._qubit_time_start(q)
-                 for q in shared_qubits)) + 2*other.time_start)
+            other_shifted = other.shift(
+                time_start=max(
+                    (
+                        self._qubit_time_end(q) - other._qubit_time_start(q)
+                        for q in shared_qubits
+                    )
+                )
+                + 2 * other.time_start
+            )
         else:
             other_shifted = copy(other)
-        gates = tuple(chain((copy(g) for g in self.gates),
-                            other_shifted.gates))
+        gates = tuple(chain((copy(g) for g in self.gates), other_shifted.gates))
         return Circuit(gates)
 
     def __call__(self, **kwargs):
@@ -286,29 +295,32 @@ class GateSetMixin(ABC):
 
     def _validate_bases(self, **kwargs):
         for name, bases_ in kwargs.items():
-            if not hasattr(bases_, '__iter__'):
+            if not hasattr(bases_, "__iter__"):
                 raise ValueError(
-                    "`{n}` must be list-like, got {t}."
-                    .format(n=name, t=type(bases_)))
+                    "`{n}` must be list-like, got {t}.".format(n=name, t=type(bases_))
+                )
             if len(self.qubits) != len(bases_):
-                raise ValueError("Number of basis elements in `{}` ({}) does "
-                                 "not match number of qubits in the "
-                                 "operation ({})."
-                                 .format(name, len(bases_), len(self.qubits)))
+                raise ValueError(
+                    "Number of basis elements in `{}` ({}) does "
+                    "not match number of qubits in the "
+                    "operation ({}).".format(name, len(bases_), len(self.qubits))
+                )
             for b in bases_:
                 if self.dim_hilbert != b.dim_hilbert:
                     raise ValueError(
                         "Expected bases with Hilbert dimensionality {}, "
-                        "but {} has elements with Hilbert dimensionality {}."
-                        .format(self.dim_hilbert, name, b.dim_hilbert))
+                        "but {} has elements with Hilbert dimensionality {}.".format(
+                            self.dim_hilbert, name, b.dim_hilbert
+                        )
+                    )
 
     def _qubit_indices_in_state(self, state):
         try:
             return [state.qubits.index(q) for q in self.qubits]
         except ValueError as ex:
             raise ValueError(
-                'Qubit {} is not present in the state'
-                .format(ex.args[0].split()[0]))
+                "Qubit {} is not present in the state".format(ex.args[0].split()[0])
+            )
 
 
 class CircuitUnitMixin(ABC):
@@ -376,19 +388,30 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
         a dephasing operation. If None, assumed to be a default full basis.
     """
 
-    def __init__(self, qubits, dim_hilbert, duration=0., time_start=0.,
-                 plot_metadata=None, repr_=None, bases_in=None, bases_out=None):
-        super(GatePlaceholder, self).__init__()
+    def __init__(
+        self,
+        qubits,
+        dim_hilbert,
+        duration=0.0,
+        time_start=0.0,
+        plot_metadata=None,
+        repr_=None,
+        bases_in=None,
+        bases_out=None,
+    ):
+        super().__init__()
         self._dim_hilbert = dim_hilbert
-        if hasattr(qubits, '__iter__') and not isinstance(qubits, str):
+        if hasattr(qubits, "__iter__") and not isinstance(qubits, str):
             self._qubits = tuple(qubits)
         else:
             self._qubits = (qubits,)
 
-        self.bases_in = (bases_in or
-                         (bases.general(self._dim_hilbert),) * len(self._qubits))
-        self.bases_out = (bases_out or
-                          (bases.general(self._dim_hilbert),) * len(self._qubits))
+        self.bases_in = bases_in or (bases.general(self._dim_hilbert),) * len(
+            self._qubits
+        )
+        self.bases_out = bases_out or (bases.general(self._dim_hilbert),) * len(
+            self._qubits
+        )
         self.ptm = None
 
         if plot_metadata:
@@ -409,13 +432,14 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
             plot_metadata=self.plot_metadata,
             repr_=self.repr,
             bases_in=self.bases_in,
-            bases_out=self.bases_out
+            bases_out=self.bases_out,
         )
 
     @property
     def shape(self):
-        return tuple((basis.dim_pauli
-                      for basis in chain(self.bases_out, self.bases_in)))
+        return tuple(
+            (basis.dim_pauli for basis in chain(self.bases_out, self.bases_in))
+        )
 
     @property
     def qubits(self):
@@ -443,7 +467,7 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
 
     @property
     def gates(self):
-        return self,
+        return (self,)
 
     def operations(self):
         """Operations (Mathematical units) of this circuit.
@@ -482,14 +506,24 @@ class GatePlaceholder(GateSetMixin, CircuitUnitMixin):
 
 
 class Gate(GatePlaceholder):
-    _valid_identifier_re = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
+    _valid_identifier_re = re.compile("[a-zA-Z_][a-zA-Z0-9_]*")
     _sympify_locals = {
         "beta": symbols("beta"),
         "gamma": symbols("gamma"),
     }
 
-    def __init__(self, qubits, dim_hilbert, operation_func, duration=0., time_start=0.,
-                 plot_metadata=None, repr_=None, bases_in=None, bases_out=None):
+    def __init__(
+        self,
+        qubits,
+        dim_hilbert,
+        operation_func,
+        duration=0.0,
+        time_start=0.0,
+        plot_metadata=None,
+        repr_=None,
+        bases_in=None,
+        bases_out=None,
+    ):
         """Gate
 
         Parameters
@@ -523,16 +557,22 @@ class Gate(GatePlaceholder):
             subset of full basis, for example for the purpose of constructing
             a dephasing operation. If None, assumed to be a default full basis.
         """
-        super(Gate, self).__init__(qubits, dim_hilbert, duration, time_start,
-                                   plot_metadata, repr_, bases_in, bases_out)
+        super().__init__(
+            qubits,
+            dim_hilbert,
+            duration,
+            time_start,
+            plot_metadata,
+            repr_,
+            bases_in,
+            bases_out,
+        )
         self._ptm = None
         argspec = inspect.getfullargspec(operation_func)
         if argspec.varargs is not None:
-            raise ValueError(
-                "`operation_func` can't accept free arguments.")
+            raise ValueError("`operation_func` can't accept free arguments.")
         if argspec.varkw is not None:
-            raise ValueError(
-                "`operation_func` can't accept free keyword arguments.")
+            raise ValueError("`operation_func` can't accept free keyword arguments.")
         self._operation_func = operation_func
         # OrderedDict is mostly to emphasise that order is important here,
         # since Python 3.7 dict is guaranteed to be ordered
@@ -550,16 +590,26 @@ class Gate(GatePlaceholder):
             plot_metadata=self.plot_metadata,
             repr_=self.repr,
             bases_in=self.bases_in,
-            bases_out=self.bases_out
+            bases_out=self.bases_out,
         )
         other.ptm = copy(self.ptm)
         other._params = copy(self._params)
         return other
 
     @classmethod
-    def from_ptm(cls, ptm, bases_in, bases_out=None, *, qubits=None,
-                 duration=0., time_start=0., plot_metadata=None, repr_=None):
-        """ Construct an operation from a Pauli transfer matrix provided in
+    def from_ptm(
+        cls,
+        ptm,
+        bases_in,
+        bases_out=None,
+        *,
+        qubits=None,
+        duration=0.0,
+        time_start=0.0,
+        plot_metadata=None,
+        repr_=None,
+    ):
+        """Construct an operation from a Pauli transfer matrix provided in
         a certain Pauli basis.
 
         Parameters
@@ -597,14 +647,32 @@ class Gate(GatePlaceholder):
         num_qubits = len(bases_in)
         if qubits is None:
             qubits = list(range(num_qubits))
-        return Gate(qubits, bases_in[0].dim_hilbert, lambda: (ptm, bases_in, bases_out),
-                    duration, time_start, plot_metadata, repr_,
-                    bases_in, bases_out)
+        return Gate(
+            qubits,
+            bases_in[0].dim_hilbert,
+            lambda: (ptm, bases_in, bases_out),
+            duration,
+            time_start,
+            plot_metadata,
+            repr_,
+            bases_in,
+            bases_out,
+        )
 
     @classmethod
-    def from_kraus(cls, kraus, bases_in=None, bases_out=None, *, qubits=None,
-                   duration=0, time_start=0., plot_metadata=None, repr_=None,
-                   dim_hilbert=2):
+    def from_kraus(
+        cls,
+        kraus,
+        bases_in=None,
+        bases_out=None,
+        *,
+        qubits=None,
+        duration=0,
+        time_start=0.0,
+        plot_metadata=None,
+        repr_=None,
+        dim_hilbert=2,
+    ):
         """Construct an operation from a set of Kraus matrices.
 
         TODO: elaborate on Kraus matrices format.
@@ -649,8 +717,8 @@ class Gate(GatePlaceholder):
             kraus = kraus.reshape((1, *kraus.shape))
         elif len(kraus.shape) != 3:
             raise ValueError(
-                '`kraus` should be a 2D or 3D array, got shape {}'
-                .format(kraus.shape))
+                "`kraus` should be a 2D or 3D array, got shape {}".format(kraus.shape)
+            )
         kraus_size = kraus.shape[1]
         if bases_in is None:
             bases_in = cls._default_bases(kraus_size, dim_hilbert)
@@ -658,24 +726,41 @@ class Gate(GatePlaceholder):
         else:
             dim_hilbert = bases_in[0].dim_hilbert
             num_qubits = len(bases_in)
-            if (kraus_size != dim_hilbert ** num_qubits or
-                    kraus_size != kraus.shape[2]):
-                raise ValueError('Shape of the Kraus operator for bases provided must '
-                                 'be {0}x{0}, got {1}x{2} instead'
-                                 .format(dim_hilbert ** num_qubits, kraus.shape[1],
-                                         kraus.shape[2]))
+            if kraus_size != dim_hilbert**num_qubits or kraus_size != kraus.shape[2]:
+                raise ValueError(
+                    "Shape of the Kraus operator for bases provided must "
+                    "be {0}x{0}, got {1}x{2} instead".format(
+                        dim_hilbert**num_qubits, kraus.shape[1], kraus.shape[2]
+                    )
+                )
         bases_out = bases_out or bases_in
-        return cls.from_ptm(kraus_to_ptm(kraus, bases_in, bases_out),
-                            bases_in, bases_out, qubits=qubits,
-                            duration=duration, time_start=time_start,
-                            plot_metadata=plot_metadata,
-                            repr_=repr_)
+        return cls.from_ptm(
+            kraus_to_ptm(kraus, bases_in, bases_out),
+            bases_in,
+            bases_out,
+            qubits=qubits,
+            duration=duration,
+            time_start=time_start,
+            plot_metadata=plot_metadata,
+            repr_=repr_,
+        )
 
     @classmethod
-    def from_lindblad_form(cls, time, bases_in=None, bases_out=None, *,
-                           hamiltonian=None, lindblad_ops=None, qubits=None,
-                           duration=None, time_start=0., plot_metadata=None,
-                           repr_=None, dim_hilbert=2):
+    def from_lindblad_form(
+        cls,
+        time,
+        bases_in=None,
+        bases_out=None,
+        *,
+        hamiltonian=None,
+        lindblad_ops=None,
+        qubits=None,
+        duration=None,
+        time_start=0.0,
+        plot_metadata=None,
+        repr_=None,
+        dim_hilbert=2,
+    ):
         """Construct and operation from a list of Lindblad operators.
 
         TODO: elaborate on Lindblad operators format
@@ -727,24 +812,33 @@ class Gate(GatePlaceholder):
         if lindblad_ops is not None:
             if bases_in is None:
                 bases_in = cls._default_bases(len(hamiltonian), dim_hilbert)
-            if isinstance(lindblad_ops, np.ndarray) and \
-                    len(lindblad_ops.shape) == 2:
+            if isinstance(lindblad_ops, np.ndarray) and len(lindblad_ops.shape) == 2:
                 lindblad_ops = (lindblad_ops,)
             if not isinstance(lindblad_ops, np.ndarray):
                 lindblad_ops = np.array(lindblad_ops)
             summands.append(plm_lindbladian_part(lindblad_ops, bases_in))
         if len(summands) == 0:
-            raise ValueError("Either `hamiltonian` or `lindblad_ops` must be "
-                             "provided.")
+            raise ValueError(
+                "Either `hamiltonian` or `lindblad_ops` must be " "provided."
+            )
         plm = np.sum(summands, axis=0) * time
-        dim = np.prod(plm.shape[:len(plm.shape) // 2])
+        dim = np.prod(plm.shape[: len(plm.shape) // 2])
         ptm = expm(plm.reshape((dim, dim))).reshape(plm.shape)
         if not np.allclose(ptm.imag, 0):
-            raise ValueError('Resulting PTM is not real-valued, check the '
-                             'sanity of `hamiltonian` and `lindblad_ops`.')
-        out = cls.from_ptm(ptm.real, bases_in, bases_in, qubits=qubits,
-                           duration=duration, time_start=time_start,
-                           plot_metadata=plot_metadata, repr_=repr_)
+            raise ValueError(
+                "Resulting PTM is not real-valued, check the "
+                "sanity of `hamiltonian` and `lindblad_ops`."
+            )
+        out = cls.from_ptm(
+            ptm.real,
+            bases_in,
+            bases_in,
+            qubits=qubits,
+            duration=duration,
+            time_start=time_start,
+            plot_metadata=plot_metadata,
+            repr_=repr_,
+        )
         if bases_out is not None:
             return out.set_bases(bases_out=bases_out)
         else:
@@ -756,21 +850,24 @@ class Gate(GatePlaceholder):
 
     @property
     def free_parameters(self):
-        return set().union(*(expr.free_symbols
-                             for expr in self._params.values()))
+        return set().union(*(expr.free_symbols for expr in self._params.values()))
 
     def _resolve_ptm(self):
         params = tuple(sympy_to_native(p) for p in self._params.values())
         # FIXME: exceptions must be handled
         ptm, bases_in, bases_out = self._operation_func(*params)
-        self.ptm = ptm_convert_basis(ptm, bases_in, bases_out,
-                                     self.bases_in, self.bases_out)
+        self.ptm = ptm_convert_basis(
+            ptm, bases_in, bases_out, self.bases_in, self.bases_out
+        )
 
     def set(self, **kwargs):
-        kwargs = {key: sympify(val, locals=self._sympify_locals)
-                  for key, val in kwargs.items()}
-        self._params = {k: v.subs(kwargs, simultaneous=True)
-                        for k, v in self._params.items()}
+        kwargs = {
+            key: sympify(val, locals=self._sympify_locals)
+            for key, val in kwargs.items()
+        }
+        self._params = {
+            k: v.subs(kwargs, simultaneous=True) for k, v in self._params.items()
+        }
         if len(self.free_parameters) == 0:
             self._resolve_ptm()
 
@@ -783,8 +880,9 @@ class Gate(GatePlaceholder):
     def _default_bases(cls, kraus_size, dim_hilbert):
         num_qubits = int(log(kraus_size, dim_hilbert))
         if not dim_hilbert**num_qubits != kraus_size:
-            raise ValueError("Computed number of qubits in the operation is not "
-                             "integer.")
+            raise ValueError(
+                "Computed number of qubits in the operation is not " "integer."
+            )
         return (bases.general(dim_hilbert),) * num_qubits
 
     def set_bases(self, bases_in=None, bases_out=None):
@@ -815,10 +913,12 @@ class Gate(GatePlaceholder):
         if bases_out is not None:
             self._validate_bases(bases_out=bases_out)
             other.bases_out = bases_out
-        if self.ptm is not None and (self.bases_in != other.bases_in or
-                                     self.bases_out != other.bases_out):
-            other.ptm = ptm_convert_basis(self.ptm, self.bases_in, self.bases_out,
-                                          other.bases_in, other.bases_out)
+        if self.ptm is not None and (
+            self.bases_in != other.bases_in or self.bases_out != other.bases_out
+        ):
+            other.ptm = ptm_convert_basis(
+                self.ptm, self.bases_in, self.bases_out, other.bases_in, other.bases_out
+            )
         return other
 
     def __matmul__(self, state):
@@ -841,14 +941,16 @@ class Gate(GatePlaceholder):
 
         for qubit in self.qubits:
             if qubit not in state.qubits:
-                raise ValueError(f"Qubit {qubit} is not present in state. "
-                                 "List of qubits in state: {state.qubits}")
+                raise ValueError(
+                    f"Qubit {qubit} is not present in state. "
+                    "List of qubits in state: {state.qubits}"
+                )
         op = self
         for qubit_number, basis in zip(qubit_indices, self.bases_in):
             if state.bases[qubit_number] != basis:
                 op = self.set_bases(
-                    bases_in=tuple([state.bases[q]
-                                    for q in qubit_indices]))
+                    bases_in=tuple([state.bases[q] for q in qubit_indices])
+                )
                 break
 
         state.apply_ptm(op.ptm, *op.qubits)
@@ -878,22 +980,30 @@ class ResetOperation(GatePlaceholder):
         are picked from the Gate parameters when displayed.
         If `None`, defaults to `"gate"`.
     """
+
     def __init__(
         self,
         qubits,
         dim_hilbert,
-        duration=0.,
-        time_start=0.,
+        duration=0.0,
+        time_start=0.0,
         plot_metadata=None,
         repr_=None,
     ):
         bases_in = (bases.general(dim_hilbert),) * len(qubits)
         bases_out = (bases.general(dim_hilbert).subbasis([0]),) * len(qubits)
-        plot_metadata = plot_metadata or {"style": "box", "label": r'$\mathcal{{R}}$'}
-        repr_ = repr_ or 'reset'
-        super().__init__(qubits, dim_hilbert, duration, time_start,
-                         plot_metadata=plot_metadata, repr_=repr_,
-                         bases_in=bases_in, bases_out=bases_out)
+        plot_metadata = plot_metadata or {"style": "box", "label": r"$\mathcal{{R}}$"}
+        repr_ = repr_ or "reset"
+        super().__init__(
+            qubits,
+            dim_hilbert,
+            duration,
+            time_start,
+            plot_metadata=plot_metadata,
+            repr_=repr_,
+            bases_in=bases_in,
+            bases_out=bases_out,
+        )
 
     def __copy__(self):
         return self.__class__(
@@ -916,8 +1026,10 @@ class ResetOperation(GatePlaceholder):
         # the computation, if there is a mistake.
         for qubit in self.qubits:
             if qubit not in state.qubits:
-                raise ValueError(f"Qubit {qubit} is not present in state. "
-                                 "List of qubits in state: {state.qubits}")
+                raise ValueError(
+                    f"Qubit {qubit} is not present in state. "
+                    "List of qubits in state: {state.qubits}"
+                )
         state.reset(*self.qubits)
 
 
@@ -961,8 +1073,7 @@ class Circuit(GateSetMixin):
     @property
     def free_parameters(self):
         if self._params_cache is None:
-            self._params_cache = set(chain(*(g.free_parameters
-                                             for g in self._gates)))
+            self._params_cache = set(chain(*(g.free_parameters for g in self._gates)))
         return self._params_cache
 
     def set(self, **kwargs):
@@ -999,6 +1110,7 @@ class Circuit(GateSetMixin):
         super().set_bases(bases_in, bases_out)
 
         from .compiler import optimize
+
         return optimize(self, bases_in, bases_out, self.qubits, optimizations=False)
 
     def __matmul__(self, state):
@@ -1022,10 +1134,12 @@ class Box(CircuitUnitMixin, Circuit):
             self.repr = repr_
 
     def __copy__(self):
-        other = Box(self._qubits,
-                    (copy(gate) for gate in self._gates),
-                    plot_metadata=deepcopy(self.plot_metadata),
-                    repr_=self.repr)
+        other = Box(
+            self._qubits,
+            (copy(gate) for gate in self._gates),
+            plot_metadata=deepcopy(self.plot_metadata),
+            repr_=self.repr,
+        )
         other._params_cache = self._params_cache
         return other
 
@@ -1035,7 +1149,7 @@ class Box(CircuitUnitMixin, Circuit):
 
     @property
     def gates(self):
-        return self,
+        return (self,)
 
     @property
     def params(self):
@@ -1061,8 +1175,7 @@ class FinalizedCircuit:
         to the slower computation with higher precision.
     """
 
-    def __init__(self, circuit, qubits=None, *,
-                 bases_in=None, sv_cutoff=1e-5):
+    def __init__(self, circuit, qubits=None, *, bases_in=None, sv_cutoff=1e-5):
         self.qubits = sorted(circuit.qubits) if qubits is None else list(qubits)
         self.circuit = circuit
         self.bases_in = bases_in
@@ -1070,8 +1183,10 @@ class FinalizedCircuit:
         self._sv_cutoff = sv_cutoff
 
         from . import optimize
-        self.compiled_circuit = optimize(self.circuit, self.bases_in,
-                                         qubits=self.qubits, sv_cutoff=self._sv_cutoff)
+
+        self.compiled_circuit = optimize(
+            self.circuit, self.bases_in, qubits=self.qubits, sv_cutoff=self._sv_cutoff
+        )
 
     @property
     def params(self):
@@ -1091,9 +1206,12 @@ class FinalizedCircuit:
             FinalizedCircuit
         """
         if len(self._params) > 0:
-            out = FinalizedCircuit(self.compiled_circuit(**params), self.qubits,
-                                   bases_in=self.bases_in,
-                                   sv_cutoff=self._sv_cutoff)
+            out = FinalizedCircuit(
+                self.compiled_circuit(**params),
+                self.qubits,
+                bases_in=self.bases_in,
+                sv_cutoff=self._sv_cutoff,
+            )
             # Store the copy of the original circuit
             out.circuit = self.circuit
             if len(out._params) != 0:
@@ -1117,13 +1235,21 @@ class FinalizedCircuit:
             raise PTMNotDefinedError(*self._params)
         bases_out = bases_out or bases_in
         ptm_in_shape = tuple(b.dim_pauli for b in bases_in)
-        start_ptm = Gate.from_ptm(np.identity(int(np.prod(ptm_in_shape)), dtype=float)
-                                  .reshape(ptm_in_shape*2), bases_in,
-                                  qubits=self.qubits)
+        start_ptm = Gate.from_ptm(
+            np.identity(int(np.prod(ptm_in_shape)), dtype=float).reshape(
+                ptm_in_shape * 2
+            ),
+            bases_in,
+            qubits=self.qubits,
+        )
         from .compiler import optimize
+
         # Since start_ptm involves all the qubits, compiler will merge all the
         # operations into it, resulting into a single gate that has PTM
         return optimize(
-            start_ptm + self.compiled_circuit, optimizations=False,
-            bases_in=bases_in, bases_out=bases_out, qubits=self.qubits
+            start_ptm + self.compiled_circuit,
+            optimizations=False,
+            bases_in=bases_in,
+            bases_out=bases_out,
+            qubits=self.qubits,
         ).ptm

@@ -2,8 +2,16 @@ import numpy as np
 from itertools import product
 
 
-def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
-         amp_limits=None, phase_limits=None, cmap_name='plasma'):
+def plot(
+    state,
+    *,
+    ax=None,
+    truncate_levels=None,
+    colorbar=True,
+    amp_limits=None,
+    phase_limits=None,
+    cmap_name="plasma"
+):
     """
     Plots the density matrix as a complex 3D histogram.
 
@@ -42,14 +50,15 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     from matplotlib import colorbar as colorbar_
 
     if ax is None:
-        fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+        fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
     else:
         fig = None
 
     if cmap_name not in plt.colormaps():
         raise ValueError(
             "The given colormap name is not valid, please provide the name of"
-            " one of the standard built-in colormaps in matplotlib")
+            " one of the standard built-in colormaps in matplotlib"
+        )
 
     n_qubits = len(state.qubits)
     _rho = state.to_dm()
@@ -57,13 +66,11 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
 
     if truncate_levels is not None:
         # Tomo emulation: truncate leaked states and add
-        rho = (_rho.reshape(state.pauli_vector.dim_hilbert * 2)
-               [(slice(0, truncate_levels),) * (2 * n_qubits)]
-               .reshape(truncate_levels ** n_qubits,
-                        truncate_levels ** n_qubits))
+        rho = _rho.reshape(state.pauli_vector.dim_hilbert * 2)[
+            (slice(0, truncate_levels),) * (2 * n_qubits)
+        ].reshape(truncate_levels**n_qubits, truncate_levels**n_qubits)
         trace = np.trace(rho)
-        rho += ((1 - trace) * np.identity(2**n_qubits) *
-                truncate_levels ** -n_qubits)
+        rho += (1 - trace) * np.identity(2**n_qubits) * truncate_levels**-n_qubits
         assert np.allclose(np.trace(rho), 1)
         dim = truncate_levels
     else:
@@ -71,10 +78,12 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
         rho = _rho
 
     def tuple_to_string(tup):
-        state_ = ''.join(str(x) for x in tup)
-        return r'$\left| %s \right\rangle$' % state_
+        state_ = "".join(str(x) for x in tup)
+        return r"$\left| %s \right\rangle$" % state_
 
-    labels = [tuple_to_string(x) for x in product(*(range(dim) for _ in range(n_qubits)))]
+    labels = [
+        tuple_to_string(x) for x in product(*(range(dim) for _ in range(n_qubits)))
+    ]
 
     if phase_limits and isinstance(phase_limits, (list, tuple)):
         assert len(phase_limits) == 2
@@ -106,19 +115,29 @@ def plot(state, *, ax=None, truncate_levels=None, colorbar=True,
     ax.axes.w_yaxis.set_major_locator(plt.IndexLocator(1, 0.25))
     ax.set_yticklabels(labels)
 
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="center", va='baseline',
-             rotation_mode="anchor")
+    plt.setp(
+        ax.get_xticklabels(),
+        rotation=45,
+        ha="center",
+        va="baseline",
+        rotation_mode="anchor",
+    )
 
-    plt.setp(ax.get_yticklabels(), rotation=-45, ha="center", va='baseline',
-             rotation_mode="anchor")
+    plt.setp(
+        ax.get_yticklabels(),
+        rotation=-45,
+        ha="center",
+        va="baseline",
+        rotation_mode="anchor",
+    )
 
-    ax.set_zlabel('Amplitude')
+    ax.set_zlabel("Amplitude")
 
     if colorbar:
         cax, _ = colorbar_.make_axes(ax)
         cb = colorbar_.ColorbarBase(cax, cmap=cmap, norm=norm)
         cb.set_ticks((-np.pi, 0, np.pi))
-        cb.set_ticklabels((r'$-\pi$', r'$0$', r'$\pi$'))
-        cb.set_label('Phase')
+        cb.set_ticklabels((r"$-\pi$", r"$0$", r"$\pi$"))
+        cb.set_label("Phase")
 
     return fig

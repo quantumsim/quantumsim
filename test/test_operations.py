@@ -18,21 +18,25 @@ class TestOperations:
     def test_kraus_to_ptm_qubit(self):
         p_damp = 0.5
         damp_kraus_mat = np.array(
-            [[[1, 0], [0, np.sqrt(1 - p_damp)]],
-             [[0, np.sqrt(p_damp)], [0, 0]]])
+            [[[1, 0], [0, np.sqrt(1 - p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]]
+        )
 
         gm_qubit_basis = (bases.gell_mann(2),)
         gm_two_qubit_basis = gm_qubit_basis * 2
 
         damp_op = Gate.from_kraus(damp_kraus_mat, gm_qubit_basis)
 
-        expected_mat = np.array([[1, 0, 0, 0],
-                                 [0, np.sqrt(1-p_damp), 0, 0],
-                                 [0, 0, np.sqrt(1-p_damp), 0],
-                                 [p_damp, 0, 0, 1-p_damp]])
+        expected_mat = np.array(
+            [
+                [1, 0, 0, 0],
+                [0, np.sqrt(1 - p_damp), 0, 0],
+                [0, 0, np.sqrt(1 - p_damp), 0],
+                [p_damp, 0, 0, 1 - p_damp],
+            ]
+        )
         assert np.allclose(damp_op.ptm, expected_mat)
 
-        with pytest.raises(ValueError, match=r'.* must be list-like, .*'):
+        with pytest.raises(ValueError, match=r".* must be list-like, .*"):
             damp_op.set_bases(bases.gell_mann(2), bases.gell_mann(2))
 
         cz_kraus_mat = np.diag([1, 1, 1, -1])
@@ -56,8 +60,7 @@ class TestOperations:
 
         assert cz_ptm.shape == (9, 9, 9, 9)
         cz_ptm_flat = cz_ptm.reshape((81, 81))
-        assert np.all(cz_ptm_flat.round(3) <= 1) and np.all(
-            cz_ptm.round(3) >= -1)
+        assert np.all(cz_ptm_flat.round(3) <= 1) and np.all(cz_ptm.round(3) >= -1)
         assert np.isclose(np.sum(cz_ptm_flat[0, :]), 1)
         assert np.isclose(np.sum(cz_ptm_flat[:, 0]), 1)
 
@@ -65,7 +68,7 @@ class TestOperations:
         qubit_basis = (bases.general(2),)
         qutrit_basis = (bases.general(3),)
         cz_kraus_mat = np.diag([1, 1, 1, -1])
-        kraus_op = Gate.from_kraus(cz_kraus_mat, qubit_basis*2)
+        kraus_op = Gate.from_kraus(cz_kraus_mat, qubit_basis * 2)
 
         wrong_dim_kraus = np.random.random((4, 4, 2, 2))
         with pytest.raises(ValueError):
@@ -76,41 +79,45 @@ class TestOperations:
         with pytest.raises(ValueError):
             _ = Gate.from_kraus(cz_kraus_mat, qutrit_basis)
         with pytest.raises(ValueError):
-            _ = kraus_op.set_bases(qutrit_basis*2)
+            _ = kraus_op.set_bases(qutrit_basis * 2)
 
     def test_convert_ptm_basis(self):
         p_damp = 0.5
         damp_kraus_mat = np.array(
-            [[[1, 0], [0, np.sqrt(1-p_damp)]],
-             [[0, np.sqrt(p_damp)], [0, 0]]])
+            [[[1, 0], [0, np.sqrt(1 - p_damp)]], [[0, np.sqrt(p_damp)], [0, 0]]]
+        )
         gell_mann_basis = (bases.gell_mann(2),)
         general_basis = (bases.general(2),)
 
         op1 = Gate.from_kraus(damp_kraus_mat, gell_mann_basis)
-        op2 = op1.set_bases(general_basis, general_basis) \
-            .set_bases(gell_mann_basis, gell_mann_basis)
+        op2 = op1.set_bases(general_basis, general_basis).set_bases(
+            gell_mann_basis, gell_mann_basis
+        )
         assert op1.ptm == approx(op2.ptm)
         assert op1.bases_in == op2.bases_in
         assert op1.bases_out == op2.bases_out
 
     def test_lindblad_single_qubit(self):
         ham = random_hermitian_matrix(2, seed=56)
-        lindblad_ops = np.array([
-            [[0, 0.1],
-             [0, 0]],
-            [[0, 0],
-             [0, 0.33]],
-        ])
+        lindblad_ops = np.array(
+            [
+                [[0, 0.1], [0, 0]],
+                [[0, 0], [0, 0.33]],
+            ]
+        )
         t1 = 10
         t2 = 25
         b1 = (bases.general(2),)
         b2 = (bases.gell_mann(2),)
-        op1 = Gate.from_lindblad_form(t1, b1, b2, hamiltonian=ham,
-                                      lindblad_ops=lindblad_ops)
-        op2 = Gate.from_lindblad_form(t2, b2, b1, hamiltonian=ham,
-                                      lindblad_ops=lindblad_ops)
-        op = Gate.from_lindblad_form(t1+t2, b1, hamiltonian=ham,
-                                     lindblad_ops=lindblad_ops)
+        op1 = Gate.from_lindblad_form(
+            t1, b1, b2, hamiltonian=ham, lindblad_ops=lindblad_ops
+        )
+        op2 = Gate.from_lindblad_form(
+            t2, b2, b1, hamiltonian=ham, lindblad_ops=lindblad_ops
+        )
+        op = Gate.from_lindblad_form(
+            t1 + t2, b1, hamiltonian=ham, lindblad_ops=lindblad_ops
+        )
         dm = random_hermitian_matrix(2, seed=3)
         state1 = State.from_dm(dm, b1)
         state2 = State.from_dm(dm, b1)
@@ -136,51 +143,52 @@ class TestOperations:
         identity = np.array([[1, 0], [0, 1]])
         ham1 = random_hermitian_matrix(2, seed=6)
         ham2 = random_hermitian_matrix(2, seed=7)
-        ham = (np.kron(ham1, identity).reshape((2, 2, 2, 2)) +
-               np.kron(identity, ham2).reshape((2, 2, 2, 2)))
+        ham = np.kron(ham1, identity).reshape((2, 2, 2, 2)) + np.kron(
+            identity, ham2
+        ).reshape((2, 2, 2, 2))
         dm = random_hermitian_matrix(4, seed=3)
         op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1)
         op2 = Gate.from_lindblad_form(25, b, hamiltonian=ham2, qubits=1)
-        op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham)
-        state1 = State.from_dm(dm, b*2)
-        state2 = State.from_dm(dm, b*2)
+        op = Gate.from_lindblad_form(25, b * 2, hamiltonian=ham)
+        state1 = State.from_dm(dm, b * 2)
+        state2 = State.from_dm(dm, b * 2)
         op1 @ state1
         op2 @ state1
         op @ state2
         assert np.allclose(state1.to_pv(), state2.to_pv())
 
-        ops1 = np.array([
-            [[0, 0.1],
-             [0, 0]],
-            [[0, 0],
-             [0, 0.33]],
-        ])
-        ops2 = np.array([
-            [[0, 0.15],
-             [0, 0]],
-            [[0, 0],
-             [0, 0.17]],
-        ])
-        ops = [np.kron(op, identity).reshape((2, 2, 2, 2)) for op in ops1] + \
-              [np.kron(identity, op).reshape((2, 2, 2, 2)) for op in ops2]
+        ops1 = np.array(
+            [
+                [[0, 0.1], [0, 0]],
+                [[0, 0], [0, 0.33]],
+            ]
+        )
+        ops2 = np.array(
+            [
+                [[0, 0.15], [0, 0]],
+                [[0, 0], [0, 0.17]],
+            ]
+        )
+        ops = [np.kron(op, identity).reshape((2, 2, 2, 2)) for op in ops1] + [
+            np.kron(identity, op).reshape((2, 2, 2, 2)) for op in ops2
+        ]
         op1 = Gate.from_lindblad_form(25, b, lindblad_ops=ops1)
         op2 = Gate.from_lindblad_form(25, b, lindblad_ops=ops2, qubits=1)
-        op = Gate.from_lindblad_form(25, b*2, lindblad_ops=ops)
-        state1 = State.from_dm(dm, b*2)
-        state2 = State.from_dm(dm, b*2)
+        op = Gate.from_lindblad_form(25, b * 2, lindblad_ops=ops)
+        state1 = State.from_dm(dm, b * 2)
+        state2 = State.from_dm(dm, b * 2)
         op1 @ state1
         op2 @ state1
         op @ state2
         assert np.allclose(state1.to_pv(), state2.to_pv())
 
-        op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1,
-                                      lindblad_ops=ops1)
-        op2 = Gate.from_lindblad_form(25, b, hamiltonian=ham2,
-                                      lindblad_ops=ops2, qubits=1)
-        op = Gate.from_lindblad_form(25, b*2, hamiltonian=ham,
-                                     lindblad_ops=ops)
-        state1 = State.from_dm(dm, b*2)
-        state2 = State.from_dm(dm, b*2)
+        op1 = Gate.from_lindblad_form(25, b, hamiltonian=ham1, lindblad_ops=ops1)
+        op2 = Gate.from_lindblad_form(
+            25, b, hamiltonian=ham2, lindblad_ops=ops2, qubits=1
+        )
+        op = Gate.from_lindblad_form(25, b * 2, hamiltonian=ham, lindblad_ops=ops)
+        state1 = State.from_dm(dm, b * 2)
+        state2 = State.from_dm(dm, b * 2)
         op1 @ state1
         op2 @ state1
         op @ state2
@@ -188,11 +196,13 @@ class TestOperations:
 
     def test_ptm(self):
         # Some random gate sequence
-        circuit = (lib2.rotate_x(0, angle=np.pi/2) +
-                   lib2.rotate_y(1, angle=0.3333) +
-                   lib2.cphase(0, 2, angle=np.pi) +
-                   lib2.cphase(1, 2, angle=np.pi) +
-                   lib2.rotate_x(1, angle=-np.pi/2))
+        circuit = (
+            lib2.rotate_x(0, angle=np.pi / 2)
+            + lib2.rotate_y(1, angle=0.3333)
+            + lib2.cphase(0, 2, angle=np.pi)
+            + lib2.cphase(1, 2, angle=np.pi)
+            + lib2.rotate_x(1, angle=-np.pi / 2)
+        )
 
         b = (bases.general(2),) * 3
         ptm = circuit.finalize().ptm(b, b)

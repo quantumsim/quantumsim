@@ -20,7 +20,7 @@ class TestLibrary:
     def test_rotate_x(self):
         state = State([0, 1, 2], dim_hilbert=3)
 
-        lib.rotate_x(1, angle=pi/2, foo='bar') @ state
+        lib.rotate_x(1, angle=pi / 2, foo="bar") @ state
         lib.rotate_x(2, angle=pi) @ state
         assert np.allclose(state.meas_prob(0), (1, 0, 0))
         assert np.allclose(state.meas_prob(1), (0.5, 0.5, 0))
@@ -29,16 +29,16 @@ class TestLibrary:
         lib.rotate_x(1, angle=pi) @ state
         assert np.allclose(state.meas_prob(1), (0.5, 0.5, 0))
 
-        lib.rotate_x(1, angle=pi/2) @ state
+        lib.rotate_x(1, angle=pi / 2) @ state
         assert np.allclose(state.meas_prob(1), (1, 0, 0))
 
-        lib.rotate_x(0, angle=2*pi) @ state
+        lib.rotate_x(0, angle=2 * pi) @ state
         assert np.allclose(state.meas_prob(0), (1, 0, 0))
 
     def test_rotate_y(self):
         state = State([0, 1, 2], dim_hilbert=3)
 
-        lib.rotate_y(1, angle=pi/2, foo='bar') @ state
+        lib.rotate_y(1, angle=pi / 2, foo="bar") @ state
         lib.rotate_y(2, angle=pi) @ state
         assert np.allclose(state.meas_prob(0), (1, 0, 0))
         assert np.allclose(state.meas_prob(1), (0.5, 0.5, 0))
@@ -47,17 +47,17 @@ class TestLibrary:
         lib.rotate_y(1, angle=pi) @ state
         assert np.allclose(state.meas_prob(1), (0.5, 0.5, 0))
 
-        lib.rotate_y(1, angle=pi/2) @ state
+        lib.rotate_y(1, angle=pi / 2) @ state
         assert np.allclose(state.meas_prob(1), (1, 0, 0))
 
-        lib.rotate_y(0, angle=2*pi) @ state
+        lib.rotate_y(0, angle=2 * pi) @ state
         assert np.allclose(state.meas_prob(0), (1, 0, 0))
 
     def test_rotate_z(self):
         sqrt2 = np.sqrt(2)
         state = State([0], dim_hilbert=3)
 
-        lib.rotate_z(0, angle=pi/2) @ state
+        lib.rotate_z(0, angle=pi / 2) @ state
         assert np.allclose(state.to_pv(), [1] + [0] * 8)
         lib.rotate_z(0, angle=pi) @ state
         assert np.allclose(state.to_pv(), [1] + [0] * 8)
@@ -67,20 +67,16 @@ class TestLibrary:
         state = State.from_pv(had_expansion, basis)
 
         lib.rotate_z(0, angle=pi) @ state
-        assert np.allclose(state.to_pv(),
-                           [0.5, 0.5, 0, -sqrt2, 0, 0, 0, 0, 0])
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, -sqrt2, 0, 0, 0, 0, 0])
 
-        lib.rotate_z(0, angle=pi/2) @ state
-        assert np.allclose(state.to_pv(),
-                           [0.5, 0.5, 0, 0, -sqrt2, 0, 0, 0, 0])
+        lib.rotate_z(0, angle=pi / 2) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, 0, -sqrt2, 0, 0, 0, 0])
 
         lib.rotate_z(0, angle=pi) @ state
-        assert np.allclose(state.to_pv(),
-                           [0.5, 0.5, 0, 0, sqrt2, 0, 0, 0, 0])
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, 0, sqrt2, 0, 0, 0, 0])
 
-        lib.rotate_z(0, angle=2*pi) @ state
-        assert np.allclose(state.to_pv(),
-                           [0.5, 0.5, 0, 0, sqrt2, 0, 0, 0, 0])
+        lib.rotate_z(0, angle=2 * pi) @ state
+        assert np.allclose(state.to_pv(), [0.5, 0.5, 0, 0, sqrt2, 0, 0, 0, 0])
 
     def test_cphase(self):
         rng = np.random.default_rng(seed=999)
@@ -93,8 +89,8 @@ class TestLibrary:
         dm = random_hermitian_matrix(9, 998)
         dm_res = unitary @ dm @ unitary.conj().T
 
-        state = State.from_dm(dm, basis*2)
-        lib.cphase(0, 1, angle=angle, foo='bar') @ state
+        state = State.from_dm(dm, basis * 2)
+        lib.cphase(0, 1, angle=angle, foo="bar") @ state
         assert np.allclose(state.to_dm(), dm_res)
 
     def test_measure(self):
@@ -104,10 +100,10 @@ class TestLibrary:
         identity = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
 
         dm = random_hermitian_matrix(27, 3)
-        state = State.from_dm(dm, basis*3)
+        state = State.from_dm(dm, basis * 3)
 
         povm00 = np.kron(np.kron(povm0, identity), identity)
-        lib.measure(0, result=0, foo='bar') @ state
+        lib.measure(0, result=0, foo="bar") @ state
         dm = povm00 @ dm @ povm00
         assert np.allclose(state.to_dm(), dm)
         lib.measure(0, result=0) @ state
@@ -126,18 +122,18 @@ class TestLibrary:
         lib.measure(1, result=0) @ state
         assert np.allclose(state.to_dm(), np.zeros((27, 27)))
 
-        with pytest.raises(ValueError, match='Unknown measurement result: 3'):
+        with pytest.raises(ValueError, match="Unknown measurement result: 3"):
             lib.measure(0, result=3)
 
     def test_dephase(self):
         dm = random_hermitian_matrix(3, 3)
         state = State.from_dm(dm, basis)
-        lib.dephase(0, foo='bar') @ state
+        lib.dephase(0, foo="bar") @ state
         assert np.allclose(state.to_dm(), np.diag(np.diag(dm)))
 
     def test_reset(self):
         dm = random_hermitian_matrix(3**3, 876)
-        state = State.from_dm(dm, basis*3)
+        state = State.from_dm(dm, basis * 3)
         qubit = 1
-        lib.reset(qubit, bra='ket') @ state
+        lib.reset(qubit, bra="ket") @ state
         assert state.meas_prob(qubit) == pytest.approx([1, 0, 0])

@@ -19,6 +19,7 @@ class PerfectQubitModel(Model):
     """A model for an ideal error model, where gates are instantaneous and perfect,
     while the qubits experiences no noise.
     """
+
     dim = 2
 
     def __init__(self):
@@ -46,17 +47,25 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
+
         def _rotate_x(angle):
             sin, cos = np.sin(angle / 2), np.cos(angle / 2)
-            return kraus_to_ptm(np.array([[[cos, -1j * sin], [-1j * sin, cos]]]),
-                                BASIS21, BASIS21), BASIS21, BASIS21
+            return (
+                kraus_to_ptm(
+                    np.array([[[cos, -1j * sin], [-1j * sin, cos]]]), BASIS21, BASIS21
+                ),
+                BASIS21,
+                BASIS21,
+            )
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_x,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$X({angle})$"},
-                    repr_="X({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_x,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$X({angle})$"},
+            repr_="X({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -75,17 +84,23 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
+
         def _rotate_y(angle):
             sin, cos = np.sin(angle / 2), np.cos(angle / 2)
-            return kraus_to_ptm(np.array([[[cos, -sin], [sin, cos]]]),
-                                BASIS21, BASIS21), BASIS21, BASIS21
+            return (
+                kraus_to_ptm(np.array([[[cos, -sin], [sin, cos]]]), BASIS21, BASIS21),
+                BASIS21,
+                BASIS21,
+            )
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_y,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$Y({angle})$"},
-                    repr_="Y({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_y,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$Y({angle})$"},
+            repr_="Y({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -104,17 +119,25 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
+
         def _rotate_z(angle):
             exp = np.exp(-1j * angle / 2)
-            return kraus_to_ptm(np.diag([exp, exp.conj()]).reshape((1, 2, 2)),
-                                BASIS21, BASIS21), BASIS21, BASIS21
+            return (
+                kraus_to_ptm(
+                    np.diag([exp, exp.conj()]).reshape((1, 2, 2)), BASIS21, BASIS21
+                ),
+                BASIS21,
+                BASIS21,
+            )
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_z,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$Z({angle})$"},
-                    repr_="Z({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_z,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$Z({angle})$"},
+            repr_="Z({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -139,18 +162,41 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
+
         def _rotate_euler(angle_z1, angle_x, angle_z2):
             exp_phi, exp_lambda = np.exp(1j * angle_z1), np.exp(1j * angle_z2)
             sin_theta, cos_theta = np.sin(angle_x / 2), np.cos(angle_x / 2)
-            return kraus_to_ptm(np.array([[
-                [cos_theta, -1j * exp_lambda * sin_theta],
-                [-1j * exp_phi * sin_theta, exp_phi * exp_lambda * cos_theta]
-            ]]), BASIS21, BASIS21), BASIS21, BASIS21
+            return (
+                kraus_to_ptm(
+                    np.array(
+                        [
+                            [
+                                [cos_theta, -1j * exp_lambda * sin_theta],
+                                [
+                                    -1j * exp_phi * sin_theta,
+                                    exp_phi * exp_lambda * cos_theta,
+                                ],
+                            ]
+                        ]
+                    ),
+                    BASIS21,
+                    BASIS21,
+                ),
+                BASIS21,
+                BASIS21,
+            )
 
-        gate = Gate(qubit, self.dim, _rotate_euler, duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": "$R_({angle_z1}, {angle_x}, {angle_z2})$"},
-                    repr_="RotEuler({angle_z1}, {angle_x}, {angle_z2})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_euler,
+            duration=0,
+            plot_metadata={
+                "style": "box",
+                "label": "$R_({angle_z1}, {angle_x}, {angle_z2})$",
+            },
+            repr_="RotEuler({angle_z1}, {angle_x}, {angle_z2})",
+        )
         gate.set(**params)
         return gate
 
@@ -169,14 +215,17 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
-        matrix = kraus_to_ptm(np.sqrt(0.5)*np.array([[[1, 1], [1, -1]]]),
-                              BASIS21, BASIS21)
-        return Gate(qubit,
-                    self.dim,
-                    lambda: (matrix, BASIS21, BASIS21),
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$H$"},
-                    repr_="H")
+        matrix = kraus_to_ptm(
+            np.sqrt(0.5) * np.array([[[1, 1], [1, -1]]]), BASIS21, BASIS21
+        )
+        return Gate(
+            qubit,
+            self.dim,
+            lambda: (matrix, BASIS21, BASIS21),
+            duration=0,
+            plot_metadata={"style": "box", "label": "$H$"},
+            repr_="H",
+        )
 
     # noinspection DuplicatedCode
     def cphase(self, qubit1, qubit2, **params):
@@ -194,22 +243,25 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
+
         def _cphase(angle):
             matrix = np.diag([1, 1, 1, np.exp(1j * angle)]).reshape((1, 4, 4))
             return kraus_to_ptm(matrix, BASIS22, BASIS22), BASIS22, BASIS22
 
-        gate = Gate([qubit1, qubit2],
-                    self.dim,
-                    _cphase,
-                    duration=0,
-                    plot_metadata={
-                        "style": "line",
-                        "markers": [
-                            {"style": "marker", "label": "o"},
-                            {"style": "marker", "label": "o"},
-                        ],
-                    },
-                    repr_="CPhase({angle})")
+        gate = Gate(
+            [qubit1, qubit2],
+            self.dim,
+            _cphase,
+            duration=0,
+            plot_metadata={
+                "style": "line",
+                "markers": [
+                    {"style": "marker", "label": "o"},
+                    {"style": "marker", "label": "o"},
+                ],
+            },
+            repr_="CPhase({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -229,22 +281,25 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
-        matrix = kraus_to_ptm(np.array([[[1, 0, 0, 0],
-                                         [0, 1, 0, 0],
-                                         [0, 0, 0, 1],
-                                         [0, 0, 1, 0]]]), BASIS22, BASIS22)
-        return Gate([control_qubit, target_qubit],
-                    self.dim,
-                    lambda: (matrix, BASIS22, BASIS22),
-                    duration=0,
-                    plot_metadata={
-                        "style": "line",
-                        "markers": [
-                            {"style": "marker", "label": "o"},
-                            {"style": "marker", "label": r"$\oplus$"},
-                        ],
-                    },
-                    repr_='CNot')
+        matrix = kraus_to_ptm(
+            np.array([[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]]]),
+            BASIS22,
+            BASIS22,
+        )
+        return Gate(
+            [control_qubit, target_qubit],
+            self.dim,
+            lambda: (matrix, BASIS22, BASIS22),
+            duration=0,
+            plot_metadata={
+                "style": "line",
+                "markers": [
+                    {"style": "marker", "label": "o"},
+                    {"style": "marker", "label": r"$\oplus$"},
+                ],
+            },
+            repr_="CNot",
+        )
 
     # noinspection PyUnusedLocal
     def swap(self, control_qubit, target_qubit, **params):
@@ -261,23 +316,25 @@ class PerfectQubitModel(Model):
         -------
         Gate
         """
-        matrix = kraus_to_ptm(np.array([[[1, 0, 0, 0],
-                                         [0, 0, 1, 0],
-                                         [0, 1, 0, 0],
-                                         [0, 0, 0, 1]]]), BASIS22, BASIS22)
-        return Gate([control_qubit, target_qubit],
-                    self.dim,
-                    lambda: (matrix, BASIS22, BASIS22),
-                    duration=0,
-                    plot_metadata={
-                        "style": "line",
-                        "markers": [
-                            {"style": "marker", "label": "x"},
-                            {"style": "marker", "label": "x"},
-                        ],
-                    },
-                    repr_='Swap',
-                    )
+        matrix = kraus_to_ptm(
+            np.array([[[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]]]),
+            BASIS22,
+            BASIS22,
+        )
+        return Gate(
+            [control_qubit, target_qubit],
+            self.dim,
+            lambda: (matrix, BASIS22, BASIS22),
+            duration=0,
+            plot_metadata={
+                "style": "line",
+                "markers": [
+                    {"style": "marker", "label": "x"},
+                    {"style": "marker", "label": "x"},
+                ],
+            },
+            repr_="Swap",
+        )
 
     def measure(self, qubit, **params):
         """A perfect measurement gate.
@@ -298,16 +355,17 @@ class PerfectQubitModel(Model):
         def project(result):
             if result in (0, 1):
                 basis_element = (BASIS21[0].subbasis([result]),)
-                return np.array([[1.]]), basis_element, basis_element
+                return np.array([[1.0]]), basis_element, basis_element
             raise ValueError("Unknown measurement result: {}".format(result))
 
-        gate = Gate(qubit,
-                    self.dim,
-                    project,
-                    duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
-                    repr_='measure')
+        gate = Gate(
+            qubit,
+            self.dim,
+            project,
+            duration=0,
+            plot_metadata={"style": "box", "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
+            repr_="measure",
+        )
         gate.set(**params)
         return gate
 
@@ -328,16 +386,20 @@ class PerfectQubitModel(Model):
         """
 
         def _dephase():
-            return np.array([[[1., 0.], [0., 1.]]]),\
-                   BASIS21_CLASSICAL, BASIS21_CLASSICAL
+            return (
+                np.array([[[1.0, 0.0], [0.0, 1.0]]]),
+                BASIS21_CLASSICAL,
+                BASIS21_CLASSICAL,
+            )
 
-        return Gate(qubit,
-                    self.dim,
-                    _dephase,
-                    duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": r"$Z$"},
-                    repr_='dephase')
+        return Gate(
+            qubit,
+            self.dim,
+            _dephase,
+            duration=0,
+            plot_metadata={"style": "box", "label": r"$Z$"},
+            repr_="dephase",
+        )
 
     # noinspection PyUnusedLocal
     def reset(self, qubit, **params):
@@ -365,6 +427,7 @@ class PerfectQutritModel(Model):
     This class is mostly needed to construct noisy qutrit models, since third state is
     not used, if the computation is perfect.
     """
+
     dim = 3
 
     def __init__(self):
@@ -392,17 +455,20 @@ class PerfectQutritModel(Model):
         -------
         Gate
         """
+
         def _rotate_x(angle):
             sin, cos = np.sin(angle / 2), np.cos(angle / 2)
             matrix = np.array([[[cos, -1j * sin, 0], [-1j * sin, cos, 0], [0, 0, 1]]])
             return kraus_to_ptm(matrix, BASIS31, BASIS31), BASIS31, BASIS31
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_x,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$X({angle})$"},
-                    repr_="X({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_x,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$X({angle})$"},
+            repr_="X({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -421,17 +487,20 @@ class PerfectQutritModel(Model):
         -------
         Gate
         """
+
         def _rotate_y(angle):
             sin, cos = np.sin(angle / 2), np.cos(angle / 2)
             matrix = np.array([[[cos, -sin, 0], [sin, cos, 0], [0, 0, 1]]])
             return kraus_to_ptm(matrix, BASIS31, BASIS31), BASIS31, BASIS31
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_y,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$Y({angle})$"},
-                    repr_="Y({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_y,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$Y({angle})$"},
+            repr_="Y({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -450,17 +519,25 @@ class PerfectQutritModel(Model):
         -------
         Gate
         """
+
         def _rotate_z(angle):
             exp = np.exp(-1j * angle / 2)
-            return kraus_to_ptm(np.diag([exp, exp.conj(), 1]).reshape((1, 3, 3)),
-                                BASIS31, BASIS31), BASIS31, BASIS31
+            return (
+                kraus_to_ptm(
+                    np.diag([exp, exp.conj(), 1]).reshape((1, 3, 3)), BASIS31, BASIS31
+                ),
+                BASIS31,
+                BASIS31,
+            )
 
-        gate = Gate(qubit,
-                    self.dim,
-                    _rotate_z,
-                    duration=0,
-                    plot_metadata={"style": "box", "label": "$Z({angle})$"},
-                    repr_="Z({angle})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_z,
+            duration=0,
+            plot_metadata={"style": "box", "label": "$Z({angle})$"},
+            repr_="Z({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -485,19 +562,43 @@ class PerfectQutritModel(Model):
         -------
         Gate
         """
+
         def _rotate_euler(angle_z1, angle_x, angle_z2):
             exp_phi, exp_lambda = np.exp(1j * angle_z1), np.exp(1j * angle_z2)
             sin_theta, cos_theta = np.sin(angle_x / 2), np.cos(angle_x / 2)
-            return kraus_to_ptm(np.array([[
-                [cos_theta, -1j * exp_lambda * sin_theta, 0],
-                [-1j * exp_phi * sin_theta, exp_phi * exp_lambda * cos_theta, 0],
-                [0, 0, 1]
-            ]]), BASIS31, BASIS31), BASIS31, BASIS31
+            return (
+                kraus_to_ptm(
+                    np.array(
+                        [
+                            [
+                                [cos_theta, -1j * exp_lambda * sin_theta, 0],
+                                [
+                                    -1j * exp_phi * sin_theta,
+                                    exp_phi * exp_lambda * cos_theta,
+                                    0,
+                                ],
+                                [0, 0, 1],
+                            ]
+                        ]
+                    ),
+                    BASIS31,
+                    BASIS31,
+                ),
+                BASIS31,
+                BASIS31,
+            )
 
-        gate = Gate(qubit, self.dim, _rotate_euler, duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": "$R_({angle_z1}, {angle_x}, {angle_z2})$"},
-                    repr_="RotEuler({angle_z1}, {angle_x}, {angle_z2})")
+        gate = Gate(
+            qubit,
+            self.dim,
+            _rotate_euler,
+            duration=0,
+            plot_metadata={
+                "style": "box",
+                "label": "$R_({angle_z1}, {angle_x}, {angle_z2})$",
+            },
+            repr_="RotEuler({angle_z1}, {angle_x}, {angle_z2})",
+        )
         gate.set(**params)
         return gate
 
@@ -517,26 +618,32 @@ class PerfectQutritModel(Model):
         -------
         Gate
         """
+
         def _cphase(angle=np.pi):
             generator = np.zeros((9, 9))
             generator[2, 4] = 1
             generator[4, 2] = 1
             unitary = expm(-1j * angle * generator / np.pi)
-            return kraus_to_ptm(unitary.reshape(1, 9, 9),
-                                BASIS32, BASIS32), BASIS32, BASIS32
+            return (
+                kraus_to_ptm(unitary.reshape(1, 9, 9), BASIS32, BASIS32),
+                BASIS32,
+                BASIS32,
+            )
 
-        gate = Gate([qubit1, qubit2],
-                    self.dim,
-                    _cphase,
-                    duration=0,
-                    plot_metadata={
-                        "style": "line",
-                        "markers": [
-                            {"style": "marker", "label": "o"},
-                            {"style": "marker", "label": "o"},
-                        ],
-                    },
-                    repr_="CPhase({angle})")
+        gate = Gate(
+            [qubit1, qubit2],
+            self.dim,
+            _cphase,
+            duration=0,
+            plot_metadata={
+                "style": "line",
+                "markers": [
+                    {"style": "marker", "label": "o"},
+                    {"style": "marker", "label": "o"},
+                ],
+            },
+            repr_="CPhase({angle})",
+        )
         gate.set(**params)
         return gate
 
@@ -559,16 +666,17 @@ class PerfectQutritModel(Model):
         def project(result):
             if result in (0, 1, 2):
                 basis_element = (BASIS31[0].subbasis([result]),)
-                return np.array([[1.]]), basis_element, basis_element
+                return np.array([[1.0]]), basis_element, basis_element
             raise ValueError("Unknown measurement result: {}".format(result))
 
-        gate = Gate(qubit,
-                    self.dim,
-                    project,
-                    duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
-                    repr_='measure')
+        gate = Gate(
+            qubit,
+            self.dim,
+            project,
+            duration=0,
+            plot_metadata={"style": "box", "label": r"$\circ\!\!\!\!\!\!\!\nearrow$"},
+            repr_="measure",
+        )
         gate.set(**params)
         return gate
 
@@ -589,16 +697,20 @@ class PerfectQutritModel(Model):
         """
 
         def _dephase():
-            return np.array(np.identity(3).reshape((1, 3, 3))), \
-                   BASIS31_CLASSICAL, BASIS31_CLASSICAL
+            return (
+                np.array(np.identity(3).reshape((1, 3, 3))),
+                BASIS31_CLASSICAL,
+                BASIS31_CLASSICAL,
+            )
 
-        return Gate(qubit,
-                    self.dim,
-                    _dephase,
-                    duration=0,
-                    plot_metadata={"style": "box",
-                                   "label": r"$Z$"},
-                    repr_='dephase')
+        return Gate(
+            qubit,
+            self.dim,
+            _dephase,
+            duration=0,
+            plot_metadata={"style": "box", "label": r"$Z$"},
+            repr_="dephase",
+        )
 
     # noinspection PyUnusedLocal
     def reset(self, qubit, **params):
