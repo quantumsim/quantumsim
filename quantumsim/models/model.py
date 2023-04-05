@@ -1,7 +1,7 @@
 import abc
 from collections import defaultdict
 from copy import deepcopy
-from itertools import tee
+from itertools import tee, chain
 
 from ..circuits.circuit import GatePlaceholder, Circuit, Box
 
@@ -13,40 +13,48 @@ def pairwise(iterable):
 
 
 class WaitingGate(GatePlaceholder):
-    def __init__(self, qubit, duration, dim_hilbert, time_start=0, plot_metadata=None,
-                 **metadata):
-        super().__init__(qubits=[qubit],
-                         dim_hilbert=dim_hilbert,
-                         duration=duration,
-                         time_start=time_start,
-                         plot_metadata=plot_metadata or {
-                             "style": "box",
-                             "label": r"$\mathcal{{W}}$"
-                         },
-                         repr_=f"wait(duration={duration})")
+    def __init__(
+        self, qubit, duration, dim_hilbert, time_start=0, plot_metadata=None, **metadata
+    ):
+        super().__init__(
+            qubits=[qubit],
+            dim_hilbert=dim_hilbert,
+            duration=duration,
+            time_start=time_start,
+            plot_metadata=plot_metadata
+            or {"style": "box", "label": r"$\mathcal{{W}}$"},
+            repr_=f"wait(duration={duration})",
+        )
         self.metadata = metadata
 
     def __copy__(self):
-        other = WaitingGate(self._qubits[0], self.duration, self.dim_hilbert,
-                            self._time_start)
+        other = WaitingGate(
+            self._qubits[0], self.duration, self.dim_hilbert, self._time_start
+        )
         other.metadata = deepcopy(self.metadata)
         return other
 
     def split(self, time):
         if time < self.time_start or time > self.time_end:
             raise ValueError("time must be between gate's time_start and time_end")
-        return (WaitingGate(self._qubits[0],
-                            time - self.time_start,
-                            self.dim_hilbert,
-                            self.time_start,
-                            deepcopy(self.plot_metadata),
-                            **self.metadata),
-                WaitingGate(self._qubits[0],
-                            self.time_end - time,
-                            self.dim_hilbert,
-                            time,
-                            deepcopy(self.plot_metadata),
-                            **self.metadata))
+        return (
+            WaitingGate(
+                self._qubits[0],
+                time - self.time_start,
+                self.dim_hilbert,
+                self.time_start,
+                deepcopy(self.plot_metadata),
+                **self.metadata,
+            ),
+            WaitingGate(
+                self._qubits[0],
+                self.time_end - time,
+                self.dim_hilbert,
+                time,
+                deepcopy(self.plot_metadata),
+                **self.metadata,
+            ),
+        )
 
 
 class Model(metaclass=abc.ABCMeta):
@@ -58,6 +66,7 @@ class Model(metaclass=abc.ABCMeta):
     ----------
     setup : quantumsim.Setup
     """
+
     def __init__(self, setup, dim=None):
         self._setup = setup
         self._dim = dim
@@ -115,18 +124,20 @@ class Model(metaclass=abc.ABCMeta):
             duration = gates[0].time_start - time_start
             if duration > margin:
                 waiting_gates.append(
-                    self.wait(qubit, duration).shift(time_start=time_start))
+                    self.wait(qubit, duration).shift(time_start=time_start)
+                )
             duration = time_end - gates[-1].time_end
             if duration > margin:
                 waiting_gates.append(
-                    self.wait(qubit, duration).shift(time_end=time_end))
+                    self.wait(qubit, duration).shift(time_end=time_end)
+                )
             for gate1, gate2 in pairwise(gates):
                 duration = gate2.time_start - gate1.time_end
                 if duration > margin:
-                    waiting_gates.append(self.wait(qubit, duration)
-                                             .shift(time_start=gate1.time_end))
-        gates = sorted(circuit.gates + waiting_gates,
-                       key=lambda g: g.time_start)
+                    waiting_gates.append(
+                        self.wait(qubit, duration).shift(time_start=gate1.time_end)
+                    )
+        gates = sorted(chain(circuit.gates, waiting_gates), key=lambda g: g.time_start)
         return Circuit(gates)
 
     def finalize(self, circuit, bases_in=None, qubits=None):
